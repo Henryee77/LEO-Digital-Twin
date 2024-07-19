@@ -18,7 +18,6 @@ class Channel():
   """The class of wireless channel"""
 
   def __init__(self):
-    # self.shadowed_rician = Shadowed_Rician(name="Shadowed Rician", a=constant.MIN_POSITIVE_FLOAT)
     self.rayleigh = Rayleigh()
     self.nakagami = Nakagami()
 
@@ -53,7 +52,6 @@ class Channel():
     alpha = uniform.rvs() * 2 * constant.PI
     R = A * np.exp(1j * alpha) + Z
     return abs(R)
-    # return self.shadowed_rician.rvs(Omega, 2 * b, m)
 
   @overload
   def scintillation_loss(self, epsilon: float) -> float:
@@ -175,12 +173,12 @@ class Channel():
   def rician_fading(self, k_db: float) -> float:
     """Rician fading.
 
-                Args:
-                        k_db (float): The ratio between the power of LOS and NLOS (dB).
+      Args:
+        k_db (float): The ratio between the power of LOS and NLOS (dB).
 
-                Returns:
-                        float: The fading gain (dB).
-                """
+      Returns:
+        float: The fading gain (dB).
+    """
     K = util.tolinear(k_db)
     mu = np.sqrt(K / (K + 1))
     sigma = np.sqrt(1 / (2 * (K + 1)))
