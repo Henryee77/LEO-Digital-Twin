@@ -3,183 +3,196 @@
 from typing import overload
 
 import functools
+import math
 import numpy as np
 import numpy.typing as npt
+from scipy.stats import uniform, norm
 from itur.models import itu676
 
 from ..util import constant
+from ..util.distribution import Rayleigh, Nakagami
 from .. import util
 
 
-def free_space(distance: float, freq: float) -> float:
-  """The free space path loss model.
+class Channel():
+  """The class of wireless channel"""
 
-  Args:
-    distance (float): The propagation distance.
-    freq (float): The center frequency.
+  def __init__(self):
+    # self.shadowed_rician = Shadowed_Rician(name="Shadowed Rician", a=constant.MIN_POSITIVE_FLOAT)
+    self.rayleigh = Rayleigh()
+    self.nakagami = Nakagami()
 
-  Returns:
-    (float): The path loss in dB
-  """
-  pl = 2 * util.todb(distance) + 2 * util.todb(freq) + constant.FREE_SPACE_LOSS
-  pl = float(pl)
-  return pl
+  def free_space(distance: float, freq: float) -> float:
+    """The free space path loss model.
 
+    Args:
+      distance (float): The propagation distance.
+      freq (float): The center frequency.
 
-@overload
-def shadow_fading(epsilon: float) -> float:
-  ...
+    Returns:
+      (float): The path loss in dB
+    """
+    pl = 2 * util.todb(distance) + 2 * util.todb(freq) + constant.FREE_SPACE_LOSS
+    pl = float(pl)
+    return pl
 
+  def shadowed_rician_fading(self, b: float, m: float, Omega: float) -> float:
+    """The shadowed rician fading model.
+       Reference: A new simple model for land mobile satellite channels first- and second-order statistics
 
-@overload
-def shadow_fading(epsilon: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-  ...
+    Args:
+      b (float): half power of multipath component
+      m (float): Nakagami parameter
+      Omega (float): Average power of LOS component
 
+    Returns:
+      (float): The shadow fading in dB
+    """
+    A = self.rayleigh.rvs(scale=math.sqrt(b))
+    Z = self.nakagami.rvs(nu=m, scale=math.sqrt(Omega))
+    alpha = uniform.rvs() * 2 * constant.PI
+    R = A * np.exp(1j * alpha) + Z
+    return abs(R)
+    # return self.shadowed_rician.rvs(Omega, 2 * b, m)
 
-def shadow_fading(epsilon):
-  """The shadow fading model.
+  @overload
+  def scintillation_loss(self, epsilon: float) -> float:
+    ...
 
-  Args:
-    epsilon (float): The elevation angle in radian.
+  @overload
+  def scintillation_loss(self, epsilon: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    ...
 
-  Returns:
-    (float): The shadow fading in dB
-  """
+  def scintillation_loss(self, epsilon):
+    """The scintillation loss model.
 
-  rounded_epsilon = np.around(epsilon / constant.PI_IN_RAD, decimals=-1)
-  stdv_table = np.array(constant.SF_STDV_LIST[constant.SF_MODEL])
-  epsilon_index = (
-      rounded_epsilon /
-      round(constant.ANGLE_RESOLUTION / constant.PI_IN_RAD)).astype(int)
-  sf_stdv = stdv_table[epsilon_index]
-  sf_loss = np.abs(np.random.normal(loc=0, scale=sf_stdv))
-  return sf_loss
+    Args:
+      epsilon (float): The elevation angle in radian.
 
+    Returns:
+      (float): The scintillation loss in dB
+    """
+    rounded_epsilon = np.around(epsilon / constant.PI_IN_RAD, decimals=-1)
+    epsilon_index = (
+        rounded_epsilon /
+        round(constant.ANGLE_RESOLUTION / constant.PI_IN_RAD)).astype(int)
+    scint_loss = constant.SCINTILLATION_TABLE[epsilon_index]
+    return scint_loss
 
-@overload
-def scintillation_loss(epsilon: float) -> float:
-  ...
+  @overload
+  def gas_attenuation(self, fc: float, epsilon: float) -> float:
+    ...
 
+  @overload
+  def gas_attenuation(self, fc: float, epsilon: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    ...
 
-@overload
-def scintillation_loss(
-        epsilon: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-  ...
+  def gas_attenuation(self, fc, epsilon):
+    """The gas attenuation model.
+    The gas attenuation is zenith loss / sin(elevation_angle).
+    The longer the distance through the troposphere (small elevation angle),
+    the more severe attenuation it suffers
 
+    Args:
+      fc (float): The central frequency of the signal
+      epsilon (float): The elevation angle in radian.
 
-def scintillation_loss(epsilon):
-  """The scintillation loss model.
+    Returns:
+      (float): The gas attenuation in dB
+    """
+    return self.zenith_attenuation(fc=fc) / np.sin(epsilon)
 
-  Args:
-    epsilon (float): The elevation angle in radian.
+  def zenith_attenuation(self, fc: float) -> float:
+    """The zenith attenuation model.
+    Zenith loss is the loss when the elevation angle is 90 degrees.
 
-  Returns:
-    (float): The scintillation loss in dB
-  """
-  rounded_epsilon = np.around(epsilon / constant.PI_IN_RAD, decimals=-1)
-  epsilon_index = (
-      rounded_epsilon /
-      round(constant.ANGLE_RESOLUTION / constant.PI_IN_RAD)).astype(int)
-  scint_loss = constant.SCINTILLATION_TABLE[epsilon_index]
-  return scint_loss
+    Args:
+      fc (float): The central frequency of the signal
 
+    Returns:
+      (float): The zenith attenuation in dB
+    """
+    zenith_att = itu676.gaseous_attenuation_slant_path(
+        f=fc / 1e9,
+        el=constant.PI / constant.PI_IN_RAD / 2,
+        rho=constant.GROUND_WATER_VAP_DENSITY,
+        P=constant.GROUND_ATMOS_PRESSURE,
+        T=constant.GROUND_TEMPERATURE,
+        mode='approx')
 
-@overload
-def gas_attenuation(fc: float, epsilon: float) -> float:
-  ...
+    return float(zenith_att.value)
 
+  @functools.cache
+  def cal_deterministic_loss(self, distance: float, freq: float, epsilon: float) -> float:
+    """Calculate the deterministic part of the loss.
 
-@overload
-def gas_attenuation(
-        fc: float, epsilon: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-  ...
-
-
-def gas_attenuation(fc, epsilon):
-  """The gas attenuation model.
-  The gas attenuation is zenith loss / sin(elevation_angle).
-  The longer the distance through the troposphere (small elevation angle),
-  the more severe attenuation it suffers
-
-  Args:
-    fc (float): The central frequency of the signal
-    epsilon (float): The elevation angle in radian.
-
-  Returns:
-    (float): The gas attenuation in dB
-  """
-  return zenith_attenuation(fc=fc) / np.sin(epsilon)
-
-
-def zenith_attenuation(fc: float) -> float:
-  """The zenith attenuation model.
-  Zenith loss is the loss when the elevation angle is 90 degrees.
-
-  Args:
-    fc (float): The central frequency of the signal
-
-  Returns:
-    (float): The zenith attenuation in dB
-  """
-  zenith_att = itu676.gaseous_attenuation_slant_path(
-      f=fc / 1e9,
-      el=constant.PI / constant.PI_IN_RAD / 2,
-      rho=constant.GROUND_WATER_VAP_DENSITY,
-      P=constant.GROUND_ATMOS_PRESSURE,
-      T=constant.GROUND_TEMPERATURE,
-      mode='approx')
-
-  return float(zenith_att.value)
-
-
-@functools.cache
-def cal_deterministic_loss(distance: float, freq: float, epsilon: float) -> float:
-  """Calculate the deterministic part of the loss.
-
-  Args:
+    Args:
       distance (float): The distance between sat and ue.
       freq (float): The center freq.
       epsilon (float): The elevation angle pointing from ue to sat
 
-  Returns:
+    Returns:
       (float): The total deterministic loss (dB)
-  """
-  fspl = free_space(distance, freq)
-  scpl = scintillation_loss(epsilon)
-  gpl = gas_attenuation(freq, epsilon)
-  return fspl + scpl + gpl
+    """
+    fspl = self.free_space(distance, freq)
+    scpl = self.scintillation_loss(epsilon)
+    gpl = self.gas_attenuation(freq, epsilon)
+    return fspl + scpl + gpl
 
+  def cal_stochastic_loss(self, epsilon: float) -> float:
+    """Calculate the stochastic part of the loss.
 
-def cal_stochastic_loss(epsilon: float) -> float:
-  """Calculate the stochastic part of the loss.
-
-  Args:
+    Args:
       epsilon (float): The elevation angle pointing from ue to sat
 
-  Returns:
+    Returns:
       (float): The total stochastic loss (dB)
-  """
-  sf = shadow_fading(epsilon)
-  return sf
+    """
+    sr_loss = self.shadowed_rician_fading(epsilon)
+    return sr_loss
 
+  def cal_total_loss(self, distance: float, freq: float, epsilon: float) -> float:
+    """Calculate the total loss for sat and ue.
 
-def cal_total_loss(distance: float, freq: float, epsilon: float) -> float:
-  """Calculate the total loss for sat and ue.
-
-  Args:
+    Args:
       distance (float): The distance between sat and ue.
       freq (float): The center freq.
       epsilon (float): The elevation angle pointing from ue to sat
 
-  Returns:
+    Returns:
       (float): The total loss (dB)
-  """
-  det_loss = cal_deterministic_loss(distance=round(distance,
-                                                   constant.CACHED_PRECISION),
-                                    freq=round(freq,
-                                               constant.CACHED_PRECISION),
-                                    epsilon=round(epsilon,
-                                                  constant.CACHED_PRECISION))
-  stoch_loss = cal_stochastic_loss(epsilon=epsilon)
+    """
+    det_loss = self.cal_deterministic_loss(distance=round(distance,
+                                                          constant.CACHED_PRECISION),
+                                           freq=round(freq,
+                                                      constant.CACHED_PRECISION),
+                                           epsilon=round(epsilon,
+                                                         constant.CACHED_PRECISION))
+    stoch_loss = self.cal_stochastic_loss(epsilon=epsilon)
 
-  return det_loss + stoch_loss
+    return det_loss + stoch_loss
+
+  def rician_fading(self, k_db: float) -> float:
+    """Rician fading.
+
+                Args:
+                        k_db (float): The ratio between the power of LOS and NLOS (dB).
+
+                Returns:
+                        float: The fading gain (dB).
+                """
+    K = util.tolinear(k_db)
+    mu = np.sqrt(K / (K + 1))
+    sigma = np.sqrt(1 / (2 * (K + 1)))
+
+    h = (sigma * norm.rvs() + mu) + 1j * (sigma * norm.rvs() + mu)
+    fading_gain = np.abs(h)
+    return util.todb(fading_gain)
+
+  def rayleigh_fading(self, b: float) -> float:
+    """Rayleigh fading.
+
+    Returns:
+      float: The fading gain (dB).
+    """
+    return self.rician_fading(k_db=constant.MIN_NEG_FLOAT)
