@@ -56,8 +56,8 @@ class OffPolicyTrainer(object):
                                                                   self.args.uploaded_layer_num_per_turn,
                                                                   agent.actor_layer_num)
           # 1-index
-          a_rand_idx = [round(idx + 1) for idx in a_rand_idx]
-          c_rand_idx = [round(idx + 1) for idx in c_rand_idx]
+          # a_rand_idx = [round(idx + 1) for idx in a_rand_idx]
+          # c_rand_idx = [round(idx + 1) for idx in c_rand_idx]
 
         else:
           raise ValueError(
@@ -254,8 +254,8 @@ class OffPolicyTrainer(object):
       # Select action
       # print(f'obs: {env_observation}')
       action_n = {}
-      for agent_name, agent in self.leo_agent_dict.items():
-        agent_action = agent.select_stochastic_action(
+      for agent_name, leo_agent in self.leo_agent_dict.items():
+        agent_action = leo_agent.select_stochastic_action(
           np.array(env_observation[agent_name]), self.total_timesteps)
         action_n[agent_name] = agent_action
 
@@ -264,8 +264,8 @@ class OffPolicyTrainer(object):
 
       # Add experience to memory
       total_reward = sum(env_reward.values())
-      for agent_name, agent in self.leo_agent_dict.items():
-        agent.add_memory(
+      for agent_name, leo_agent in self.leo_agent_dict.items():
+        leo_agent.add_memory(
             obs=env_observation[agent_name],
             new_obs=new_env_observation[agent_name],
             action=action_n[agent_name],

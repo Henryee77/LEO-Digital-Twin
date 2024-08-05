@@ -21,7 +21,7 @@ class Channel():
     self.rayleigh = Rayleigh()
     self.nakagami = Nakagami()
 
-  def free_space(distance: float, freq: float) -> float:
+  def free_space(self, distance: float, freq: float) -> float:
     """The free space path loss model.
 
     Args:
@@ -132,21 +132,22 @@ class Channel():
     Returns:
       (float): The total deterministic loss (dB)
     """
-    fspl = self.free_space(distance, freq)
+    fspl = self.free_space(distance=distance, freq=freq)
     scpl = self.scintillation_loss(epsilon)
     gpl = self.gas_attenuation(freq, epsilon)
     return fspl + scpl + gpl
 
-  def cal_stochastic_loss(self, epsilon: float) -> float:
+  def cal_stochastic_loss(self) -> float:
     """Calculate the stochastic part of the loss.
 
     Args:
-      epsilon (float): The elevation angle pointing from ue to sat
 
     Returns:
       (float): The total stochastic loss (dB)
     """
-    sr_loss = self.shadowed_rician_fading(epsilon)
+    sr_loss = self.shadowed_rician_fading(b=constant.SCATTER_COMPONENT_HALF_POWER,
+                                          m=constant.NAKAGAMI_PARAMETER,
+                                          Omega=constant.LOS_COMPONENT_POWER)
     return sr_loss
 
   def cal_total_loss(self, distance: float, freq: float, epsilon: float) -> float:
@@ -166,7 +167,7 @@ class Channel():
                                                       constant.CACHED_PRECISION),
                                            epsilon=round(epsilon,
                                                          constant.CACHED_PRECISION))
-    stoch_loss = self.cal_stochastic_loss(epsilon=epsilon)
+    stoch_loss = self.cal_stochastic_loss()
 
     return det_loss + stoch_loss
 

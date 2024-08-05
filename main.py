@@ -137,7 +137,7 @@ if __name__ == '__main__':
       '--ch-critic-n-hidden', default=2400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--iter-num', default=10, type=int,
+      '--iter-num', default=2, type=int,
       help='Number of base training iteration')
   parser.add_argument(
       '--replay-buffer-size', default=10000, type=int,
@@ -177,10 +177,10 @@ if __name__ == '__main__':
       '--federated-update-rate', default=5e-3, type=float,
       help='Network exchanging rate of federated agents')
   parser.add_argument(
-      '--federated-upload-freq', default=7, type=int,
+      '--federated-upload-freq', default=5, type=int,
       help='Frequency of federated uploading per learning iteration')
   parser.add_argument(
-      '--federated-download-freq', default=20, type=int,
+      '--federated-download-freq', default=15, type=int,
       help='Frequency of federated downloading per learning iteration')
   parser.add_argument(
       '--historical-smoothing-coef', default=0.9, type=float,

@@ -168,5 +168,5 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
   index = start
   for _ in range(num):
     result.append(index)
-    index = (index + 1) % modulo
+    index = int((index + 1) % modulo)
   return result, index

@@ -45,6 +45,7 @@ class Constellation(object):
 
     Args:
         setup_data_list (list[ConstellationData]): All data for constellation.
+        channel (Channel): Wireless channel.
     """
     self.shell_num = len(setup_data_list)
     self.setup_data_list = setup_data_list
@@ -110,7 +111,7 @@ class Constellation(object):
                         position=Position(orbital=satellite_pos),
                         cell_topo=CellTopology(center_point=Position(
                             geodetic=projection_point)),
-                        antenna=Antenna()
+                        antenna=Antenna(),
                         channel=self.wireless_channel)
 
     self.all_sat[sat_obj.name] = sat_obj
