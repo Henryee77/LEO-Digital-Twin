@@ -1,20 +1,20 @@
 """agent.py"""
-import math
 from typing import Literal
 import numpy as np
-from misc.replay_buffer import ReplayBuffer
-from policy.model import TD3, DDPG
+from ..misc.replay_buffer import ReplayBuffer
+from ..policy.model import TD3, DDPG
 from low_earth_orbit.util import constant
 
 
 class Agent(object):
-  def __init__(self, env, policy_name: Literal['TD3', 'DDPG'], tb_writer, log, args, name, device):
+  def __init__(self, env, policy_name: Literal['TD3', 'DDPG'], tb_writer, log, args, name, agent_type, device):
 
     self.env = env
     self.log = log
     self.tb_writer = tb_writer
     self.args = args
     self.name = name
+    self.agent_type = agent_type
     self.device = device
 
     self.set_dim()
@@ -35,6 +35,14 @@ class Agent(object):
   def set_dim(self):
     self.state_dim = self.env.observation_space.shape[0]
     self.action_dim = self.env.action_space.shape[0]
+    if self.agent_type == 'LEO':
+      self.actor_n_hidden = self.args.ra_actor_n_hidden
+      self.critic_n_hidden = self.args.ra_critic_n_hidden
+    elif self.agent_type == 'channel':
+      self.actor_n_hidden = self.args.ch_actor_n_hidden
+      self.critic_n_hidden = self.args.ch_critic_n_hidden
+    else:
+      raise ValueError("No such agent type")
 
     self.log[self.args.log_name].info('[{}] State dim: {}'.format(
         self.name, self.state_dim))
@@ -107,6 +115,8 @@ class Agent(object):
           actor_input_dim=self.state_dim,
           actor_output_dim=self.action_dim,
           critic_input_dim=self.state_dim + self.action_dim,
+          actor_n_hidden=self.actor_n_hidden,
+          critic_n_hidden=self.critic_n_hidden,
           name=self.name,
           args=self.args,
           action_low=self.env.action_space.low,

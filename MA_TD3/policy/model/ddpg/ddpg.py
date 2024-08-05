@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
-from misc.replay_buffer import ReplayBuffer
+from ....misc.replay_buffer import ReplayBuffer
 from ...policy_base import PolicyBase
 
 # Implementation of the Deep Deterministic Policy Gradient algorithm (DDPG)

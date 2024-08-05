@@ -16,6 +16,7 @@ from ..satellite import Satellite
 from ..cell import CellTopology
 from ..antenna import Antenna
 from ..ground_user import User
+from ..channel import Channel
 
 
 @dataclass
@@ -38,6 +39,7 @@ class Constellation(object):
   def __init__(
       self,
       setup_data_list: List[ConstellationData],
+      channel: Channel,
   ):
     """The constructer of Constellation Class.
 
@@ -53,6 +55,7 @@ class Constellation(object):
         for data in self.setup_data_list
     ]
     self.all_sat = {}
+    self.wireless_channel = channel
     self.create_all_sat()
 
   def create_all_sat(self):
@@ -107,7 +110,8 @@ class Constellation(object):
                         position=Position(orbital=satellite_pos),
                         cell_topo=CellTopology(center_point=Position(
                             geodetic=projection_point)),
-                        antenna=Antenna())
+                        antenna=Antenna()
+                        channel=self.wireless_channel)
 
     self.all_sat[sat_obj.name] = sat_obj
 

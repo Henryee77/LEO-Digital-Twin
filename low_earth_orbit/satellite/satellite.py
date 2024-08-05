@@ -6,7 +6,7 @@ import collections
 
 from ..antenna import Antenna
 from ..cell import CellTopology
-from ..channel import channel
+from ..channel import Channel
 from ..util import Position
 from ..util import constant
 from ..ground_user import User
@@ -24,6 +24,7 @@ class Satellite(object):
                angle_speed: float,
                cell_topo: CellTopology,
                antenna: Antenna,
+               channel: Channel,
                max_power: float = constant.MAX_POWER,
                beam_alg: int = constant.DEFAULT_BEAM_SWEEPING_ALG):
 
@@ -34,6 +35,7 @@ class Satellite(object):
     self.angle_speed = angle_speed
     self.cell_topo = cell_topo
     self.antenna = antenna
+    self.wireless_channel = channel
     self.max_power = max_power
     self.beam_alg = beam_alg
 
@@ -138,9 +140,9 @@ class Satellite(object):
 
     antenna_gain = float(self.antenna.calc_antenna_gain(theta))
 
-    path_loss = channel.cal_total_loss(distance=dis_sat_ue,
-                                       freq=self.antenna.central_frequency,
-                                       epsilon=epsilon)
+    path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
+                                                     freq=self.antenna.central_frequency,
+                                                     epsilon=epsilon)
 
     rx_power = constant.MAX_POWER - path_loss + antenna_gain + ue.rx_gain
 
@@ -170,9 +172,9 @@ class Satellite(object):
 
       tx_gain.append(float(self.antenna.calc_antenna_gain(theta)))
 
-      path_loss = channel.cal_total_loss(distance=dis_sat_ue,
-                                         freq=self.antenna.central_frequency,
-                                         epsilon=epsilon)
+      path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
+                                                       freq=self.antenna.central_frequency,
+                                                       epsilon=epsilon)
       channel_loss.append(path_loss)
 
     return self.cell_topo.sinr_of_users(serving_ue=serving_ue,

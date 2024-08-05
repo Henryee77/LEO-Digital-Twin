@@ -7,23 +7,23 @@ from typing import Dict, List
 import torch
 import numpy as np
 
-from agent import Agent
-from misc import misc
+from ..agent import Agent
+from ..misc import misc
 
 
 class OffPolicyTrainer(object):
   """The trainer class"""
 
-  def __init__(self, args, agent_dict: Dict[str, Agent]):
+  def __init__(self, args, leo_agent_dict: Dict[str, Agent], channel_agent):
     self.args = args
     self.total_timesteps = 0  # steps of collecting experience
     self.total_train_iter = 0  # steps of training iteration
     self.total_eps = 0  # steps of episodes
-    self.agent_dict = agent_dict
-    self.agent_num = len(self.agent_dict)
+    self.leo_agent_dict = leo_agent_dict
+    self.agent_num = len(self.leo_agent_dict)
 
     self.parameter_db = {}
-    for agent_name in agent_dict.keys():
+    for agent_name in leo_agent_dict.keys():
       self.parameter_db[agent_name] = {}
     self.weight_db = {}
 
@@ -34,7 +34,7 @@ class OffPolicyTrainer(object):
         agent_names (List[str]): The names of agents perform the FU.
     """
     for agent_name in agent_names:
-      agent = self.agent_dict[agent_name]
+      agent = self.leo_agent_dict[agent_name]
       if not self.parameter_db[agent_name]:
         self.parameter_db[agent_name]['actor'] = copy.deepcopy(
           agent.actor_state_dict)
@@ -114,7 +114,7 @@ class OffPolicyTrainer(object):
 
     # Update the parameters to the requested agents
     for agent_name in agent_names:
-      agent = self.agent_dict[agent_name]
+      agent = self.leo_agent_dict[agent_name]
       tau = agent.federated_update_rate
       actor_sd, critic_sd = agent.model_state_dict
 
@@ -152,19 +152,19 @@ class OffPolicyTrainer(object):
       for _ in range(self.args.iter_num):
         self.total_train_iter += 1
         nn_start_time = time.time()
-        for _, agent in self.agent_dict.items():
+        for _, agent in self.leo_agent_dict.items():
           # Update policy (iteration of training is args.iter_num)
           agent.update_policy(self.total_train_iter)
         nn_train_time += time.time() - nn_start_time
 
         if self.total_eps % self.args.federated_upload_freq == 0:
           ps_start_time = time.time()
-          self.federated_upload(agent_names=list(self.agent_dict.keys()))
+          self.federated_upload(agent_names=list(self.leo_agent_dict.keys()))
           param_sharing_time += time.time() - ps_start_time
 
         if self.total_eps % self.args.federated_download_freq == 0:
           ps_start_time = time.time()
-          self.federated_download(agent_names=list(self.agent_dict.keys()))
+          self.federated_download(agent_names=list(self.leo_agent_dict.keys()))
           param_sharing_time += time.time() - ps_start_time
 
       # Measure performance  # or (self.total_eps <= 20 and self.total_eps % 2 == 0)
@@ -186,7 +186,7 @@ class OffPolicyTrainer(object):
 
   def eval_progress(self, env, log, tb_writer, running_mode='training'):
     eval_reward = {}
-    for agent_name in self.agent_dict:
+    for agent_name in self.leo_agent_dict:
       eval_reward[agent_name] = 0.0
     step_count = 0
     env_observation, _ = env.reset()
@@ -196,7 +196,7 @@ class OffPolicyTrainer(object):
       # Select action
       # print(f'obs: {env_observation}, {type(env_observation)}')
       action_n = {}
-      for agent_name, agent in self.agent_dict.items():
+      for agent_name, agent in self.leo_agent_dict.items():
         agent_action = agent.select_deterministic_action(
             np.array(env_observation[agent_name]))
         action_n[agent_name] = agent_action
@@ -235,7 +235,7 @@ class OffPolicyTrainer(object):
         break
     for agent_name in eval_reward:
       eval_reward[agent_name] /= step_count
-    for agent_name in self.agent_dict:
+    for agent_name in self.leo_agent_dict:
       log[self.args.log_name].info(
           f'Agent {agent_name}: Evaluation Reward {eval_reward[agent_name]:.6f} at episode {self.total_eps}')
       tb_writer.add_scalars(
@@ -245,7 +245,7 @@ class OffPolicyTrainer(object):
 
   def collect_one_traj(self, env, log, tb_writer):
     ep_reward = {}
-    for agent_name in self.agent_dict:
+    for agent_name in self.leo_agent_dict:
       ep_reward[agent_name] = 0.0
     step_count = 0
     env_observation, _ = env.reset()
@@ -254,7 +254,7 @@ class OffPolicyTrainer(object):
       # Select action
       # print(f'obs: {env_observation}')
       action_n = {}
-      for agent_name, agent in self.agent_dict.items():
+      for agent_name, agent in self.leo_agent_dict.items():
         agent_action = agent.select_stochastic_action(
           np.array(env_observation[agent_name]), self.total_timesteps)
         action_n[agent_name] = agent_action
@@ -264,7 +264,7 @@ class OffPolicyTrainer(object):
 
       # Add experience to memory
       total_reward = sum(env_reward.values())
-      for agent_name, agent in self.agent_dict.items():
+      for agent_name, agent in self.leo_agent_dict.items():
         agent.add_memory(
             obs=env_observation[agent_name],
             new_obs=new_env_observation[agent_name],
@@ -285,7 +285,7 @@ class OffPolicyTrainer(object):
     for agent_name in ep_reward:
       ep_reward[agent_name] /= step_count
     self.total_eps += 1
-    for agent_name in self.agent_dict:
+    for agent_name in self.leo_agent_dict:
       log[self.args.log_name].info(
           f'Agent {agent_name}: Train episode reward {ep_reward[agent_name]:.6f} at episode {self.total_eps}')
       tb_writer.add_scalars(

@@ -7,9 +7,9 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorboardX import SummaryWriter
-from misc import misc
-from agent import Agent
-from trainer import OffPolicyTrainer
+from MA_TD3.misc import misc
+from MA_TD3.agent import Agent
+from MA_TD3.trainer import OffPolicyTrainer
 
 
 def main(args):
@@ -43,7 +43,7 @@ def main(args):
 
   # Initialize agents
   agent_name_list = ['3_0_24', '2_0_1', '1_0_9']
-  agent_dict = {}
+  leo_agent_dict = {}
 
   # Start train
   trainer_dict = {'TD3': 'Off-Policy',
@@ -56,25 +56,34 @@ def main(args):
     env = misc.make_env(args=args, ax=ax, agent_names=agent_name_list)
     # Initialize agents
     for agent_name in agent_name_list:
-      agent_dict[agent_name] = Agent(env=env,
-                                     policy_name=args.model,
-                                     tb_writer=tb_writer,
-                                     log=log,
-                                     name=agent_name,
-                                     args=args, device=device)
-
-    trainer = OffPolicyTrainer(args=args, agent_dict=agent_dict)
+      leo_agent_dict[agent_name] = Agent(env=env,
+                                         policy_name=args.model,
+                                         tb_writer=tb_writer,
+                                         log=log,
+                                         name=agent_name,
+                                         agent_type='LEO',
+                                         args=args,
+                                         device=device)
+    channel_agent = Agent(env=env,
+                          policy_name=args.model,
+                          tb_writer=tb_writer,
+                          log=log,
+                          name=agent_name,
+                          agent_type='channel',
+                          args=args,
+                          device=device)
+    trainer = OffPolicyTrainer(args=args, leo_agent_dict=leo_agent_dict, channel_agent=channel_agent)
     if args.running_mode == 'training':
       trainer.train(env=env, log=log, tb_writer=tb_writer)
 
-      for agent_name, agent in agent_dict.items():
+      for agent_name, agent in leo_agent_dict.items():
         agent.policy.save(
           filename=f'{filename}_{agent_name}', directory=saving_directory)
       misc.save_config(args=args)
 
     elif args.running_mode == 'testing':
       print(f'Testing {filename}......')
-      for agent_name, agent in agent_dict.items():
+      for agent_name, agent in leo_agent_dict.items():
         agent.policy.load(
           filename=f'{filename}_{agent_name}', directory=loading_directory)
       trainer.test(env=env, log=log, tb_writer=tb_writer)
@@ -82,7 +91,7 @@ def main(args):
       raise ValueError(f'No {args.running_mode} running mode')
 
   else:
-    raise ValueError('Please update trainer dict.')
+    raise ValueError('On-policy trainer dict is not yet finished.')
 
   tb_writer.close()
 
@@ -116,10 +125,16 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--actor-n-hidden', default=6400, type=int,
+      '--ra-actor-n-hidden', default=6400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--critic-n-hidden', default=11840, type=int,
+      '--ra-critic-n-hidden', default=11840, type=int,
+      help='Number of hidden neuron')
+  parser.add_argument(
+      '--ch-actor-n-hidden', default=1200, type=int,
+      help='Number of hidden neuron')
+  parser.add_argument(
+      '--ch-critic-n-hidden', default=2400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
       '--iter-num', default=10, type=int,

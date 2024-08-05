@@ -12,6 +12,7 @@ from low_earth_orbit.ground_user import User
 from low_earth_orbit.constellation import Constellation
 from low_earth_orbit.constellation import ConstellationData
 from low_earth_orbit.nmc import NMC
+from low_earth_orbit.channel import Channel
 from low_earth_orbit.util import util
 from low_earth_orbit.util import Position
 from low_earth_orbit.util import Geodetic
@@ -350,7 +351,8 @@ class LEOSatEnv(gym.Env):
 
   def _init_env(self):
     self.step_num = 0
-    self.constel = self.make_constellation()
+    self.wireless_channel = Channel()
+    self.constel = self.make_constellation(channel=self.wireless_channel)
     self.ues = self.make_ues()
     for ue in self.ues:
       self.ue_dict[ue.name] = ue
@@ -407,9 +409,8 @@ class LEOSatEnv(gym.Env):
     diff_lo = abs(sat.position.geodetic.longitude - constant.ORIGIN_LONG)
     return diff_la < r and diff_lo < r
 
-  def make_constellation(self) -> Constellation:
-    """Make a constellation
-    """
+  def make_constellation(self, channel: Channel) -> Constellation:
+    """Make a constellation"""
     shell_num = 4
     plane_num = [1, 1, 1, 1, 1]
     sat_per_plane = [22, 22, 20, 58, 43]
@@ -420,7 +421,7 @@ class LEOSatEnv(gym.Env):
         ConstellationData(plane_num=plane_num[i],
                           sat_per_plane=sat_per_plane[i],
                           sat_height=sat_height[i],
-                          inclination_angle=inclination[i])
+                          inclination_angle=inclination[i], channel=channel)
         for i in range(shell_num)
     ])
 

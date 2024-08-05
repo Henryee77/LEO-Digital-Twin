@@ -7,7 +7,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from misc.replay_buffer import ReplayBuffer
+from ....misc.replay_buffer import ReplayBuffer
 from ...policy_base import PolicyBase
 
 
@@ -16,8 +16,20 @@ class Actor(nn.Module):
 
   def __init__(self, actor_input_dim, actor_output_dim, n_hidden, name):
     super(Actor, self).__init__()
+    hidden_denom = [0, 1, 2, 4, 8, 16, 32]
+    layer_list = []
+    for i in range(len(hidden_denom)):
+      if i == 0:
+        layer_list.append((f'fc_{i}', nn.Linear(actor_input_dim, n_hidden)))
+        layer_list.append((f'elu_{i}', nn.ELU()))
+      elif i == len(hidden_denom) - 1:
+        layer_list.append((f'fc_{i}', nn.Linear(n_hidden // hidden_denom[i], actor_output_dim)))
+      else:
+        layer_list.append((f'fc_{i}', nn.Linear(n_hidden // hidden_denom[i], n_hidden // hidden_denom[i + 1])))
+        layer_list.append((f'elu_{i}', nn.ELU()))
 
-    network_dict = OrderedDict([('fc_1', nn.Linear(actor_input_dim, n_hidden)),
+    network_dict = OrderedDict(layer_list)
+    """network_dict = OrderedDict([('fc_1', nn.Linear(actor_input_dim, n_hidden)),
                                 ('elu_1', nn.ELU()),
                                 ('fc_2', nn.Linear(n_hidden, n_hidden // 2)),
                                 ('elu_2', nn.ELU()),
@@ -30,11 +42,10 @@ class Actor(nn.Module):
                                 ('fc_6', nn.Linear(n_hidden // 16, n_hidden // 32)),
                                 ('elu_6', nn.ELU()),
                                 ('fc_7', nn.Linear(n_hidden // 32, actor_output_dim))
-                                ])
+                                ]) """
+
     self.layer_num = (len(network_dict) + 1) / 2
-
     self.network = nn.Sequential(network_dict)
-
     self.name = name
 
   def forward(self, state):
@@ -48,8 +59,23 @@ class Critic(nn.Module):
 
   def __init__(self, critic_input_dim, n_hidden, name):
     super(Critic, self).__init__()
+    hidden_denom = [0, 1, 2, 4, 8, 16, 32]
+    layer_list = []
+    for i in range(len(hidden_denom)):
+      if i == 0:
+        layer_list.append((f'fc_{i}', nn.Linear(critic_input_dim, n_hidden)))
+        layer_list.append((f'elu_{i}', nn.ELU()))
+      elif i == len(hidden_denom) - 1:
+        layer_list.append((f'fc_{i}', nn.Linear(n_hidden // hidden_denom[i], 1)))
+      else:
+        layer_list.append((f'fc_{i}', nn.Linear(n_hidden // hidden_denom[i], n_hidden // hidden_denom[i + 1])))
+        layer_list.append((f'elu_{i}', nn.ELU()))
 
-    q1_network_dict = OrderedDict([('fc_1', nn.Linear(critic_input_dim, n_hidden)),
+    q1_network_dict = OrderedDict(layer_list)
+    q2_network_dict = OrderedDict(copy.deepcopy(layer_list))
+    assert q1_network_dict is not q2_network_dict
+
+    '''q1_network_dict = OrderedDict([('fc_1', nn.Linear(critic_input_dim, n_hidden)),
                                    ('elu_1', nn.ELU()),
                                    ('fc_2', nn.Linear(n_hidden, n_hidden // 2)),
                                    ('elu_2', nn.ELU()),
@@ -76,7 +102,7 @@ class Critic(nn.Module):
                                    ('fc_6', nn.Linear(n_hidden // 16, n_hidden // 32)),
                                    ('elu_6', nn.ELU()),
                                    ('fc_7', nn.Linear(n_hidden // 32, 1))
-                                   ])
+                                   ])'''
     self.q_network_num = 2
     self.layer_num = (len(q1_network_dict) + 1) / 2
 
@@ -104,27 +130,25 @@ class Critic(nn.Module):
 class TD3(PolicyBase):
   """The TD3 class"""
 
-  def __init__(self, actor_input_dim, actor_output_dim, critic_input_dim, name, args, action_low, action_high, device):
+  def __init__(self, actor_input_dim, actor_output_dim, critic_input_dim, actor_n_hidden, critic_n_hidden, name, args, action_low, action_high, device):
     super(TD3, self).__init__()
     self.actor = Actor(
         actor_input_dim=actor_input_dim,
         actor_output_dim=actor_output_dim,
-        n_hidden=args.actor_n_hidden,
+        n_hidden=actor_n_hidden,
         name=name + '_actor').to(device)
     self.actor_target = copy.deepcopy(self.actor)
 
-    self.actor_optimizer = torch.optim.Adam(
-        self.actor.parameters(), lr=args.actor_lr, weight_decay=args.lambda_l2)
+    self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=args.actor_lr, weight_decay=args.lambda_l2)
     self.actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
       self.actor_optimizer, factor=args.lr_reduce_factor, patience=args.lr_reduce_patience, eps=1e-12)
 
-    self.critic = Critic(critic_input_dim,
-                         args.critic_n_hidden,
+    self.critic = Critic(critic_input_dim=critic_input_dim,
+                         n_hidden=critic_n_hidden,
                          name=name + '_critic').to(device)
     self.critic_target = copy.deepcopy(self.critic)
 
-    self.critic_optimizer = torch.optim.Adam(
-        self.critic.parameters(), lr=args.critic_lr, weight_decay=args.lambda_l2)
+    self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=args.critic_lr, weight_decay=args.lambda_l2)
     self.critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
       self.critic_optimizer, factor=args.lr_reduce_factor, patience=args.lr_reduce_patience, eps=1e-12)
 
@@ -138,15 +162,15 @@ class TD3(PolicyBase):
     self.tau = args.tau
     self.policy_freq = args.policy_freq
 
-  @property
+  @ property
   def actor_layer_num(self):
     return self.actor.layer_num
 
-  @property
+  @ property
   def critic_layer_num(self):
     return self.critic.layer_num
 
-  @property
+  @ property
   def q_network_num(self):
     return self.critic.q_network_num
 
