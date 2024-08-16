@@ -54,23 +54,23 @@ class Channel():
     return abs(R)
 
   @overload
-  def scintillation_loss(self, epsilon: float) -> float:
+  def scintillation_loss(self, elevation_angle: float) -> float:
     ...
 
   @overload
-  def scintillation_loss(self, epsilon: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+  def scintillation_loss(self, elevation_angle: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     ...
 
-  def scintillation_loss(self, epsilon):
+  def scintillation_loss(self, elevation_angle):
     """The scintillation loss model.
 
     Args:
-      epsilon (float): The elevation angle in radian.
+      elevation_angle (float): The elevation angle in radian.
 
     Returns:
       (float): The scintillation loss in dB
     """
-    rounded_epsilon = np.around(epsilon / constant.PI_IN_RAD, decimals=-1)
+    rounded_epsilon = np.around(elevation_angle / constant.PI_IN_RAD, decimals=-1)
     epsilon_index = (
         rounded_epsilon /
         round(constant.ANGLE_RESOLUTION / constant.PI_IN_RAD)).astype(int)
@@ -78,14 +78,14 @@ class Channel():
     return scint_loss
 
   @overload
-  def gas_attenuation(self, fc: float, epsilon: float) -> float:
+  def gas_attenuation(self, fc: float, elevation_angle: float) -> float:
     ...
 
   @overload
-  def gas_attenuation(self, fc: float, epsilon: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+  def gas_attenuation(self, fc: float, elevation_angle: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     ...
 
-  def gas_attenuation(self, fc, epsilon):
+  def gas_attenuation(self, fc, elevation_angle):
     """The gas attenuation model.
     The gas attenuation is zenith loss / sin(elevation_angle).
     The longer the distance through the troposphere (small elevation angle),
@@ -93,12 +93,12 @@ class Channel():
 
     Args:
       fc (float): The central frequency of the signal
-      epsilon (float): The elevation angle in radian.
+      elevation_angle (float): The elevation angle in radian.
 
     Returns:
       (float): The gas attenuation in dB
     """
-    return self.zenith_attenuation(fc=fc) / np.sin(epsilon)
+    return self.zenith_attenuation(fc=fc) / np.sin(elevation_angle)
 
   def zenith_attenuation(self, fc: float) -> float:
     """The zenith attenuation model.
@@ -121,20 +121,20 @@ class Channel():
     return float(zenith_att.value)
 
   @functools.cache
-  def cal_deterministic_loss(self, distance: float, freq: float, epsilon: float) -> float:
+  def cal_deterministic_loss(self, distance: float, freq: float, elevation_angle: float) -> float:
     """Calculate the deterministic part of the loss.
 
     Args:
       distance (float): The distance between sat and ue.
       freq (float): The center freq.
-      epsilon (float): The elevation angle pointing from ue to sat
+      elevation_angle (float): The elevation angle pointing from ue to sat
 
     Returns:
       (float): The total deterministic loss (dB)
     """
     fspl = self.free_space(distance=distance, freq=freq)
-    scpl = self.scintillation_loss(epsilon)
-    gpl = self.gas_attenuation(freq, epsilon)
+    scpl = self.scintillation_loss(elevation_angle)
+    gpl = self.gas_attenuation(freq, elevation_angle)
     return fspl + scpl + gpl
 
   def cal_stochastic_loss(self) -> float:
@@ -150,13 +150,13 @@ class Channel():
                                           Omega=constant.LOS_COMPONENT_POWER)
     return sr_loss
 
-  def cal_total_loss(self, distance: float, freq: float, epsilon: float) -> float:
+  def cal_total_loss(self, distance: float, freq: float, elevation_angle: float) -> float:
     """Calculate the total loss for sat and ue.
 
     Args:
       distance (float): The distance between sat and ue.
       freq (float): The center freq.
-      epsilon (float): The elevation angle pointing from ue to sat
+      elevation_angle (float): The elevation angle pointing from ue to sat
 
     Returns:
       (float): The total loss (dB)
@@ -165,8 +165,8 @@ class Channel():
                                                           constant.CACHED_PRECISION),
                                            freq=round(freq,
                                                       constant.CACHED_PRECISION),
-                                           epsilon=round(epsilon,
-                                                         constant.CACHED_PRECISION))
+                                           elevation_angle=round(elevation_angle,
+                                                                 constant.CACHED_PRECISION))
     stoch_loss = self.cal_stochastic_loss()
 
     return det_loss + stoch_loss
@@ -195,3 +195,22 @@ class Channel():
       float: The fading gain (dB).
     """
     return self.rician_fading(k_db=constant.MIN_NEG_FLOAT)
+
+  def modified_rain_attenuation(self, rain_rate: float, L_s: float, height_diff: float, freq: float, elevation_angle: float, polarization_angle: float = 0) -> float:
+    # reference paper: Rain Attenuation Prediction Model for Satellite Communications in Tropical Regions
+    k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[int(freq / 1e9)]
+    k = (k_h + k_v + (k_h - k_v) * (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / 2
+    alpha = (k_h * alpha_h + k_v * alpha_v + (k_h * alpha_h - k_v * alpha_v) *
+             (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / (2 * k)
+    a_1, a_2, a_3, a_4 = (0.3979, 0.0021, 0.0185, 0.2337)
+    r = 1 / (a_1 / math.sin(elevation_angle) + a_2 * rain_rate * height_diff / constant.KM - a_3 * (freq / 1e9) + a_4)
+    print("coeffiecnt", k, alpha, r)
+    A_p = k * (rain_rate ** alpha) * L_s / constant.KM * r
+    return A_p
+
+  def itu_rain__attenuation(self, rain_rate: float, freq: float, elevation_angle: float, polarization_angle: float = 0) -> float:
+    k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[int(freq / 1e9)]
+    k = (k_h + k_v + (k_h - k_v) * (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / 2
+    alpha = (k_h * alpha_h + k_v * alpha_v + (k_h * alpha_h - k_v * alpha_v) *
+             (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / (2 * k)
+    return k * (rain_rate ** alpha)
