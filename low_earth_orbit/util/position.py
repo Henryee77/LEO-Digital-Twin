@@ -62,7 +62,7 @@ class Geodetic:
 
 @dataclass
 class Orbital:
-  """The Geodetic coordinates."""
+  """The Orbital coordinates."""
   inclination: float
   small_omega: float
   large_omega: float
