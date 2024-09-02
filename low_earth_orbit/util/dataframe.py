@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, Tuple
-
+import numpy as np
+import numpy.typing as npt
 from . import constant
 
 
 @dataclass
 class RxData:
-  """The rx date for each beam."""
+  """The rx data for each beam."""
   rsrp: float
   # sinr: float = 0
   inter_sat: bool = True
@@ -25,6 +26,18 @@ class RxData:
   @property
   def gamma(self):
     return self.rsrp - self.a3_offset - constant.A3_HYSTERESIS
+
+
+@dataclass
+class AtmosphericData:
+  """The Atmospheric data for whole region"""
+  latitude_range: Tuple[float]
+  longitude_range: Tuple[float]
+  rainfall: npt.NDArray[np.float64]
+
+  @property
+  def rainfall(self):
+    return self.rainfall
 
 
 SatBeamID = Tuple[str, int]

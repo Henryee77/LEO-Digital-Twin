@@ -27,6 +27,15 @@ class OffPolicyTrainer(object):
       self.parameter_db[agent_name] = {}
     self.weight_db = {}
 
+    self.sat_sim_time = 0
+    self.nn_train_time = 0
+    self.eval_time = 0
+    self.param_sharing_time = 0
+
+  @property
+  def total_eps(self):
+    return self.total_eps
+
   def federated_upload(self, agent_names: List[str]):
     """Federated uploading for the models of the given agents.
 
@@ -138,50 +147,44 @@ class OffPolicyTrainer(object):
       agent.load_critic_state_dict(critic_sd)
 
   def train(self, env, log, tb_writer):
-    sat_sim_time = 0
-    nn_train_time = 0
-    eval_time = 0
-    param_sharing_time = 0
-    train_start_time = time.time()
-    while self.total_eps < self.args.ep_max_timesteps:
-      # Collect one trajectory
-      sim_start_time = time.time()
-      self.collect_one_traj(env=env, log=log, tb_writer=tb_writer)
-      sat_sim_time += time.time() - sim_start_time
+    sim_start_time = time.time()
+    self.collect_one_traj(env=env, log=log, tb_writer=tb_writer)
+    self.sat_sim_time += time.time() - sim_start_time
 
-      for _ in range(self.args.iter_num):
-        self.total_train_iter += 1
-        nn_start_time = time.time()
-        for _, agent in self.leo_agent_dict.items():
-          # Update policy (iteration of training is args.iter_num)
-          agent.update_policy(self.total_train_iter)
-        nn_train_time += time.time() - nn_start_time
+    for _ in range(self.args.iter_num):
+      self.total_train_iter += 1
+      nn_start_time = time.time()
+      for _, agent in self.leo_agent_dict.items():
+        # Update policy (iteration of training is args.iter_num)
+        agent.update_policy(self.total_train_iter)
+      self.nn_train_time += time.time() - nn_start_time
 
-        if self.total_eps % self.args.federated_upload_freq == 0:
-          ps_start_time = time.time()
-          self.federated_upload(agent_names=list(self.leo_agent_dict.keys()))
-          param_sharing_time += time.time() - ps_start_time
+      if self.total_eps % self.args.federated_upload_freq == 0:
+        ps_start_time = time.time()
+        self.federated_upload(agent_names=list(self.leo_agent_dict.keys()))
+        self.param_sharing_time += time.time() - ps_start_time
 
-        if self.total_eps % self.args.federated_download_freq == 0:
-          ps_start_time = time.time()
-          self.federated_download(agent_names=list(self.leo_agent_dict.keys()))
-          param_sharing_time += time.time() - ps_start_time
+      if self.total_eps % self.args.federated_download_freq == 0:
+        ps_start_time = time.time()
+        self.federated_download(agent_names=list(self.leo_agent_dict.keys()))
+        self.param_sharing_time += time.time() - ps_start_time
 
       # Measure performance  # or (self.total_eps <= 20 and self.total_eps % 2 == 0)
       eval_start_time = time.time()
       if self.total_eps % self.args.eval_freq == 0:
         self.eval_progress(env=env, log=log, tb_writer=tb_writer)
-      eval_time = time.time() - eval_start_time
+      self.eval_time = time.time() - eval_start_time
 
-    total_training_time = time.time() - train_start_time
+  def print_time(self):
+    total_training_time = self.sat_sim_time + self.nn_train_time + self.param_sharing_time + self.eval_time
     print(
-      f'Satellite simulation time ratio: {sat_sim_time / total_training_time * 100 :.2f} %')
+      f'Satellite simulation time ratio: {self.sat_sim_time / total_training_time * 100 :.2f} %')
     print(
-      f'NN training time ratio: {nn_train_time / total_training_time * 100 :.2f} %')
+      f'NN training time ratio: {self.nn_train_time / total_training_time * 100 :.2f} %')
     print(
-      f'Parameter sharing time ratio: {param_sharing_time / total_training_time * 100 :.2f} %')
+      f'Parameter sharing time ratio: {self.param_sharing_time / total_training_time * 100 :.2f} %')
     print(
-      f'Evaluation time ratio: {eval_time / total_training_time * 100 :.2f} %')
+      f'Evaluation time ratio: {self.eval_time / total_training_time * 100 :.2f} %')
     print(f'total running time: {total_training_time / 3600: .2f} hr')
 
   def eval_progress(self, env, log, tb_writer, running_mode='training'):

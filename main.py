@@ -74,7 +74,10 @@ def main(args):
                           device=device)
     trainer = OffPolicyTrainer(args=args, leo_agent_dict=leo_agent_dict, channel_agent=channel_agent)
     if args.running_mode == 'training':
-      trainer.train(env=env, log=log, tb_writer=tb_writer)
+      while trainer.total_eps < args.ep_max_timesteps:
+        trainer.train(env=env, log=log, tb_writer=tb_writer)
+
+      trainer.print_time()
 
       for agent_name, agent in leo_agent_dict.items():
         agent.policy.save(
@@ -125,10 +128,10 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--ra-actor-n-hidden', default=6400, type=int,
+      '--ra-actor-n-hidden', default=3200, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--ra-critic-n-hidden', default=11840, type=int,
+      '--ra-critic-n-hidden', default=6400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
       '--ch-actor-n-hidden', default=1200, type=int,
