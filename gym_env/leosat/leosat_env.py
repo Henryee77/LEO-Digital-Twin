@@ -74,7 +74,7 @@ class LEOSatEnv(gym.Env):
 
     self.pos_low = np.array([-1] * 2)
     self.pos_high = np.array([1] * 2)
-    self.obs_range = 7  # the plotting range
+    self.obs_range = 2  # the plotting range
     sinr_diff_low = np.array([-1] * self.cell_num)
     sinr_diff_high = np.array([1] * self.cell_num)
 
@@ -118,8 +118,11 @@ class LEOSatEnv(gym.Env):
       for beam_idx, power in power_dict.items():
         self.main_sats[sat_name].set_beam_power(beam_idx=beam_idx, tx_power=power)
 
-    ue_throughput, ue_sinr = self.constel.cal_throughput(ues=self.ues,
-                                                         interference_beams=self.additional_beam_set)
+    ue_sinr = self.constel.cal_transmission_sinr(ues=self.ues,
+                                                 interference_beams=self.additional_beam_set)
+    ue_throughput = self.constel.cal_throughput(ues=self.ues,
+                                                sinr=ue_sinr,
+                                                interference_beams=self.additional_beam_set)
 
     cell_sinr = {}
     for sat_name in self.agent_names:
@@ -144,18 +147,17 @@ class LEOSatEnv(gym.Env):
       self.reward[key] = 0.0
     # print(f'dB: {sat_power}')
     # print(util.tolinear(sat_power))
+    sat_tran_ratio = {}
     for ue_name, throughput in ue_throughput.items():
       last_satbeam = self.ue_dict[ue_name].last_serving
       # print(self.ue_dict[ue_name].servable)
-      for ue in self.ues:
-        if ue.name == ue_name:
-          # print(ue.servable)
-          break
       if last_satbeam is not None:
         sat_name, _ = last_satbeam
         sat_power = self.main_sats[sat_name].all_power
         if util.tolinear(sat_power) > constant.MIN_POSITIVE_FLOAT:
-          self.reward[sat_name] += throughput / util.tolinear(sat_power) / 1e3
+          if sat_tran_ratio[sat_name] is None:
+            sat_tran_ratio[sat_name] = max(0, 1 - self.main_sats[sat_name].training_latency / constant.TIMESLOT)
+          self.reward[sat_name] += sat_tran_ratio[sat_name] * throughput / util.tolinear(sat_power) / 1e3
 
     # print(ue_throughput)
     # print(util.tolinear(sat_power))

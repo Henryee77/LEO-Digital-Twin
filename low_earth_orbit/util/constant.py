@@ -86,7 +86,7 @@ MIN_NEG_FLOAT = -1 * sys.float_info.max
 
 # Constellation
 ORIGIN_LONG = 121
-ORIGIN_LATI = 24
+ORIGIN_LATI = 23.5
 
 # Sat
 MAX_POWER = 50  # dBm

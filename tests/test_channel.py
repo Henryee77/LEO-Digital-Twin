@@ -51,6 +51,6 @@ L_s = (rain_height - constant.R_EARTH) / np.sin(elevation_angle)
 print(distance, elevation_angle, L_s, rain_height - ue.position.geodetic.height)
 
 
-channel_gain = wireless_channel.rain_attenuation(
+channel_gain = wireless_channel.itu_rain_attenuation(
     rain_rate=0.3, L_s=L_s, height_diff=rain_height - ue.position.geodetic.height, freq=sat.antenna.central_frequency, elevation_angle=elevation_angle)
 print(channel_gain)

@@ -285,6 +285,7 @@ class Constellation(object):
   def cal_throughput(self,
                      ues: List[User],
                      mode: str = 'run',
+                     sinr: Dict[str, float] | None = None,
                      interference_beams: Set[SatBeamID] | None = None) -> Dict[str, float]:
     """Calculate the throughput of each user
 
@@ -293,15 +294,17 @@ class Constellation(object):
         mode (str): The execution mode of this method
                     1. 'run'
                     2. 'debug' (will print detail info)
+        sinr (Dict[str, float]): The dictionary of the ue sinr.
         interferece_beams (Set[SatBeamID] | None): custom defined interferece beams
 
     Returns:
         Dict[str, float]: The throughput of each online user
     """
     throughput = {}
-    sinr = self.cal_transmission_sinr(ues=ues,
-                                      mode=mode,
-                                      interference_beams=interference_beams)
+    if sinr is None:
+      sinr = self.cal_transmission_sinr(ues=ues,
+                                        mode=mode,
+                                        interference_beams=interference_beams)
     for ue in ues:
       if ue.online and ue.last_serving:
         sat_name, beam_idx = ue.last_serving
@@ -316,11 +319,8 @@ class Constellation(object):
               f'Capacity term: {math.log2(1 + util.tolinear(sinr[ue.name]))}, '
               f'channel num: {served_ue_num}, ')
 
-        transmission_ratio = max(
-            0, 1 - sat.training_latency / constant.TIMESLOT)
-        throughput[ue.name] = (transmission_ratio *
-                               bandwidth *
+        throughput[ue.name] = (bandwidth *
                                math.log2(1 + util.tolinear(sinr[ue.name])) /
                                served_ue_num)
 
-    return throughput, sinr
+    return throughput

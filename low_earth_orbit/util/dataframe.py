@@ -34,10 +34,15 @@ class AtmosphericData:
   latitude_range: Tuple[float]
   longitude_range: Tuple[float]
   rainfall: npt.NDArray[np.float64]
+  cloudtop: npt.NDArray[np.float64]
 
   @property
   def rainfall(self):
     return self.rainfall
+
+  @property
+  def cloudtop(self):
+    return self.cloudtop
 
 
 SatBeamID = Tuple[str, int]
