@@ -41,9 +41,31 @@ def main(args):
   ax.set_aspect('equal', adjustable='box')
   plt.ion()
 
+  # Create env
+  real_env = misc.make_env(args.real_env_name, args=args, ax=ax, agent_names=agent_name_list)
+  digital_env = misc.make_env(args.digital_env_name, args=args, ax=ax, agent_names=agent_name_list)
+
   # Initialize agents
   agent_name_list = ['3_0_24', '2_0_1', '1_0_9']
-  leo_agent_dict = {}
+  realworld_agent_dict = {}
+  digitalworld_agent_dict = {}
+  for agent_name in agent_name_list:
+    realworld_agent_dict[agent_name] = Agent(env=real_env,
+                                             policy_name=args.model,
+                                             tb_writer=tb_writer,
+                                             log=log,
+                                             name=agent_name,
+                                             agent_type='LEO',
+                                             args=args,
+                                             device=device)
+    digitalworld_agent_dict[agent_name] = Agent(env=digital_env,
+                                                policy_name=args.model,
+                                                tb_writer=tb_writer,
+                                                log=log,
+                                                name=agent_name,
+                                                agent_type='LEO',
+                                                args=args,
+                                                device=device)
 
   # Start train
   trainer_dict = {'TD3': 'Off-Policy',
@@ -52,30 +74,10 @@ def main(args):
 
   # Off-Policy
   if trainer_dict[args.model] == 'Off-Policy':
-    # Create env
-    env = misc.make_env(args=args, ax=ax, agent_names=agent_name_list)
-    # Initialize agents
-    for agent_name in agent_name_list:
-      leo_agent_dict[agent_name] = Agent(env=env,
-                                         policy_name=args.model,
-                                         tb_writer=tb_writer,
-                                         log=log,
-                                         name=agent_name,
-                                         agent_type='LEO',
-                                         args=args,
-                                         device=device)
-    channel_agent = Agent(env=env,
-                          policy_name=args.model,
-                          tb_writer=tb_writer,
-                          log=log,
-                          name=agent_name,
-                          agent_type='channel',
-                          args=args,
-                          device=device)
-    trainer = OffPolicyTrainer(args=args, leo_agent_dict=leo_agent_dict, channel_agent=channel_agent)
+    trainer = OffPolicyTrainer(args=args, leo_agent_dict=leo_agent_dict)
     if args.running_mode == 'training':
       while trainer.total_eps < args.ep_max_timesteps:
-        trainer.train(env=env, log=log, tb_writer=tb_writer)
+        trainer.train(digital_env=env, log=log, tb_writer=tb_writer)
 
       trainer.print_time()
 
@@ -205,8 +207,11 @@ if __name__ == '__main__':
 
   # ------------------- Env -------------------------
   parser.add_argument(
-      '--env-name', type=str, required=True,
-      help='OpenAI gym environment name')
+      '--real-env-name', type=str, required=True,
+      help='OpenAI gym environment name. Correspond to the real world')
+  parser.add_argument(
+      '--digital-env-name', type=str, required=True,
+      help='OpenAI gym environment name. Correspond to the digital twins')
   parser.add_argument(
       '--ep-max-timesteps', type=int, required=True,
       help='Total number of episodes')

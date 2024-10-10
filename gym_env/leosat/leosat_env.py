@@ -1,7 +1,6 @@
 """leosat_env.py"""
-from typing import List, Set, Dict
 
-import math
+from typing import List, Set, Dict
 import random
 import gymnasium as gym
 import numpy as np
@@ -22,7 +21,7 @@ from low_earth_orbit.util import constant
 class LEOSatEnv(gym.Env):
   """The LEO Env class."""
 
-  def __init__(self, ax: plt.Axes, agent_names: List[str], args):
+  def __init__(self, ax: plt.Axes, args, agent_dict, agent_names: List[str]):
     super(LEOSatEnv, self).__init__()
     self.ax = ax
     # self.main_sat_name = '0_3_8'
@@ -32,6 +31,7 @@ class LEOSatEnv(gym.Env):
     self.prev_cell_sinr = {}
     self.prev_beam_power = {}
     self.reward = {}
+    self._leo_agents = agent_dict
     self.agent_num = len(agent_names)
     self.agent_names = agent_names
     self.cell_num = 0
@@ -94,8 +94,16 @@ class LEOSatEnv(gym.Env):
     self.random_interfer_beam_num = 2
     self.interference_change_freq = 5
     self.interfer_power_low = 20
-    self.interfer_power_high = self.truncate(
+    self.interfer_power_high = util.truncate(
       self.max_power - util.todb(self.random_interfer_beam_num))
+
+  @property
+  def leo_agents(self):
+    return self._leo_agents
+
+  @leo_agents.setter
+  def leo_agents(self, agent_dict):
+    self._leo_agents = agent_dict
 
   def step(self, action_n: Dict[str, npt.NDArray]):
     # moving satellites
@@ -205,12 +213,12 @@ class LEOSatEnv(gym.Env):
 
   def get_scaled_pos(self, sat_name: str) -> npt.NDArray[np.float32]:
     sat = self.main_sats[sat_name]
-    return np.array([self.rescale_value(sat.position.geodetic.longitude,
+    return np.array([util.rescale_value(sat.position.geodetic.longitude,
                                         constant.ORIGIN_LONG - self.obs_range,
                                         constant.ORIGIN_LONG + self.obs_range,
                                         self.pos_low[0],
                                         self.pos_high[0]),
-                     self.rescale_value(sat.position.geodetic.latitude,
+                     util.rescale_value(sat.position.geodetic.latitude,
                                         constant.ORIGIN_LATI - self.obs_range,
                                         constant.ORIGIN_LATI + self.obs_range,
                                         self.pos_low[1],
@@ -222,24 +230,12 @@ class LEOSatEnv(gym.Env):
     Args:
         action (_type_): Action.
     """
-
-    train_set = self.action_to_trainset(action[self.beam_slice])
-    # print(train_set)
-
-    self.constel.assign_training_set(sat_name=sat_name,
-                                     train_set=train_set)
-
-    beamwidth_dict = self.action_to_beamwidth_dict(action[self.beamwidth_slice])
-    for beam_idx, beamwidth in beamwidth_dict.items():
-      self.main_sats[sat_name].set_beamwidth(beam_idx=beam_idx, beamwidth=beamwidth)
-      # print(f'{beam_idx}, {beamwidth / constant.PI_IN_RAD}')
-
-    self.main_sats[sat_name].scan_beam()
+    pass
 
   def action_to_beamwidth_dict(self, beamwidth_action: npt.NDArray[np.float64]) -> Dict[int, float]:
     res = {}
     for i, beamwidth in enumerate(beamwidth_action):
-      res[i] = self.rescale_value(beamwidth,
+      res[i] = util.rescale_value(beamwidth,
                                   self.beamwidth_action_low[i],
                                   self.beamwidth_action_high[i],
                                   self.min_beamwidth,
@@ -264,7 +260,7 @@ class LEOSatEnv(gym.Env):
       else:
         power_dict[beam_idx] = 0
     # print(f'dict: {power_dict}')
-    total_power = util.tolinear(self.rescale_value(power_action[-1],
+    total_power = util.tolinear(util.rescale_value(power_action[-1],
                                                    self.total_power_low[0],
                                                    self.total_power_high[0],
                                                    self.min_power,
@@ -278,48 +274,9 @@ class LEOSatEnv(gym.Env):
     total_power = np.sum(np.fromiter(power_dict.values(), dtype=float))
     # print(f'total power: {util.todb(total_power)}')
     for beam_idx in power_dict:
-      power_dict[beam_idx] = util.todb(self.truncate(power_dict[beam_idx]))
+      power_dict[beam_idx] = util.todb(util.truncate(power_dict[beam_idx]))
 
     return power_dict
-
-  def rescale_value(self, x, r_min, r_max, t_min, t_max) -> float:
-    """Rescale the value from domain R to doamin T
-
-    Args:
-        x (_type_): The input value
-        r_min (_type_): min value of space R
-        r_max (_type_): max value of space R
-        t_min (_type_): min value of space T
-        t_max (_type_): max value of space T
-
-    Returns:
-        float: The rescaled value
-    """
-    res = (x - r_min) / (r_max - r_min) * (t_max - t_min) + t_min
-    # print(f'debug: {x}, {res}, {t_min}, {t_max}')
-    return res
-
-  def truncate(self, x: float, precision: int = 3) -> float:
-    mult = 10 ** (precision)
-    return float(math.floor(x * mult)) / mult
-
-  def action_to_trainset(self, action: npt.NDArray[np.float64]) -> Set[int]:
-    """Map the action output to the training beam set.
-
-    Args:
-        action (float): Action
-
-    Returns:
-        Set[int]: Training beam set.
-    """
-    train_set = set()
-    # print(action)
-    for i, act in enumerate(action):
-      if act >= 0:
-        train_set.add(i)
-    # print(action)
-    # print(train_set)
-    return train_set
 
   def add_random_interference(self):
     """Other satellites have random beam act as interference """
@@ -338,6 +295,24 @@ class LEOSatEnv(gym.Env):
                                random.uniform(self.interfer_power_low, self.interfer_power_high))
             sat.cell_topo.add_serving(f'{beam_idx}', beam_idx)
             self.additional_beam_set.add((intefere_sat_name, beam_idx))
+
+  def action_to_trainset(self, action: npt.NDArray[np.float64]) -> Set[int]:
+    """Map the action output to the training beam set.
+
+    Args:
+        action (float): Action
+
+    Returns:
+        Set[int]: Training beam set.
+    """
+    train_set = set()
+    # print(action)
+    for i, act in enumerate(action):
+      if act >= 0:
+        train_set.add(i)
+    # print(action)
+    # print(train_set)
+    return train_set
 
   def reset(self, seed=None, options=None):
     super().reset(seed=seed)
@@ -368,7 +343,7 @@ class LEOSatEnv(gym.Env):
       self.prev_beam_power[sat_name] = np.zeros((cell_num, ))
       self.reward[sat_name] = 0.0
 
-    # TODO would not be feasible if cell_num is dynamic
+    # TODO would not be feasible if cell_num is dynamic or is non-identical
     self.cell_num = self.main_sats[self.agent_names[0]].cell_topo.cell_number
 
   def render(self):

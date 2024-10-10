@@ -1,7 +1,8 @@
 """utils.py for NN training"""
 import logging
+import csv
 from datetime import datetime
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -10,7 +11,7 @@ import yaml
 import git
 import numpy as np
 import matplotlib.pyplot as plt
-import gym_env  # this line is neccessary
+import gym_env  # this line is neccessary, don't delete it.
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -89,8 +90,8 @@ def set_log(args, path="."):
   return log
 
 
-def make_env(args, ax: plt.Axes, agent_names) -> gym.Env:
-  env = gym.make(args.env_name, ax=ax, args=args, agent_names=agent_names)
+def make_env(env_name, args, ax: plt.Axes, agent_dict=None, agent_names=None) -> gym.Env:
+  env = gym.make(env_name, ax=ax, args=args, agent_dict=agent_dict, agent_names=agent_names)
 
   return env
 
@@ -170,3 +171,19 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
     result.append(index)
     index = int((index + 1) % modulo)
   return result, index
+
+
+def load_rt_file() -> Dict[str, Dict[int, Dict[str, float]]]:
+  """Load the ray tracing simulation result file."""
+  rt_result = {}
+  with open('MA_TD3/misc/rt_result.csv', mode='r', newline='') as f:
+    reader = csv.DictReader(f)
+    for row in reader:
+      print(row)
+      sat_name = row.pop('sat_name')
+      t = int(row.pop('t'))
+      if sat_name not in rt_result:
+        rt_result[sat_name] = {}
+      rt_result[sat_name][t] = row
+
+  return rt_result

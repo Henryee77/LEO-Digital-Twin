@@ -8,18 +8,19 @@ from typing import Optional
 from typing import Tuple
 import numpy as np
 
-from . import constant
+from . import util, constant
 
 
 @dataclass
 class Cartesian:
   """The Cartesian coordinates."""
+
   x: float
   y: float
   z: float
 
   def __str__(self) -> str:
-    return f'x: {self.x}, y: {self.y}, z: {self.z}'
+    return f"x: {self.x}, y: {self.y}, z: {self.z}"
 
   def get(self) -> Tuple[float, float, float]:
     return self.x, self.y, self.z
@@ -33,18 +34,50 @@ class Cartesian:
 
     return Geodetic(longitude, latitude, height)
 
+  def to_spherical(self) -> Spherical:
+    "Change the Cartesian to Spherical."
+    r = math.sqrt(self.x**2 + self.y**2 + self.z**2)
+    theta = math.acos(self.z / r)
+    phi = util.sign(self.y) * math.acos(self.x / math.sqrt(self.x**2 + self.y**2))
+    return Spherical(r, theta, phi)
+
+
+@dataclass
+class Spherical:
+  """The Spherical coordinates."""
+
+  r: float
+  theta: float
+  phi: float
+
+  def __str__(self) -> str:
+    return f"r: {self.r}, theta: {self.theta}, phi: {self.phi}"
+
+  def get(self) -> Tuple[float, float, float]:
+    return self.r, self.theta, self.phi
+
+  def to_cartesian(self) -> Cartesian:
+    """Change the Spherical to Cartesian."""
+    x = self.r * math.sin(self.theta) * math.cos(self.phi)
+    y = self.r * math.sin(self.theta) * math.sin(self.phi)
+    z = self.r * math.cos(self.theta)
+    return Cartesian(x, y, z)
+
 
 @dataclass
 class Geodetic:
   """The Geodetic coordinates."""
+
   longitude: float
   latitude: float
   height: float
 
   def __str__(self) -> str:
-    return (f'longitude: {self.longitude}, '
-            f'latitude: {self.latitude}, '
-            f'height: {self.height}')
+    return (
+      f"longitude: {self.longitude}, "
+      f"latitude: {self.latitude}, "
+      f"height: {self.height}"
+    )
 
   def get(self) -> Tuple[float, float, float]:
     return self.longitude, self.latitude, self.height
@@ -59,20 +92,29 @@ class Geodetic:
 
     return Cartesian(x, y, z)
 
+  def pos_different(self, pos_two: Geodetic) -> tuple[float, float, float]:
+    d_longitude = pos_two.longitude - self.longitude
+    d_latitude = pos_two.latitude - self.latitude
+    d_height = pos_two.height - self.height
+    return d_longitude, d_latitude, d_height
+
 
 @dataclass
 class Orbital:
-  """The Orbital coordinates."""
+  """The Geodetic coordinates."""
+
   inclination: float
   small_omega: float
   large_omega: float
   radius: float
 
   def __str__(self) -> str:
-    return (f'inclination: {self.inclination}, '
-            f'small_omega: {self.small_omega}, '
-            f'large_omega: {self.large_omega}, '
-            f'radius: {self.radius}')
+    return (
+      f"inclination: {self.inclination}, "
+      f"small_omega: {self.small_omega}, "
+      f"large_omega: {self.large_omega}, "
+      f"radius: {self.radius}"
+    )
 
   def get(self) -> Tuple[float, float, float, float]:
     return self.inclination, self.small_omega, self.large_omega, self.radius
@@ -81,11 +123,19 @@ class Orbital:
     """Change the Orbital to Cartesian."""
     sin_o_cos_i = math.sin(self.small_omega) * math.cos(self.inclination)
 
-    x = self.radius * (math.cos(self.large_omega) * math.cos(self.small_omega) -
-                       math.sin(self.large_omega) * sin_o_cos_i)
-    y = self.radius * (math.sin(self.large_omega) * math.cos(self.small_omega) +
-                       math.cos(self.large_omega) * sin_o_cos_i)
-    z = self.radius * math.sin(self.small_omega) * math.sin(self.inclination)
+    x = self.radius * (
+      math.cos(self.large_omega) * math.cos(self.small_omega)
+      - math.sin(self.large_omega) * sin_o_cos_i
+    )
+    y = self.radius * (
+      math.sin(self.large_omega) * math.cos(self.small_omega)
+      + math.cos(self.large_omega) * sin_o_cos_i
+    )
+    z = (
+      self.radius
+      * math.sin(self.small_omega)
+      * math.sin(self.inclination)
+    )
 
     return Cartesian(x, y, z)
 
@@ -98,10 +148,11 @@ class Position(object):
   """The position class."""
 
   def __init__(
-      self,
-      cartesian: Optional[Cartesian] = None,
-      geodetic: Optional[Geodetic] = None,
-      orbital: Optional[Orbital] = None,
+    self,
+    cartesian: Optional[Cartesian] = None,
+    geodetic: Optional[Geodetic] = None,
+    orbital: Optional[Orbital] = None,
+    spherical: Optional[Spherical] = None,
   ):
     """The __init__ funciton for position.
 
@@ -119,8 +170,12 @@ class Position(object):
       self.geodetic = geodetic
     elif orbital:
       self.orbital = orbital
+    elif spherical:
+      self.spherical = spherical
     else:
-      raise ValueError('You must select cartesian or geodetic as the input.')
+      raise ValueError(
+        "You must select cartesian or geodetic as the input."
+      )
 
   @property
   def cartesian(self):
@@ -130,6 +185,7 @@ class Position(object):
   def cartesian(self, coordinate: Cartesian):
     self._cartesian = coordinate
     self._geodetic = coordinate.to_geodetic()
+    self._spherical = coordinate.to_spherical
 
   @property
   def geodetic(self):
@@ -142,14 +198,23 @@ class Position(object):
 
   @property
   def orbital(self):
-    if getattr(self, '_orbital', None) is None:
-      raise ValueError('You haven\'t initialize the Orbital.')
+    if getattr(self, "_orbital", None) is None:
+      raise ValueError("You haven't initialize the Orbital.")
     return self._orbital
 
   @orbital.setter
   def orbital(self, coordinate: Orbital):
     self._orbital = coordinate
     self._geodetic = coordinate.to_geodetic()
+    self._cartesian = coordinate.to_cartesian()
+
+  @property
+  def spherical(self):
+    return self._spherical
+
+  @spherical.setter
+  def spherical(self, coordinate: Spherical):
+    self._spherical = coordinate
     self._cartesian = coordinate.to_cartesian()
 
   def __eq__(self, target: Position):
@@ -171,16 +236,17 @@ class Position(object):
     dis = math.sqrt(diff_x**2 + diff_y**2 + diff_z**2)
     return dis
 
-  def angle_between_targets(self, target1: Position,
-                            target2: Position) -> float:
+  def angle_between_targets(
+    self, target1: Position, target2: Position
+  ) -> float:
     """Angle between two lines (self-target1 and self-target2)
 
     Args:
-        target1 (Position): The position of target1
-        target2 (Position): The position of target2
+      target1 (Position): The position of target1
+      target2 (Position): The position of target2
 
     Returns:
-        float: The angle in radian
+      float: The angle in radian
     """
     d1 = self.calculate_distance(target1)
     d2 = self.calculate_distance(target2)
@@ -192,10 +258,12 @@ class Position(object):
     """Calculate the elevation angle
 
     Args:
-        target (Position): The ground point
+      target (Position): The ground point
 
     Returns:
-        float: The angle in radian
+      float: The angle in radian
     """
     earth_center = Position(Cartesian(x=0, y=0, z=0))
-    return target.angle_between_targets(self, earth_center) - constant.PI / 2
+    return (
+      target.angle_between_targets(self, earth_center) - constant.PI / 2
+    )

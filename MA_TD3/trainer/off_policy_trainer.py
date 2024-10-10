@@ -14,7 +14,7 @@ from ..misc import misc
 class OffPolicyTrainer(object):
   """The trainer class"""
 
-  def __init__(self, args, leo_agent_dict: Dict[str, Agent], channel_agent):
+  def __init__(self, args, leo_agent_dict: Dict[str, Agent]):
     self.args = args
     self.total_timesteps = 0  # steps of collecting experience
     self.total_train_iter = 0  # steps of training iteration
@@ -40,7 +40,7 @@ class OffPolicyTrainer(object):
     """Federated uploading for the models of the given agents.
 
     Args:
-        agent_names (List[str]): The names of agents perform the FU.
+        agent_names (List[str]): The names of agents participate the parameter sharing.
     """
     for agent_name in agent_names:
       agent = self.leo_agent_dict[agent_name]
@@ -101,7 +101,7 @@ class OffPolicyTrainer(object):
     """Federated dowloading for the models of the given agents.
 
     Args:
-        agent_names (List[str]): The names of agents perform the FD.
+        agent_names (List[str]): The names of agents participate parameter sharing.
     """
     # Calculate the sum parameters
     actor_sum_sd, critic_sum_sd = OrderedDict(), OrderedDict()  # state_dict
@@ -146,9 +146,9 @@ class OffPolicyTrainer(object):
       agent.load_actor_state_dict(actor_sd)
       agent.load_critic_state_dict(critic_sd)
 
-  def train(self, env, log, tb_writer):
+  def train(self, real_env, digital_env, log, tb_writer):
     sim_start_time = time.time()
-    self.collect_one_traj(env=env, log=log, tb_writer=tb_writer)
+    self.collect_one_traj(digital_env=digital_env, log=log, tb_writer=tb_writer)
     self.sat_sim_time += time.time() - sim_start_time
 
     for _ in range(self.args.iter_num):
@@ -172,7 +172,7 @@ class OffPolicyTrainer(object):
       # Measure performance  # or (self.total_eps <= 20 and self.total_eps % 2 == 0)
       eval_start_time = time.time()
       if self.total_eps % self.args.eval_freq == 0:
-        self.eval_progress(env=env, log=log, tb_writer=tb_writer)
+        self.eval_progress(real_env=real_env, digital_env=digital_env, log=log, tb_writer=tb_writer)
       self.eval_time = time.time() - eval_start_time
 
   def print_time(self):
@@ -187,12 +187,12 @@ class OffPolicyTrainer(object):
       f'Evaluation time ratio: {self.eval_time / total_training_time * 100 :.2f} %')
     print(f'total running time: {total_training_time / 3600: .2f} hr')
 
-  def eval_progress(self, env, log, tb_writer, running_mode='training'):
+  def eval_progress(self, digital_env, log, tb_writer, running_mode='training'):
     eval_reward = {}
     for agent_name in self.leo_agent_dict:
       eval_reward[agent_name] = 0.0
     step_count = 0
-    env_observation, _ = env.reset()
+    env_observation, _ = digital_env.reset()
 
     while True:
       # print(f'{ep_timesteps}, {eval_reward}')
@@ -204,8 +204,8 @@ class OffPolicyTrainer(object):
             np.array(env_observation[agent_name]))
         action_n[agent_name] = agent_action
       # print(f'act: {agent_action}')
-      # Take action in env
-      new_env_observation, env_reward, done, truncated, _ = env.step(
+      # Take action in digital_env
+      new_env_observation, env_reward, done, truncated, _ = digital_env.step(
           copy.deepcopy(action_n))
       # print(f'new obs: {new_env_observation}')
       # For next timestep
@@ -215,21 +215,21 @@ class OffPolicyTrainer(object):
       step_count += 1
 
       if running_mode == "testing":
-        env.render()
+        digital_env.render()
 
       # TODO
       # Need to be modified to multi-agent ver.
       if running_mode == 'testing':
-        beam_power_actions = agent_action[env.power_slice]
+        beam_power_actions = agent_action[digital_env.power_slice]
         for i, action in enumerate(beam_power_actions):
-          if i < env.cell_num:
+          if i < digital_env.cell_num:
             tb_writer.add_scalars('actions/power ratio',
                                   {f'beam {i}': action}, step_count)
           else:
             tb_writer.add_scalars('actions/total power',
                                   {'total power': action}, step_count)
 
-        beamwidth_action = agent_action[env.beamwidth_slice]
+        beamwidth_action = agent_action[digital_env.beamwidth_slice]
         for i, action in enumerate(beamwidth_action):
           tb_writer.add_scalars('actions/beamwidth',
                                 {f'beam {i}': action}, step_count)
@@ -246,12 +246,12 @@ class OffPolicyTrainer(object):
     tb_writer.add_scalars(
       'Eval_reward', {'total reward': sum(eval_reward.values())}, self.total_eps)
 
-  def collect_one_traj(self, env, log, tb_writer):
+  def collect_one_traj(self, digital_env, log, tb_writer):
     ep_reward = {}
     for agent_name in self.leo_agent_dict:
       ep_reward[agent_name] = 0.0
     step_count = 0
-    env_observation, _ = env.reset()
+    env_observation, _ = digital_env.reset()
 
     while True:
       # Select action
@@ -262,8 +262,8 @@ class OffPolicyTrainer(object):
           np.array(env_observation[agent_name]), self.total_timesteps)
         action_n[agent_name] = agent_action
 
-      # Take action in env
-      new_env_observation, env_reward, done, truncated, _ = env.step(action_n)
+      # Take action in digital_env
+      new_env_observation, env_reward, done, truncated, _ = digital_env.step(action_n)
 
       # Add experience to memory
       total_reward = sum(env_reward.values())
@@ -296,8 +296,8 @@ class OffPolicyTrainer(object):
 
     return ep_reward
 
-  def test(self, env, log, tb_writer):
-    self.eval_progress(env=env,
+  def test(self, digital_env, log, tb_writer):
+    self.eval_progress(digital_env=digital_env,
                        log=log,
                        tb_writer=tb_writer,
                        running_mode='testing')
