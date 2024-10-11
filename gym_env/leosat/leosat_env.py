@@ -23,6 +23,7 @@ class LEOSatEnv(gym.Env):
 
   def __init__(self, ax: plt.Axes, args, agent_dict, agent_names: List[str]):
     super(LEOSatEnv, self).__init__()
+    self.name = 'LEOSat'
     self.ax = ax
     # self.main_sat_name = '0_3_8'
     self.constel = self.ues = self.nmc = None
@@ -96,6 +97,14 @@ class LEOSatEnv(gym.Env):
     self.interfer_power_low = 20
     self.interfer_power_high = util.truncate(
       self.max_power - util.todb(self.random_interfer_beam_num))
+
+  @property
+  def name(self):
+    return self._name
+
+  @name.setter
+  def name(self, name):
+    self._name = name
 
   @property
   def leo_agents(self):

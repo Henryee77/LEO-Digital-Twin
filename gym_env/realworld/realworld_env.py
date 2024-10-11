@@ -10,6 +10,7 @@ class RealWorldEnv(LEOSatEnv):
 
   def __init__(self, ax: Axes, args, agent_dict, agent_names: List[str]):
     super().__init__(ax, args, agent_dict, agent_names)
+    self.name = 'Real World'
 
   def _take_action(self, action, sat_name):
     train_set = self.action_to_trainset(action[self.beam_slice])

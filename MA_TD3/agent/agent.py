@@ -182,7 +182,7 @@ class Agent(object):
     assert not np.isnan(action).any()
 
     self.tb_writer.add_scalar(
-        f'debug/{self.name}_epsilon', self.epsilon, total_timesteps)
+        f'debug/{self.env.name} {self.name}_epsilon', self.epsilon, total_timesteps)
 
     return action
 
@@ -196,9 +196,9 @@ class Agent(object):
 
     self.sharing_weight = min(self.args.max_sharing_weight, r / self.historical_avg_reward)
 
-    self.tb_writer.add_scalars(f'{self.name}/historical_avg_reward',
+    self.tb_writer.add_scalars(f'{self.env.name} {self.name}/historical_avg_reward',
                                {self.name: self.historical_avg_reward}, total_train_iter)
-    self.tb_writer.add_scalars(f'{self.name}/sharing_weight',
+    self.tb_writer.add_scalars(f'{self.env.name} {self.name}/sharing_weight',
                                {self.name: self.sharing_weight}, total_train_iter)
 
   def update_policy(self, total_train_iter):
@@ -213,4 +213,4 @@ class Agent(object):
 
       for key, value in debug.items():
         self.tb_writer.add_scalars(
-          f'{self.name}/{key}', {self.name: value}, total_train_iter)
+          f'{self.env.name} {self.name}/{key}', {self.name: value}, total_train_iter)

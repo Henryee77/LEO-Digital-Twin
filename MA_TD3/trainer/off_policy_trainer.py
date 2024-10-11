@@ -14,8 +14,11 @@ from ..misc import misc
 class OffPolicyTrainer(object):
   """The trainer class"""
 
-  def __init__(self, args, leo_agent_dict: Dict[str, Agent]):
+  def __init__(self, args, log, tb_writer, env, leo_agent_dict: Dict[str, Agent]):
     self.args = args
+    self.log = log
+    self.tb_writer = tb_writer
+    self.env = env
     self.total_timesteps = 0  # steps of collecting experience
     self.total_train_iter = 0  # steps of training iteration
     self.total_eps = 0  # steps of episodes
@@ -31,19 +34,17 @@ class OffPolicyTrainer(object):
     self.nn_train_time = 0
     self.eval_time = 0
     self.param_sharing_time = 0
+    self.total_training_time = 0
 
   @property
   def total_eps(self):
     return self.total_eps
 
-  def federated_upload(self, agent_names: List[str]):
-    """Federated uploading for the models of the given agents.
+  def federated_upload(self):
+    """Federated uploading for the models of the given agents."""
+    ps_start_time = time.time()
 
-    Args:
-        agent_names (List[str]): The names of agents participate the parameter sharing.
-    """
-    for agent_name in agent_names:
-      agent = self.leo_agent_dict[agent_name]
+    for agent_name, agent in self.leo_agent_dict.items():
       if not self.parameter_db[agent_name]:
         self.parameter_db[agent_name]['actor'] = copy.deepcopy(
           agent.actor_state_dict)
@@ -97,12 +98,12 @@ class OffPolicyTrainer(object):
 
       self.weight_db[agent_name] = agent.sharing_weight
 
-  def federated_download(self, agent_names: List[str]):
-    """Federated dowloading for the models of the given agents.
+    self.param_sharing_time += time.time() - ps_start_time
 
-    Args:
-        agent_names (List[str]): The names of agents participate parameter sharing.
-    """
+  def federated_download(self):
+    """Federated dowloading for the models of the given agents."""
+    ps_start_time = time.time()
+
     # Calculate the sum parameters
     actor_sum_sd, critic_sum_sd = OrderedDict(), OrderedDict()  # state_dict
     total_weight = 0.0
@@ -122,8 +123,7 @@ class OffPolicyTrainer(object):
             critic_sum_sd[key] += torch.mul(item, param_weight)
 
     # Update the parameters to the requested agents
-    for agent_name in agent_names:
-      agent = self.leo_agent_dict[agent_name]
+    for agent_name, agent in self.leo_agent_dict.items():
       tau = agent.federated_update_rate
       actor_sd, critic_sd = agent.model_state_dict
 
@@ -146,9 +146,27 @@ class OffPolicyTrainer(object):
       agent.load_actor_state_dict(actor_sd)
       agent.load_critic_state_dict(critic_sd)
 
-  def train(self, real_env, digital_env, log, tb_writer):
+    self.param_sharing_time += time.time() - ps_start_time
+
+  def train(self):
+    for _ in range(self.args.iter_num):
+      self.total_train_iter += 1
+      nn_start_time = time.time()
+      for _, agent in self.leo_agent_dict.items():
+        # Update policy (iteration of training is args.iter_num)
+        agent.update_policy(self.total_train_iter)
+      self.nn_train_time += time.time() - nn_start_time
+
+      if self.total_eps % self.args.federated_upload_freq == 0:
+        self.federated_upload(agent_names=list(self.leo_agent_dict.keys()))
+
+      if self.total_eps % self.args.federated_download_freq == 0:
+        self.federated_download(agent_names=list(self.leo_agent_dict.keys()))
+
+  ''' # old train function
+  def train(self, env, log, tb_writer):
     sim_start_time = time.time()
-    self.collect_one_traj(digital_env=digital_env, log=log, tb_writer=tb_writer)
+    self.collect_one_episode(env=env, log=log, tb_writer=tb_writer)
     self.sat_sim_time += time.time() - sim_start_time
 
     for _ in range(self.args.iter_num):
@@ -160,39 +178,36 @@ class OffPolicyTrainer(object):
       self.nn_train_time += time.time() - nn_start_time
 
       if self.total_eps % self.args.federated_upload_freq == 0:
-        ps_start_time = time.time()
         self.federated_upload(agent_names=list(self.leo_agent_dict.keys()))
-        self.param_sharing_time += time.time() - ps_start_time
 
       if self.total_eps % self.args.federated_download_freq == 0:
-        ps_start_time = time.time()
         self.federated_download(agent_names=list(self.leo_agent_dict.keys()))
-        self.param_sharing_time += time.time() - ps_start_time
 
       # Measure performance  # or (self.total_eps <= 20 and self.total_eps % 2 == 0)
-      eval_start_time = time.time()
-      if self.total_eps % self.args.eval_freq == 0:
-        self.eval_progress(real_env=real_env, digital_env=digital_env, log=log, tb_writer=tb_writer)
-      self.eval_time = time.time() - eval_start_time
+      if self.total_eps % self.args.eval_period == 0:
+        self.eval_progress(env=env, log=log, tb_writer=tb_writer)
+  '''
 
   def print_time(self):
-    total_training_time = self.sat_sim_time + self.nn_train_time + self.param_sharing_time + self.eval_time
+    self.total_training_time = self.sat_sim_time + self.nn_train_time + self.param_sharing_time + self.eval_time
     print(
-      f'Satellite simulation time ratio: {self.sat_sim_time / total_training_time * 100 :.2f} %')
+      f'Satellite simulation time ratio: {self.sat_sim_time / self.total_training_time * 100 :.2f} %')
     print(
-      f'NN training time ratio: {self.nn_train_time / total_training_time * 100 :.2f} %')
+      f'NN training time ratio: {self.nn_train_time / self.total_training_time * 100 :.2f} %')
     print(
-      f'Parameter sharing time ratio: {self.param_sharing_time / total_training_time * 100 :.2f} %')
+      f'Parameter sharing time ratio: {self.param_sharing_time / self.total_training_time * 100 :.2f} %')
     print(
-      f'Evaluation time ratio: {self.eval_time / total_training_time * 100 :.2f} %')
-    print(f'total running time: {total_training_time / 3600: .2f} hr')
+      f'Evaluation time ratio: {self.eval_time / self.total_training_time * 100 :.2f} %')
+    print(f'total running time: {self.total_training_time / 3600: .2f} hr')
 
-  def eval_progress(self, digital_env, log, tb_writer, running_mode='training'):
+  def eval_progress(self, running_mode='training'):
+    eval_start_time = time.time()
+
     eval_reward = {}
     for agent_name in self.leo_agent_dict:
       eval_reward[agent_name] = 0.0
     step_count = 0
-    env_observation, _ = digital_env.reset()
+    env_observation, _ = self.env.reset()
 
     while True:
       # print(f'{ep_timesteps}, {eval_reward}')
@@ -204,8 +219,8 @@ class OffPolicyTrainer(object):
             np.array(env_observation[agent_name]))
         action_n[agent_name] = agent_action
       # print(f'act: {agent_action}')
-      # Take action in digital_env
-      new_env_observation, env_reward, done, truncated, _ = digital_env.step(
+      # Take action in env
+      new_env_observation, env_reward, done, truncated, _ = self.env.step(
           copy.deepcopy(action_n))
       # print(f'new obs: {new_env_observation}')
       # For next timestep
@@ -215,43 +230,50 @@ class OffPolicyTrainer(object):
       step_count += 1
 
       if running_mode == "testing":
-        digital_env.render()
+        self.env.render()
 
       # TODO
       # Need to be modified to multi-agent ver.
       if running_mode == 'testing':
-        beam_power_actions = agent_action[digital_env.power_slice]
+        beam_power_actions = agent_action[self.env.power_slice]
         for i, action in enumerate(beam_power_actions):
-          if i < digital_env.cell_num:
-            tb_writer.add_scalars('actions/power ratio',
-                                  {f'beam {i}': action}, step_count)
+          if i < self.env.cell_num:
+            self.tb_writer.add_scalars('actions/power ratio',
+                                       {f'beam {i}': action}, step_count)
           else:
-            tb_writer.add_scalars('actions/total power',
-                                  {'total power': action}, step_count)
+            self.tb_writer.add_scalars('actions/total power',
+                                       {'total power': action}, step_count)
 
-        beamwidth_action = agent_action[digital_env.beamwidth_slice]
+        beamwidth_action = agent_action[self.env.beamwidth_slice]
         for i, action in enumerate(beamwidth_action):
-          tb_writer.add_scalars('actions/beamwidth',
-                                {f'beam {i}': action}, step_count)
+          self.tb_writer.add_scalars('actions/beamwidth',
+                                     {f'beam {i}': action}, step_count)
 
       if done or truncated:
         break
     for agent_name in eval_reward:
       eval_reward[agent_name] /= step_count
     for agent_name in self.leo_agent_dict:
-      log[self.args.log_name].info(
+      self.log[self.args.log_name].info(
           f'Agent {agent_name}: Evaluation Reward {eval_reward[agent_name]:.6f} at episode {self.total_eps}')
-      tb_writer.add_scalars(
-        'Eval_reward', {f'{agent_name} reward': eval_reward[agent_name]}, self.total_eps)
-    tb_writer.add_scalars(
-      'Eval_reward', {'total reward': sum(eval_reward.values())}, self.total_eps)
+      self.tb_writer.add_scalars(
+        'Eval_reward', {f'{self.env.name} {agent_name} reward': eval_reward[agent_name]}, self.total_eps)
+    self.tb_writer.add_scalars(
+      'Eval_reward', {f'{self.env.name} total reward': sum(eval_reward.values())}, self.total_eps)
 
-  def collect_one_traj(self, digital_env, log, tb_writer):
+    self.eval_time = time.time() - eval_start_time
+
+  def collect_one_episode(self) -> Dict[str, float]:
+    """Run an episode and store the state action information to replay buffer.
+
+    Returns:
+        Dict[str, float]: Reward
+    """
     ep_reward = {}
     for agent_name in self.leo_agent_dict:
       ep_reward[agent_name] = 0.0
     step_count = 0
-    env_observation, _ = digital_env.reset()
+    env_observation, _ = self.env.reset()
 
     while True:
       # Select action
@@ -262,8 +284,8 @@ class OffPolicyTrainer(object):
           np.array(env_observation[agent_name]), self.total_timesteps)
         action_n[agent_name] = agent_action
 
-      # Take action in digital_env
-      new_env_observation, env_reward, done, truncated, _ = digital_env.step(action_n)
+      # Take action in env
+      new_env_observation, env_reward, done, truncated, _ = self.env.step(action_n)
 
       # Add experience to memory
       total_reward = sum(env_reward.values())
@@ -289,15 +311,12 @@ class OffPolicyTrainer(object):
       ep_reward[agent_name] /= step_count
     self.total_eps += 1
     for agent_name in self.leo_agent_dict:
-      log[self.args.log_name].info(
+      self.log[self.args.log_name].info(
           f'Agent {agent_name}: Train episode reward {ep_reward[agent_name]:.6f} at episode {self.total_eps}')
-      tb_writer.add_scalars(
-        f'{agent_name}/reward', {'train_reward': ep_reward[agent_name]}, self.total_eps)
+      self.tb_writer.add_scalars(
+        f'{self.env.name} {agent_name}/reward', {'train_reward': ep_reward[agent_name]}, self.total_eps)
 
     return ep_reward
 
-  def test(self, digital_env, log, tb_writer):
-    self.eval_progress(digital_env=digital_env,
-                       log=log,
-                       tb_writer=tb_writer,
-                       running_mode='testing')
+  def test(self):
+    self.eval_progress(running_mode='testing')
