@@ -10,3 +10,15 @@ register(
     # kwargs={'row': 1, 'col': 1},
     max_episode_steps=50
 )
+
+register(
+    id='RealWorld-v0',
+    entry_point='gym_env.realworld.realworld_env:RealWorldEnv',
+    max_episode_steps=50
+)
+
+register(
+    id='DigitalWorld-v0',
+    entry_point='gym_env.digitalworld.digitalworld_env:DigitalWorldEnv',
+    max_episode_steps=50
+)

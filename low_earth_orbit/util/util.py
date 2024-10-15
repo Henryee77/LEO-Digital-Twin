@@ -1,7 +1,7 @@
 """The basic util module."""
 
 import os
-from typing import Tuple, overload
+from typing import Tuple, Set, overload
 
 import math
 import numpy as np
@@ -55,6 +55,37 @@ def tolinear(db):
       In linear scale.
   """
   return 10**(db / 10)
+
+
+def sign(x: float) -> int:
+  if x >= 0:
+    return 1
+  if x < 0:
+    return -1
+  raise ValueError("NAN")
+
+
+def rescale_value(x, r_min, r_max, t_min, t_max) -> float:
+  """Rescale the value from domain R to doamin T
+
+  Args:
+      x (_type_): The input value
+      r_min (_type_): min value of space R
+      r_max (_type_): max value of space R
+      t_min (_type_): min value of space T
+      t_max (_type_): max value of space T
+
+  Returns:
+      float: The rescaled value
+  """
+  res = (x - r_min) / (r_max - r_min) * (t_max - t_min) + t_min
+  # print(f'debug: {x}, {res}, {t_min}, {t_max}')
+  return res
+
+
+def truncate(x: float, precision: int = 3) -> float:
+  mult = 10 ** (precision)
+  return float(math.floor(x * mult)) / mult
 
 
 def calc_sat_angular_speed(radius: float) -> float:

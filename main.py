@@ -41,52 +41,75 @@ def main(args):
   ax.set_aspect('equal', adjustable='box')
   plt.ion()
 
+  # Create env
+  real_env = misc.make_env(args.real_env_name, args=args, ax=ax, agent_names=agent_name_list)
+  digital_env = misc.make_env(args.digital_env_name, args=args, ax=ax, agent_names=agent_name_list)
+
   # Initialize agents
   agent_name_list = ['3_0_24', '2_0_1', '1_0_9']
-  leo_agent_dict = {}
-
-  # Start train
+  realworld_agent_dict = {}
+  digitalworld_agent_dict = {}
+  for agent_name in agent_name_list:
+    realworld_agent_dict[agent_name] = Agent(env=real_env,
+                                             policy_name=args.model,
+                                             tb_writer=tb_writer,
+                                             log=log,
+                                             name=agent_name,
+                                             agent_type='LEO',
+                                             args=args,
+                                             device=device)
+    digitalworld_agent_dict[agent_name] = Agent(env=digital_env,
+                                                policy_name=args.model,
+                                                tb_writer=tb_writer,
+                                                log=log,
+                                                name=agent_name,
+                                                agent_type='LEO',
+                                                args=args,
+                                                device=device)
+  real_env.leo_agents = realworld_agent_dict
+  digital_env.leo_agents = digitalworld_agent_dict
+  # Start training
   trainer_dict = {'TD3': 'Off-Policy',
                   'DDPG': 'Off-Policy',
                   'A3C': 'Asynchronous_On-Policy'}
 
   # Off-Policy
   if trainer_dict[args.model] == 'Off-Policy':
-    # Create env
-    env = misc.make_env(args=args, ax=ax, agent_names=agent_name_list)
-    # Initialize agents
-    for agent_name in agent_name_list:
-      leo_agent_dict[agent_name] = Agent(env=env,
-                                         policy_name=args.model,
-                                         tb_writer=tb_writer,
+    realworld_trainer = OffPolicyTrainer(args=args,
                                          log=log,
-                                         name=agent_name,
-                                         agent_type='LEO',
-                                         args=args,
-                                         device=device)
-    channel_agent = Agent(env=env,
-                          policy_name=args.model,
-                          tb_writer=tb_writer,
-                          log=log,
-                          name=agent_name,
-                          agent_type='channel',
-                          args=args,
-                          device=device)
-    trainer = OffPolicyTrainer(args=args, leo_agent_dict=leo_agent_dict, channel_agent=channel_agent)
+                                         tb_writer=tb_writer,
+                                         env=real_env,
+                                         leo_agent_dict=realworld_agent_dict)
+    digitalworld_trainer = OffPolicyTrainer(args=args,
+                                            log=log,
+                                            tb_writer=tb_writer,
+                                            env=digital_env,
+                                            leo_agent_dict=digitalworld_agent_dict)
     if args.running_mode == 'training':
-      trainer.train(env=env, log=log, tb_writer=tb_writer)
+      while digitalworld_trainer.total_eps < args.ep_max_timesteps:
+        training_process(realworld_trainer, digitalworld_trainer)
 
-      for agent_name, agent in leo_agent_dict.items():
+      digitalworld_trainer.print_time()
+      realworld_trainer.print_time()
+
+      for agent_name, agent in realworld_agent_dict.items():
         agent.policy.save(
-          filename=f'{filename}_{agent_name}', directory=saving_directory)
+          filename=f'{filename}_real_world_{agent_name}', directory=saving_directory)
+      for agent_name, agent in digitalworld_agent_dict.items():
+        agent.policy.save(
+            filename=f'{filename}_digital_world_{agent_name}', directory=saving_directory)
       misc.save_config(args=args)
 
     elif args.running_mode == 'testing':
       print(f'Testing {filename}......')
-      for agent_name, agent in leo_agent_dict.items():
+      for agent_name, agent in realworld_agent_dict.items():
         agent.policy.load(
-          filename=f'{filename}_{agent_name}', directory=loading_directory)
-      trainer.test(env=env, log=log, tb_writer=tb_writer)
+          filename=f'{filename}_real_world_{agent_name}', directory=loading_directory)
+      for agent_name, agent in digitalworld_agent_dict.items():
+        agent.policy.load(
+          filename=f'{filename}_digital_world_{agent_name}', directory=loading_directory)
+
+      testing_process()
     else:
       raise ValueError(f'No {args.running_mode} running mode')
 
@@ -94,6 +117,27 @@ def main(args):
     raise ValueError('On-policy trainer dict is not yet finished.')
 
   tb_writer.close()
+
+
+def training_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+  # run one episode with epsilon greedy
+  realworld_trainer.collect_one_episode()
+  digitalworld_trainer.collect_one_episode()
+
+  # train the neural network
+  realworld_trainer.train()
+  digitalworld_trainer.train()
+
+  # real world digital twin joint RA
+
+  # evaluate performance
+  realworld_trainer.eval_progress()
+  digitalworld_trainer.eval_progress()
+
+
+def testing_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+  realworld_trainer.eval_progress(str='testing')
+  digitalworld_trainer.eval_progress(str='testing')
 
 
 if __name__ == '__main__':
@@ -125,10 +169,10 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--ra-actor-n-hidden', default=6400, type=int,
+      '--ra-actor-n-hidden', default=3200, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--ra-critic-n-hidden', default=11840, type=int,
+      '--ra-critic-n-hidden', default=6400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
       '--ch-actor-n-hidden', default=1200, type=int,
@@ -137,7 +181,7 @@ if __name__ == '__main__':
       '--ch-critic-n-hidden', default=2400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--iter-num', default=2, type=int,
+      '--iter-num', default=4, type=int,
       help='Number of base training iteration')
   parser.add_argument(
       '--replay-buffer-size', default=10000, type=int,
@@ -202,8 +246,11 @@ if __name__ == '__main__':
 
   # ------------------- Env -------------------------
   parser.add_argument(
-      '--env-name', type=str, required=True,
-      help='OpenAI gym environment name')
+      '--real-env-name', type=str, required=True,
+      help='OpenAI gym environment name. Correspond to the real world')
+  parser.add_argument(
+      '--digital-env-name', type=str, required=True,
+      help='OpenAI gym environment name. Correspond to the digital twins')
   parser.add_argument(
       '--ep-max-timesteps', type=int, required=True,
       help='Total number of episodes')
@@ -211,7 +258,7 @@ if __name__ == '__main__':
       '--step-per-ep', default=50, type=int,
       help='Total number of steps in one episode')
   parser.add_argument(
-      '--eval-freq', default=50, type=int,
+      '--eval-period', default=10, type=int,
       help='The evaluation frequency')
 
   # ------------------ Misc -------------------------

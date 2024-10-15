@@ -24,6 +24,7 @@ class CellTopology(object):
     grid_points (list[Position]): The grid points of the cells
     serving (Dict[str, int]): Storge the name of ue to serving beam_index
   """
+
   serving: Dict[str, int]
   training_beam: Set[int]
   grid_points: List[Position]
@@ -36,10 +37,12 @@ class CellTopology(object):
   grid_y: npt.NDArray[np.float64]
   grid_z: npt.NDArray[np.float64]
 
-  def __init__(self,
-               center_point: Position,
-               cell_radius: float = constant.DEFAULT_CELL_RADIUS,
-               cell_layer: int = constant.DEFAULT_CELL_LAYER):
+  def __init__(
+      self,
+      center_point: Position,
+      cell_radius: float = constant.DEFAULT_CELL_RADIUS,
+      cell_layer: int = constant.DEFAULT_CELL_LAYER,
+  ):
     """The __init__ funciton for cell topology.
 
     Args:
@@ -66,7 +69,9 @@ class CellTopology(object):
     self.center_point = center_point
 
     if cell_radius < 0 or cell_layer < 0:
-      raise ValueError('The cell radius and the cell layer must be positive.')
+      raise ValueError(
+          "The cell radius and the cell layer must be positive."
+      )
 
     self.serving = {}
     self.training_beam = set()
@@ -91,7 +96,7 @@ class CellTopology(object):
   @center_point.setter
   def center_point(self, center: Position):
     if center is None:
-      raise ValueError('center cannot be None')
+      raise ValueError("center cannot be None")
     self._center_point = center
     self.update_cell_center_pos()
 
@@ -136,28 +141,36 @@ class CellTopology(object):
         outer_vertex_u = outer_r * np.cos(constant.TOPOLOGY_ANGLE)
         outer_vertex_v = outer_r * np.sin(constant.TOPOLOGY_ANGLE)
         for j in range(constant.DEFAULT_SHAPE):
-          temp_center_u = np.linspace(outer_vertex_u[j],
-                                      outer_vertex_u[j + 1],
-                                      i,
-                                      endpoint=False)
-          temp_center_v = np.linspace(outer_vertex_v[j],
-                                      outer_vertex_v[j + 1],
-                                      i,
-                                      endpoint=False)
-          self.center_u[idx:idx + i] = temp_center_u
-          self.center_v[idx:idx + i] = temp_center_v
+          temp_center_u = np.linspace(
+              outer_vertex_u[j],
+              outer_vertex_u[j + 1],
+              i,
+              endpoint=False,
+          )
+          temp_center_v = np.linspace(
+              outer_vertex_v[j],
+              outer_vertex_v[j + 1],
+              i,
+              endpoint=False,
+          )
+          self.center_u[idx: idx + i] = temp_center_u
+          self.center_v[idx: idx + i] = temp_center_v
           idx += i
 
     self.generate_cell_grid()
 
-    center_theta = np.arcsin(np.sqrt(self.center_u**2 + self.center_v**2))
+    center_theta = np.arcsin(
+        np.sqrt(self.center_u**2 + self.center_v**2)
+    )
     self.center_x = constant.R_EARTH * self.center_u
     self.center_y = constant.R_EARTH * self.center_v
     self.center_z = constant.R_EARTH * np.cos(center_theta)
 
-  def generate_cell_grid(self,
-                         sat_height: float | None = None,
-                         cell_range_mode: str = 'fixed_radius'):
+  def generate_cell_grid(
+      self,
+      sat_height: float | None = None,
+      cell_range_mode: str = "fixed_radius",
+  ):
     """Generate the cell grid in UV-plane then map to the XYZ-plane.
 
     Args:
@@ -170,18 +183,21 @@ class CellTopology(object):
     for i in range(self.cell_number):
       r = self.get_plotting_cell_radius(i, sat_height, cell_range_mode)
       norm_r = r / constant.R_EARTH
-      grid_u[i, :] = norm_r * np.cos(constant.DRAW_THETA) + self.center_u[i]
-      grid_v[i, :] = norm_r * np.sin(constant.DRAW_THETA) + self.center_v[i]
+      grid_u[i, :] = (
+          norm_r * np.cos(constant.DRAW_THETA) + self.center_u[i]
+      )
+      grid_v[i, :] = (
+          norm_r * np.sin(constant.DRAW_THETA) + self.center_v[i]
+      )
 
     grid_theta = np.arcsin(np.sqrt(grid_u**2 + grid_v**2))
     self.grid_x = constant.R_EARTH * grid_u
     self.grid_y = constant.R_EARTH * grid_v
     self.grid_z = constant.R_EARTH * np.cos(grid_theta)
 
-  def get_plotting_cell_radius(self,
-                               beam_idx: int,
-                               sat_height: float | None,
-                               cell_range_mode: str) -> float:
+  def get_plotting_cell_radius(
+      self, beam_idx: int, sat_height: float | None, cell_range_mode: str
+  ) -> float:
     """Get the cell radius
 
     Args:
@@ -197,23 +213,28 @@ class CellTopology(object):
     Returns:
         float: The cell radius
     """
-    if cell_range_mode == 'fixed_radius':
+    if cell_range_mode == "fixed_radius":
       r = self.cell_radius
-    elif cell_range_mode == '3dB_range':
+    elif cell_range_mode == "3dB_range":
       if sat_height is None:
         raise ValueError(
-            f'Must set the sat_height in {cell_range_mode} plotting mode.')
-      r = ((sat_height - constant.R_EARTH)
-           * math.tan(self.beam_list[beam_idx].beamwidth_3db))
-    elif cell_range_mode == 'main_lobe_range':
+            f"Must set the sat_height in {cell_range_mode} plotting mode."
+        )
+      r = (sat_height - constant.R_EARTH) * math.tan(
+          self.beam_list[beam_idx].beamwidth_3db
+      )
+    elif cell_range_mode == "main_lobe_range":
       if sat_height is None:
         raise ValueError(
-            f'Must set the sat_height in {cell_range_mode} plotting mode.')
-      r = ((sat_height - constant.R_EARTH)
-           * math.tan(self.beam_list[beam_idx].beamwidth_3db)
-           * constant.MAIN_LOBE_RANGE)
+            f"Must set the sat_height in {cell_range_mode} plotting mode."
+        )
+      r = (
+          (sat_height - constant.R_EARTH)
+          * math.tan(self.beam_list[beam_idx].beamwidth_3db)
+          * constant.MAIN_LOBE_RANGE
+      )
     else:
-      raise ValueError(f'No {cell_range_mode} cell plotting mode.')
+      raise ValueError(f"No {cell_range_mode} cell plotting mode.")
 
     return r
 
@@ -223,10 +244,15 @@ class CellTopology(object):
 
   @overload
   def mapping_rotate(
-      self, x: npt.NDArray[np.float64], y: npt.NDArray[np.float64],
-      z: npt.NDArray[np.float64]
-  ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64],
-             npt.NDArray[np.float64]]:
+      self,
+      x: npt.NDArray[np.float64],
+      y: npt.NDArray[np.float64],
+      z: npt.NDArray[np.float64],
+  ) -> Tuple[
+      npt.NDArray[np.float64],
+      npt.NDArray[np.float64],
+      npt.NDArray[np.float64],
+  ]:
     ...
 
   def mapping_rotate(self, x, y, z):
@@ -251,8 +277,12 @@ class CellTopology(object):
     r1_y = y
 
     # Rotate along the z-axis
-    r2_x = r1_x * np.cos(rotated_longitude) - r1_y * np.sin(rotated_longitude)
-    r2_y = r1_x * np.sin(rotated_longitude) + r1_y * np.cos(rotated_longitude)
+    r2_x = r1_x * np.cos(rotated_longitude) - r1_y * np.sin(
+        rotated_longitude
+    )
+    r2_y = r1_x * np.sin(rotated_longitude) + r1_y * np.cos(
+        rotated_longitude
+    )
     r2_z = r1_z
 
     return r2_x, r2_y, r2_z
@@ -260,26 +290,32 @@ class CellTopology(object):
   def update_cell_center_pos(self):
     """Update beam center position based on the center point."""
 
-    center_x, center_y, center_z = self.mapping_rotate(self.center_x,
-                                                       self.center_y,
-                                                       self.center_z)
+    center_x, center_y, center_z = self.mapping_rotate(
+        self.center_x, self.center_y, self.center_z
+    )
 
     for i in range(self.cell_number):
       self.beam_list[i].center_point = Position(
-          cartesian=Cartesian(x=center_x[i], y=center_y[i], z=center_z[i]))
+          cartesian=Cartesian(x=center_x[i], y=center_y[i], z=center_z[i])
+      )
 
   def update_grid_pos(self):
     """Update grid point position based on the center point."""
 
-    grid_x, grid_y, grid_z = self.mapping_rotate(self.grid_x, self.grid_y,
-                                                 self.grid_z)
+    grid_x, grid_y, grid_z = self.mapping_rotate(
+        self.grid_x, self.grid_y, self.grid_z
+    )
 
     self.grid_points = [
-        Position(cartesian=Cartesian(x=x, y=y, z=z)) for x, y, z in zip(
-            grid_x.reshape(-1), grid_y.reshape(-1), grid_z.reshape(-1))
+      Position(cartesian=Cartesian(x=x, y=y, z=z))
+      for x, y, z in zip(
+          grid_x.reshape(-1), grid_y.reshape(-1), grid_z.reshape(-1)
+      )
     ]
 
-  def plot_cell(self, ax: plt.Axes, cell_plot_mode: str, color_dict: Dict[str, str]):
+  def plot_cell(
+      self, ax: plt.Axes, cell_plot_mode: str, color_dict: Dict[str, str]
+  ):
     """Plot each cell in the topology."""
 
     long_list = [pos.geodetic.longitude for pos in self.grid_points]
@@ -290,20 +326,26 @@ class CellTopology(object):
       index_end = constant.CELL_GRID_RESOLUTION * (cell_i + 1)
 
       c = self.get_cell_color(
-          cell_i=cell_i, cell_plot_mode=cell_plot_mode, color_dict=color_dict)
+          cell_i=cell_i,
+          cell_plot_mode=cell_plot_mode,
+          color_dict=color_dict,
+      )
 
       if c is not None:
-        ax.plot(long_list[index_start:index_end],
-                lati_list[index_start:index_end],
-                c=c,
-                alpha=constant.CELL_ALPHA)
+        ax.plot(
+            long_list[index_start:index_end],
+            lati_list[index_start:index_end],
+            c=c,
+            alpha=constant.CELL_ALPHA,
+        )
 
-  def get_cell_color(self, cell_i: int,
-                     cell_plot_mode: Literal['all',
-                                             'active_only',
-                                             'active_and_training'],
-                     color_dict: Dict[str, str]) -> str | None:
-    """Get the plotting color of the cell. 
+  def get_cell_color(
+      self,
+      cell_i: int,
+      cell_plot_mode: Literal["all", "active_only", "active_and_training"],
+      color_dict: Dict[str, str],
+  ) -> str | None:
+    """Get the plotting color of the cell.
 
     Args:
         cell_i (int): The index of the cell
@@ -313,49 +355,57 @@ class CellTopology(object):
         str | None: The plotting color of the cell
     """
     if cell_i in self.serving.values():
-      return color_dict.get('serv_cell', constant.DEFAULT_CELL_SERV_COLOR)
-    if cell_plot_mode == 'active_only':
+      return color_dict.get("serv_cell", constant.DEFAULT_CELL_SERV_COLOR)
+    if cell_plot_mode == "active_only":
       return None
 
     if cell_i in self.training_beam:
-      return color_dict.get('scan_cell', constant.DEFAULT_CELL_SCAN_COLOR)
-    if cell_plot_mode == 'active_and_training':
+      return color_dict.get("scan_cell", constant.DEFAULT_CELL_SCAN_COLOR)
+    if cell_plot_mode == "active_and_training":
       return None
 
-    if cell_plot_mode == 'all':
-      return color_dict.get('norm_cell', constant.DEFAULT_CELL_NORM_COLOR)
+    if cell_plot_mode == "all":
+      return color_dict.get("norm_cell", constant.DEFAULT_CELL_NORM_COLOR)
     return None
 
-  def plot_topo_center(self, ax: plt.Axes, color_dict: Dict[str, str],):
+  def plot_topo_center(
+      self,
+      ax: plt.Axes,
+      color_dict: Dict[str, str],
+  ):
     """Plot center point of the topology."""
 
     center_longitude, center_latitude, _ = self.center_point.geodetic.get()
-    c = color_dict.get('topo_center', constant.DEFAULT_TOPO_CENTER_COLOR)
-    ax.scatter(center_longitude,
-               center_latitude,
-               s=constant.SAT_MARKER_SIZE,
-               c=c)
+    c = color_dict.get("topo_center", constant.DEFAULT_TOPO_CENTER_COLOR)
+    ax.scatter(
+        center_longitude, center_latitude, s=constant.SAT_MARKER_SIZE, c=c
+    )
 
   def plot_cell_center(self, ax: plt.Axes):
     """Plot center point of each cell in the topology."""
 
     for beam in self.beam_list:
-      center_longitude, center_latitude, _ = beam.center_point.geodetic.get()
+      (
+          center_longitude,
+          center_latitude,
+          _,
+      ) = beam.center_point.geodetic.get()
       ax.scatter(center_longitude, center_latitude)
 
-  def plot_geodetic_cell_topology(self,
-                                  ax: plt.Axes,
-                                  sat_height: float | None = None,
-                                  cell_range_mode: Literal['fixed_radius',
-                                                           '3dB_range',
-                                                           'main_lobe_range'] = 'fixed_radius',
-                                  cell_plot_mode: Literal['all',
-                                                          'active_only',
-                                                          'active_and_training'] = 'all',
-                                  color_dict: Dict[Literal['topo_center',
-                                                           'serv_cell',
-                                                           'scan_cell',
-                                                           'norm_cell'], str] = None):
+  def plot_geodetic_cell_topology(
+      self,
+      ax: plt.Axes,
+      sat_height: float | None = None,
+      cell_range_mode: Literal[
+          "fixed_radius", "3dB_range", "main_lobe_range"
+      ] = "fixed_radius",
+      cell_plot_mode: Literal[
+          "all", "active_only", "active_and_training"
+      ] = "all",
+      color_dict: Dict[
+          Literal["topo_center", "serv_cell", "scan_cell", "norm_cell"], str
+      ] = None,
+  ):
     """Plot the cell topology in the geodetic coordinate
 
     Args:
@@ -381,14 +431,15 @@ class CellTopology(object):
     """
 
     if ax is None:
-      raise ValueError('Must give the axes of the plot')
+      raise ValueError("Must give the axes of the plot")
 
     if color_dict is None:
       color_dict = {}
 
-    if cell_range_mode != 'fixed radius':
-      self.generate_cell_grid(sat_height=sat_height,
-                              cell_range_mode=cell_range_mode)
+    if cell_range_mode != "fixed radius":
+      self.generate_cell_grid(
+          sat_height=sat_height, cell_range_mode=cell_range_mode
+      )
 
     self.update_grid_pos()
 
@@ -397,12 +448,14 @@ class CellTopology(object):
 
     self.plot_cell(ax, cell_plot_mode, color_dict)
 
-  def sinr_of_users(self,
-                    serving_ue: List[User],
-                    tx_gain: List[float],
-                    channel_loss: List[float],
-                    i_power: List[float],
-                    mode: str = 'run') -> List[float]:
+  def sinr_of_users(
+      self,
+      serving_ue: List[User],
+      tx_gain: List[float],
+      channel_loss: List[float],
+      i_power: List[float],
+      mode: str = "run",
+  ) -> List[float]:
     """Get the sinr of a list of user
 
     Args:
@@ -422,7 +475,9 @@ class CellTopology(object):
             tx_gain=tx_gain[i],
             channel_loss=channel_loss[i],
             interference_power=i_power[i],
-            mode=mode) for i, ue in enumerate(serving_ue)
+            mode=mode,
+        )
+        for i, ue in enumerate(serving_ue)
     ]
 
   def beam_pos_of_serving_ue(self, ue: User) -> Position:
@@ -436,9 +491,9 @@ class CellTopology(object):
     """
     return self.beam_list[self.serving[ue.name]].center_point
 
-  def find_nearby(self,
-                  ue_pos: Position,
-                  r: Optional[float] = None) -> Set[int]:
+  def find_nearby(
+      self, ue_pos: Position, r: Optional[float] = None
+  ) -> Set[int]:
     """Find the nearby beam_index within r.
 
     Args:
@@ -459,8 +514,11 @@ class CellTopology(object):
       dis = beam_pos.calculate_distance(ue_pos)
       return dis <= r
 
-    ans = set(i for i, item in enumerate(self.beam_list)
-              if _dis(item.center_point, ue_pos, r))
+    ans = set(
+        i
+        for i, item in enumerate(self.beam_list)
+        if _dis(item.center_point, ue_pos, r)
+    )
     return ans
 
   def set_beam_power(self, beam_idx: int, tx_power: float):
@@ -508,7 +566,7 @@ class CellTopology(object):
       self.beam_list[beam_idx].remove_serving(ue_name)
     else:
       # lgo error in the future
-      print('No such beam_idx, error!')
+      print("No such beam_idx, error!")
 
   def all_beam_power(self) -> float:
     """Tx power of all beams
@@ -521,7 +579,7 @@ class CellTopology(object):
 
   def print_all_beams(self):
     for i, beam in enumerate(self.beam_list):
-      print(f'beam: {i}, {beam}')
+      print(f"beam: {i}, {beam}")
 
   def get_beam_info(self, beam_idx: int) -> Tuple[float, float, float, int]:
     """Get the info of the beam
@@ -533,5 +591,29 @@ class CellTopology(object):
         Tuple[float, float, float]: tx_power, central_frequency, bandwidth, served ue number
     """
     beam = self.beam_list[beam_idx]
-    return (beam.tx_power, beam.central_frequency, beam.bandwidth,
-            len(beam.served_ue))
+    return (
+        beam.tx_power,
+        beam.central_frequency,
+        beam.bandwidth,
+        len(beam.served_ue),
+    )
+
+  def cal_two_beam_dis(self, beam_one_i: int, beam_two_i: int):
+    beam_one = self.beam_list[beam_one_i].center_point.geodetic
+    beam_two = self.beam_list[beam_two_i].center_point.geodetic
+    d_long, d_lati, _ = beam_one.pos_different(beam_two)
+    return d_long, d_lati
+
+  def cal_graph_beam_dis(
+      self, scale: tuple[float, float], beam_link=constant.BEAM_NEIGHBOR
+  ):
+    ans = []
+    for cell_list in beam_link:
+      temp_list = [0] * self.cell_number
+      for baem_one, beam_two in cell_list:
+        d_long, d_lati = self.cal_two_beam_dis(baem_one, beam_two)
+        s_long, s_lati = scale
+        inner = s_long * d_long + s_lati * d_lati
+        temp_list[beam_two] = np.maximum(0, inner)
+      ans.append(temp_list)
+    return np.array(ans)
