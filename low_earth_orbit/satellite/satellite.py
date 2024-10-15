@@ -85,7 +85,7 @@ class Satellite(object):
     return self.cell_topo.all_beam_power()
 
   @property
-  def training_latency(self) -> float:
+  def beam_training_latency(self) -> float:
     return ((self.cell_topo.training_beam_num + 1) * constant.T_BEAM
             + constant.T_FB + constant.T_ACK)
 

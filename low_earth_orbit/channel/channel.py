@@ -208,9 +208,21 @@ class Channel():
     A_p = k * (rain_rate ** alpha) * L_s / constant.KM * r
     return A_p
 
-  def itu_rain_attenuation(self, rain_rate: float, freq: float, elevation_angle: float, polarization_angle: float = 0) -> float:
+  def itu_rain_attenuation(self, rain_rate: float, L_s: float, freq: float, elevation_angle: float, polarization_angle: float = 0) -> float:
+    """Calculate the rain attenuation suggested by ITU-R P.838
+
+    Args:
+        rain_rate (float): rain rate (mm/h)
+        L_s (float): slant path distance (km)
+        freq (float): central frequency
+        elevation_angle (float): elevation angle
+        polarization_angle (float, optional): polarization angle. Defaults to 0.
+
+    Returns:
+        float: rain attenuation (dB)
+    """
     k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[int(freq / 1e9)]
     k = (k_h + k_v + (k_h - k_v) * (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / 2
     alpha = (k_h * alpha_h + k_v * alpha_v + (k_h * alpha_h - k_v * alpha_v) *
              (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / (2 * k)
-    return k * (rain_rate ** alpha)
+    return k * (rain_rate ** alpha) * L_s
