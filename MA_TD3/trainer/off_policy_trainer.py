@@ -38,7 +38,11 @@ class OffPolicyTrainer(object):
 
   @property
   def total_eps(self):
-    return self.total_eps
+    return self._total_eps
+
+  @total_eps.setter
+  def total_eps(self, eps):
+    self._total_eps = eps
 
   def federated_upload(self):
     """Federated uploading for the models of the given agents."""
@@ -149,6 +153,10 @@ class OffPolicyTrainer(object):
     self.param_sharing_time += time.time() - ps_start_time
 
   def train(self):
+    """
+    1. Train the neural network.
+    2. Parameter sharing.
+    """
     for _ in range(self.args.iter_num):
       self.total_train_iter += 1
       nn_start_time = time.time()

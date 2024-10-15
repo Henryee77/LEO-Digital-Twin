@@ -41,12 +41,12 @@ def main(args):
   ax.set_aspect('equal', adjustable='box')
   plt.ion()
 
+  agent_name_list = ['3_0_24', '2_0_1', '1_0_9']
   # Create env
   real_env = misc.make_env(args.real_env_name, args=args, ax=ax, agent_names=agent_name_list)
   digital_env = misc.make_env(args.digital_env_name, args=args, ax=ax, agent_names=agent_name_list)
 
   # Initialize agents
-  agent_name_list = ['3_0_24', '2_0_1', '1_0_9']
   realworld_agent_dict = {}
   digitalworld_agent_dict = {}
   for agent_name in agent_name_list:
@@ -87,7 +87,7 @@ def main(args):
                                             leo_agent_dict=digitalworld_agent_dict)
     if args.running_mode == 'training':
       while digitalworld_trainer.total_eps < args.ep_max_timesteps:
-        training_process(realworld_trainer, digitalworld_trainer)
+        pre_training_process(realworld_trainer, digitalworld_trainer)
 
       digitalworld_trainer.print_time()
       realworld_trainer.print_time()
@@ -119,19 +119,14 @@ def main(args):
   tb_writer.close()
 
 
-def training_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+def pre_training_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
   # run one episode with epsilon greedy
-  realworld_trainer.collect_one_episode()
   digitalworld_trainer.collect_one_episode()
 
   # train the neural network
-  realworld_trainer.train()
   digitalworld_trainer.train()
 
-  # real world digital twin joint RA
-
   # evaluate performance
-  realworld_trainer.eval_progress()
   digitalworld_trainer.eval_progress()
 
 
@@ -246,10 +241,10 @@ if __name__ == '__main__':
 
   # ------------------- Env -------------------------
   parser.add_argument(
-      '--real-env-name', type=str, required=True,
+      '--real-env-name', type=str, default='DigitalWorld-v0',
       help='OpenAI gym environment name. Correspond to the real world')
   parser.add_argument(
-      '--digital-env-name', type=str, required=True,
+      '--digital-env-name', type=str, default='RealWorld-v0',
       help='OpenAI gym environment name. Correspond to the digital twins')
   parser.add_argument(
       '--ep-max-timesteps', type=int, required=True,
@@ -281,6 +276,6 @@ if __name__ == '__main__':
 
   now = datetime.now()
   time_string = now.strftime('%Y_%m_%d_%H_%M_%S')
-  args.log_name = f'{args.env_name}_{args.prefix}_log_{time_string}'
+  args.log_name = f'{args.prefix}_log_{time_string}'
 
   main(args=args)

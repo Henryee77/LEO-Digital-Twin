@@ -142,7 +142,7 @@ class Satellite(object):
 
     path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
                                                      freq=self.antenna.central_frequency,
-                                                     epsilon=epsilon)
+                                                     elevation_angle=epsilon)
 
     rx_power = constant.MAX_POWER - path_loss + antenna_gain + ue.rx_gain
 
@@ -174,7 +174,7 @@ class Satellite(object):
 
       path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
                                                        freq=self.antenna.central_frequency,
-                                                       epsilon=epsilon)
+                                                       elevation_angle=epsilon)
       channel_loss.append(path_loss)
 
     return self.cell_topo.sinr_of_users(serving_ue=serving_ue,

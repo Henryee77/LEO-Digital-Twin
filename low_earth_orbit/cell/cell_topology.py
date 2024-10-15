@@ -604,7 +604,7 @@ class CellTopology(object):
     d_long, d_lati, _ = beam_one.pos_different(beam_two)
     return d_long, d_lati
 
-  def cal_graph_beam_dis(
+  '''def cal_graph_beam_dis(
       self, scale: tuple[float, float], beam_link=constant.BEAM_NEIGHBOR
   ):
     ans = []
@@ -617,3 +617,4 @@ class CellTopology(object):
         temp_list[beam_two] = np.maximum(0, inner)
       ans.append(temp_list)
     return np.array(ans)
+  '''

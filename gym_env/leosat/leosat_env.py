@@ -172,7 +172,7 @@ class LEOSatEnv(gym.Env):
         sat_name, _ = last_satbeam
         sat_power = self.main_sats[sat_name].all_power
         if util.tolinear(sat_power) > constant.MIN_POSITIVE_FLOAT:
-          if sat_tran_ratio[sat_name] is None:
+          if sat_name not in sat_tran_ratio:
             sat_tran_ratio[sat_name] = max(0, 1 - self.main_sats[sat_name].beam_training_latency / constant.TIMESLOT)
           self.reward[sat_name] += sat_tran_ratio[sat_name] * throughput / util.tolinear(sat_power) / 1e3
 
