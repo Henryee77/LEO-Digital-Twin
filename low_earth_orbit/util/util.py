@@ -116,3 +116,7 @@ def get_taiwan_shape() -> Tuple[npt.NDArray, npt.NDArray]:
 def plot_taiwan_shape(ax: plt.Axes):
   long, lati = get_taiwan_shape()
   ax.scatter(long, lati, s=1)
+
+
+def propagation_delay(distance) -> float:
+  return distance / constant.LIGHT_SPEED

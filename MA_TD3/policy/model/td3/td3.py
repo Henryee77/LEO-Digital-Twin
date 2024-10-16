@@ -161,6 +161,8 @@ class TD3(PolicyBase):
     self.discount = args.discount
     self.tau = args.tau
     self.policy_freq = args.policy_freq
+    self._nn_param_num = (sum(p.numel() for p in self.actor.parameters() if p.requires_grad) +
+                          sum(p.numel() for p in self.critic.parameters() if p.requires_grad))
 
   @ property
   def actor_layer_num(self):
@@ -173,6 +175,10 @@ class TD3(PolicyBase):
   @ property
   def q_network_num(self):
     return self.critic.q_network_num
+
+  @property
+  def nn_param_num(self) -> int:
+    return self._nn_param_num
 
   def select_action(self, state):
     state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)

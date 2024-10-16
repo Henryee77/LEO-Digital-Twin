@@ -85,9 +85,29 @@ class Satellite(object):
     return self.cell_topo.all_beam_power()
 
   @property
+  def serving_ues(self) -> List[User]:
+    return [ue for ue in self.servable if ue.name in self.cell_topo.serving.keys()]
+
+  @property
+  def beam_sweeping_latency(self) -> float:
+    return self.cell_topo.training_beam_num * constant.T_BEAM
+
+  @property
+  def ues_feedback_latency(self) -> float:
+    return constant.T_FB * len(self.serving_ues)
+
+  @property
+  def ack_latency(self) -> float:
+    return constant.T_ACK * len(self.serving_ues)
+
+  @property
+  def avg_ue_prop_latency(self) -> float:
+    distance_to_ues = [self.position.calculate_distance(ue.position) for ue in self.serving_ues]
+    return sum(distance_to_ues) / len(distance_to_ues) / constant.LIGHT_SPEED
+
+  @property
   def beam_training_latency(self) -> float:
-    return ((self.cell_topo.training_beam_num + 1) * constant.T_BEAM
-            + constant.T_FB + constant.T_ACK)
+    return self.beam_training_latency + self.ues_feedback_latency + self.ack_latency + 2 * self.avg_ue_prop_latency
 
   def clear_power(self):
     """Set all the beam power to zero"""

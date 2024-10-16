@@ -1,8 +1,12 @@
 """leosat_env.py"""
 from typing import List, Set, Dict
 
+import numpy.typing as npt
 from matplotlib.axes import Axes
 from gym_env.leosat.leosat_env import LEOSatEnv
+from low_earth_orbit.ground_user.user import User
+from low_earth_orbit.util.position import Position, Geodetic
+from low_earth_orbit.util import constant
 
 
 class RealWorldEnv(LEOSatEnv):
@@ -11,6 +15,13 @@ class RealWorldEnv(LEOSatEnv):
   def __init__(self, ax: Axes, args, agent_dict, agent_names: List[str]):
     super().__init__(ax, args, agent_dict, agent_names)
     self.name = 'Real World'
+    self.dt_server = User('DT server', position=Position(geodetic=Geodetic(longitude=constant.ORIGIN_LONG,
+                                                                           latitude=constant.ORIGIN_LATI,
+                                                                           height=constant.R_EARTH)))
+
+  def step(self, action_n: Dict[str, npt.NDArray]):
+    if self.step_num % self.train_per_move == 0:
+      self.constel.update_sat_position()
 
   def _take_action(self, action, sat_name):
     train_set = self.action_to_trainset(action[self.beam_slice])

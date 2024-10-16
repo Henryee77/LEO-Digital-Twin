@@ -24,7 +24,7 @@ def main(args):
     os.makedirs('./config')
 
   # Set logs
-  tb_writer = SummaryWriter(f'./log/tb_{args.log_name}')
+  tb_writer = SummaryWriter(logdir=f'./log/tb_{args.log_name}', flush_secs=60)
   log = misc.set_log(args)
   saving_directory = 'pytorch_models'
   loading_directory = 'pytorch_models'
@@ -87,10 +87,10 @@ def main(args):
                                             leo_agent_dict=digitalworld_agent_dict)
     if args.running_mode == 'training':
       while digitalworld_trainer.total_eps < args.ep_max_timesteps:
-        pre_training_process(realworld_trainer, digitalworld_trainer)
+        pre_training_process(args, realworld_trainer, digitalworld_trainer)
 
       digitalworld_trainer.print_time()
-      realworld_trainer.print_time()
+      # realworld_trainer.print_time()
 
       for agent_name, agent in realworld_agent_dict.items():
         agent.policy.save(
@@ -119,7 +119,7 @@ def main(args):
   tb_writer.close()
 
 
-def pre_training_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+def pre_training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
   # run one episode with epsilon greedy
   digitalworld_trainer.collect_one_episode()
 
@@ -127,7 +127,8 @@ def pre_training_process(realworld_trainer: OffPolicyTrainer, digitalworld_train
   digitalworld_trainer.train()
 
   # evaluate performance
-  digitalworld_trainer.eval_progress()
+  if digitalworld_trainer.total_eps % args.eval_period == 0:
+    digitalworld_trainer.eval_progress()
 
 
 def testing_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):

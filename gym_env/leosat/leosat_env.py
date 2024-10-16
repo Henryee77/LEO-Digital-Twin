@@ -160,6 +160,16 @@ class LEOSatEnv(gym.Env):
         tmp_beam_power[beam_idx] = sat.get_beam_info(beam_idx)[0]
       beam_power[sat_name] = tmp_beam_power
 
+    self._cal_reward(ue_throughput=ue_throughput)
+
+    self.step_num += 1
+    done = (self.step_num >= self.max_step)
+    truncated = (self.step_num >= self.max_step)
+
+    obs = self.get_state_info(cell_sinr, beam_power)
+    return (obs, self.reward, done, truncated, {})
+
+  def _cal_reward(self, ue_throughput):
     for key in self.reward:
       self.reward[key] = 0.0
     # print(f'dB: {sat_power}')
@@ -173,19 +183,9 @@ class LEOSatEnv(gym.Env):
         sat_power = self.main_sats[sat_name].all_power
         if util.tolinear(sat_power) > constant.MIN_POSITIVE_FLOAT:
           if sat_name not in sat_tran_ratio:
-            sat_tran_ratio[sat_name] = max(0, 1 - self.main_sats[sat_name].beam_training_latency / constant.TIMESLOT)
+            overhead = max(self.main_sats[sat_name].beam_training_latency + )
+            sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.TIMESLOT)
           self.reward[sat_name] += sat_tran_ratio[sat_name] * throughput / util.tolinear(sat_power) / 1e3
-
-    # print(ue_throughput)
-    # print(util.tolinear(sat_power))
-    # print(self.reward)
-
-    self.step_num += 1
-    done = (self.step_num >= self.max_step)
-    truncated = (self.step_num >= self.max_step)
-
-    obs = self.get_state_info(cell_sinr, beam_power)
-    return (obs, self.reward, done, truncated, {})
 
   def get_state_info(self, cell_sinr, beam_power, init=False):
     sat_pos = {}
@@ -233,13 +233,9 @@ class LEOSatEnv(gym.Env):
                                         self.pos_low[1],
                                         self.pos_high[1])])
 
-  def _take_action(self, action, sat_name):
-    """Take action
-
-    Args:
-        action (_type_): Action.
-    """
-    pass
+  def _take_action(self):
+    """Take action"""
+    raise ValueError('At template funtion')
 
   def action_to_beamwidth_dict(self, beamwidth_action: npt.NDArray[np.float64]) -> Dict[int, float]:
     res = {}

@@ -7,7 +7,7 @@ from low_earth_orbit.util import constant
 
 
 class Agent(object):
-  def __init__(self, env, policy_name: Literal['TD3', 'DDPG'], tb_writer, log, args, name, agent_type, device):
+  def __init__(self, env, policy_name: Literal['TD3', 'DDPG'], tb_writer, log, args, name, agent_type, device, comp_freq=constant.DEFAULT_CPU_CYCLE):
 
     self.env = env
     self.log = log
@@ -16,6 +16,7 @@ class Agent(object):
     self.name = name
     self.agent_type = agent_type
     self.device = device
+    self.comp_freq = comp_freq
 
     self.set_dim()
     self.set_policy(policy_name)
@@ -74,6 +75,10 @@ class Agent(object):
     return self.policy.q_network_num
 
   @property
+  def nn_param_num(self):
+    return self.policy.nn_param_num
+
+  @property
   def federated_update_rate(self):
     return self._federated_update_rate
 
@@ -106,8 +111,13 @@ class Agent(object):
       w = constant.MIN_POSITIVE_FLOAT
     self._sharing_weight = w
 
+  @property
   def clear_memory(self):
     self.memory.clear()
+
+  @property
+  def computation_latency(self) -> float:
+    return constant.F_0 * self.nn_param_num / self.comp_freq
 
   def set_policy(self, policy_name):
     if policy_name == 'TD3':

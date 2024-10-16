@@ -166,10 +166,10 @@ class OffPolicyTrainer(object):
       self.nn_train_time += time.time() - nn_start_time
 
       if self.total_eps % self.args.federated_upload_freq == 0:
-        self.federated_upload(agent_names=list(self.leo_agent_dict.keys()))
+        self.federated_upload()
 
       if self.total_eps % self.args.federated_download_freq == 0:
-        self.federated_download(agent_names=list(self.leo_agent_dict.keys()))
+        self.federated_download()
 
   ''' # old train function
   def train(self, env, log, tb_writer):
@@ -277,6 +277,8 @@ class OffPolicyTrainer(object):
     Returns:
         Dict[str, float]: Reward
     """
+    sim_start_time = time.time()
+
     ep_reward = {}
     for agent_name in self.leo_agent_dict:
       ep_reward[agent_name] = 0.0
@@ -324,6 +326,7 @@ class OffPolicyTrainer(object):
       self.tb_writer.add_scalars(
         f'{self.env.name} {agent_name}/reward', {'train_reward': ep_reward[agent_name]}, self.total_eps)
 
+    self.sat_sim_time += time.time() - sim_start_time
     return ep_reward
 
   def test(self):
