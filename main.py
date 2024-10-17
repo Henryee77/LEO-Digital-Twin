@@ -55,7 +55,7 @@ def main(args):
                                              tb_writer=tb_writer,
                                              log=log,
                                              name=agent_name,
-                                             agent_type='LEO',
+                                             agent_type='real_LEO',
                                              args=args,
                                              device=device)
     digitalworld_agent_dict[agent_name] = Agent(env=digital_env,
@@ -63,11 +63,16 @@ def main(args):
                                                 tb_writer=tb_writer,
                                                 log=log,
                                                 name=agent_name,
-                                                agent_type='LEO',
+                                                agent_type='digital_LEO',
                                                 args=args,
                                                 device=device)
   real_env.leo_agents = realworld_agent_dict
+  real_env.real_agents = realworld_agent_dict
+  real_env.digital_agents = digitalworld_agent_dict
+
   digital_env.leo_agents = digitalworld_agent_dict
+  digital_env.real_agents = realworld_agent_dict
+  digital_env.digital_agents = digitalworld_agent_dict
   # Start training
   trainer_dict = {'TD3': 'Off-Policy',
                   'DDPG': 'Off-Policy',

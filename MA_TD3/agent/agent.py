@@ -4,10 +4,12 @@ import numpy as np
 from ..misc.replay_buffer import ReplayBuffer
 from ..policy.model import TD3, DDPG
 from low_earth_orbit.util import constant
+from low_earth_orbit.satellite.satellite import Satellite
+from gym_env.leosat.leosat_env import LEOSatEnv
 
 
 class Agent(object):
-  def __init__(self, env, policy_name: Literal['TD3', 'DDPG'], tb_writer, log, args, name, agent_type, device, comp_freq=constant.DEFAULT_CPU_CYCLE):
+  def __init__(self, env: LEOSatEnv, policy_name: Literal['TD3', 'DDPG'], tb_writer, log, args, name, agent_type, device, comp_freq=constant.DEFAULT_CPU_CYCLE):
 
     self.env = env
     self.log = log
@@ -17,9 +19,16 @@ class Agent(object):
     self.agent_type = agent_type
     self.device = device
     self.comp_freq = comp_freq
+    self.sat = None
 
-    self.set_dim()
-    self.set_policy(policy_name)
+    if agent_type == 'real_LEO':
+      pass
+    elif agent_type == 'digital_LEO':
+      self.set_dim()
+      self.set_policy(policy_name)
+    else:
+      raise ValueError('No such agent type')
+
     self.memory = ReplayBuffer(max_size=args.replay_buffer_size)
     self.epsilon = 1  # For exploration
     self.max_action = self.env.action_space.high[0]
@@ -36,19 +45,41 @@ class Agent(object):
   def set_dim(self):
     self.state_dim = self.env.observation_space.shape[0]
     self.action_dim = self.env.action_space.shape[0]
-    if self.agent_type == 'LEO':
-      self.actor_n_hidden = self.args.ra_actor_n_hidden
-      self.critic_n_hidden = self.args.ra_critic_n_hidden
-    elif self.agent_type == 'channel':
-      self.actor_n_hidden = self.args.ch_actor_n_hidden
-      self.critic_n_hidden = self.args.ch_critic_n_hidden
-    else:
-      raise ValueError("No such agent type")
+    self.actor_n_hidden = self.args.ra_actor_n_hidden
+    self.critic_n_hidden = self.args.ra_critic_n_hidden
 
     self.log[self.args.log_name].info('[{}] State dim: {}'.format(
         self.name, self.state_dim))
     self.log[self.args.log_name].info('[{}] Action dim: {}'.format(
         self.name, self.action_dim))
+
+  @property
+  def sat(self) -> Satellite:
+    return self._sat
+
+  @sat.setter
+  def sat(self, sat: Satellite):
+    self._sat = sat
+
+  @property
+  def action_dim(self):
+    return self._action_dim
+
+  @action_dim.setter
+  def action_dim(self, dim):
+    if not isinstance(dim, int):
+      raise TypeError('Action dimension must be int')
+    self._action_dim = dim
+
+  @property
+  def state_dim(self):
+    return self._state_dim
+
+  @state_dim.setter
+  def state_dim(self, dim):
+    if not isinstance(dim, int):
+      raise TypeError('State dimension must be int')
+    self._state_dim = dim
 
   @property
   def actor_state_dict(self):

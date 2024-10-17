@@ -3,6 +3,7 @@
 from typing import List, Dict, Set
 from typing import Tuple
 import collections
+import math
 
 from ..antenna import Antenna
 from ..cell import CellTopology
@@ -10,6 +11,7 @@ from ..channel import Channel
 from ..util import Position
 from ..util import constant
 from ..ground_user import User
+from ..util import util
 
 
 class Satellite(object):
@@ -26,6 +28,7 @@ class Satellite(object):
                antenna: Antenna,
                channel: Channel,
                max_power: float = constant.MAX_POWER,
+               total_bandwidth=constant.DEFAULT_BANDWIDTH,
                beam_alg: int = constant.DEFAULT_BEAM_SWEEPING_ALG):
 
     self._shell_index = shell_index
@@ -37,6 +40,7 @@ class Satellite(object):
     self.antenna = antenna
     self.wireless_channel = channel
     self.max_power = max_power
+    self.total_bandwidth = total_bandwidth
     self.beam_alg = beam_alg
 
   @property
@@ -109,6 +113,20 @@ class Satellite(object):
   def beam_training_latency(self) -> float:
     return self.beam_training_latency + self.ues_feedback_latency + self.ack_latency + 2 * self.avg_ue_prop_latency
 
+  @property
+  def trans_latency(self, data_size: int, target) -> float:
+    """Transmission latency
+
+    Args:
+        data_size (int): byte
+
+    Returns:
+        float: latency
+    """
+    max_rsrp = max(self.cal_rsrp(ue=target))
+    noise_power = constant.THERMAL_NOISE_POWER + util.todb(self.total_bandwidth)
+    return data_size / (self.total_bandwidth * math.log2(1 + util.tolinear(max_rsrp - noise_power)))
+
   def clear_power(self):
     """Set all the beam power to zero"""
     self.cell_topo.clear_power()
@@ -133,16 +151,22 @@ class Satellite(object):
                                     constant.R_EARTH)
     return epsilon_bool and distance_bool
 
-  def cal_rsrp(self, ue: User):
+  def cal_rsrp(self, ue: User) -> List[float]:
     """Calculate the rsrp with one ue.
 
     Args:
         ue (User): The target ue that in in servable range
+
+    Returns:
+        (List[float]): The List of rsrp for each beam.
     """
+    rsrp_list = [None] * self.cell_topo.cell_number
     for cell_index in self.cell_topo.training_beam:
       rsrp = self.cal_rsrp_one_beam(
           self.cell_topo.beam_list[cell_index].center_point, ue)
       ue.servable_add(self.name, cell_index, rsrp)
+      rsrp_list[cell_index] = rsrp
+    return rsrp_list
 
   def cal_rsrp_one_beam(self, beam_pos: Position, ue: User) -> float:
     """Calculate the rsrp with one beam.

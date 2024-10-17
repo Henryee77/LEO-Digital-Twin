@@ -74,6 +74,22 @@ class User(object):
   def online(self):
     return self._online
 
+  @property
+  def data_rate(self) -> float:
+    return constant.DEFAULT_GATEWAY_THROUGHPUT
+
+  @property
+  def trans_latency(self, data_size: int) -> float:
+    """Transmission latency
+
+    Args:
+        data_size (int): byte
+
+    Returns:
+        float: latency
+    """
+    return data_size / self.data_rate
+
   @online.setter
   def online(self, status: bool):
     self._online = status

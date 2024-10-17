@@ -83,6 +83,8 @@ ANT_GAIN_COEFF = 2.07123
 # because one of a denominator in the antenna gain fomula is raised to the power 3
 MIN_POSITIVE_FLOAT = float(sys.float_info.min**(1. / 4))
 MIN_NEG_FLOAT = -1 * sys.float_info.max
+INT_SIZE = 4  # bytes
+FLOAT_SIZE = 4
 
 # Sat
 MAX_POWER = 50  # dBm
@@ -102,3 +104,4 @@ CELL_ALPHA = 0.5
 DEFAULT_CPU_CYCLE = 1.5e9
 F_0 = 600
 DEFAULT_RT_DELAY = 0.5
+DEFAULT_GATEWAY_THROUGHPUT = 100e6  # bytes/s

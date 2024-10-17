@@ -16,6 +16,7 @@ from low_earth_orbit.util import util
 from low_earth_orbit.util import Position
 from low_earth_orbit.util import Geodetic
 from low_earth_orbit.util import constant
+from MA_TD3.agent.agent import Agent
 
 
 class LEOSatEnv(gym.Env):
@@ -28,7 +29,6 @@ class LEOSatEnv(gym.Env):
     # self.main_sat_name = '0_3_8'
     self.constel = self.ues = self.nmc = None
     self.ue_dict = {}
-    self.main_sats = {}
     self.prev_cell_sinr = {}
     self.prev_beam_power = {}
     self.reward = {}
@@ -38,10 +38,6 @@ class LEOSatEnv(gym.Env):
     self.cell_num = 0
     self._init_env()
     assert (self.constel is not None) and (self.ues is not None) and (self.nmc is not None)
-
-    for sat_name in self.agent_names:
-      self.main_sats[sat_name] = self.constel.all_sat[sat_name]
-      self.main_sats[sat_name].servable = self.ues
 
     self.step_num = 0
     self.max_step = args.step_per_ep
@@ -54,7 +50,7 @@ class LEOSatEnv(gym.Env):
     self.total_power_low = np.array([-1])
     self.total_power_high = np.array([1])
     self.min_power = 40
-    self.max_power = self.main_sats[agent_names[0]].max_power
+    self.max_power = self.leo_agents[agent_names[0]].sat.max_power
     self.power_slice = slice(0, self.cell_num + 1)
 
     self.beamwidth_action_low = np.array([-1] * self.cell_num)
@@ -107,12 +103,28 @@ class LEOSatEnv(gym.Env):
     self._name = name
 
   @property
-  def leo_agents(self):
+  def leo_agents(self) -> Dict[str, Agent]:
     return self._leo_agents
 
   @leo_agents.setter
-  def leo_agents(self, agent_dict):
+  def leo_agents(self, agent_dict: Dict[str, Agent]):
     self._leo_agents = agent_dict
+
+  @property
+  def real_agents(self) -> Dict[str, Agent]:
+    return self._real_agents
+
+  @real_agents.setter
+  def real_agents(self, agent_dict: Dict[str, Agent]):
+    self._real_agents = agent_dict
+
+  @property
+  def digital_agents(self) -> Dict[str, Agent]:
+    return self._digital_agents
+
+  @digital_agents.setter
+  def digital_agents(self, agent_dict: Dict[str, Agent]):
+    self._digital_agents = agent_dict
 
   def step(self, action_n: Dict[str, npt.NDArray]):
     # moving satellites
@@ -131,9 +143,9 @@ class LEOSatEnv(gym.Env):
     for sat_name, action in action_n.items():
       # set the beam power of the main satellite
       power_dict = self.action_to_power_dict(action[self.power_slice], sat_name)
-      self.main_sats[sat_name].clear_power()
+      self.leo_agents[sat_name].sat.clear_power()
       for beam_idx, power in power_dict.items():
-        self.main_sats[sat_name].set_beam_power(beam_idx=beam_idx, tx_power=power)
+        self.leo_agents[sat_name].sat.set_beam_power(beam_idx=beam_idx, tx_power=power)
 
     ue_sinr = self.constel.cal_transmission_sinr(ues=self.ues,
                                                  interference_beams=self.additional_beam_set)
@@ -149,13 +161,13 @@ class LEOSatEnv(gym.Env):
         sat_name, beam_idx = ue.last_serving
         cell_sinr[sat_name][beam_idx] += util.tolinear(ue_sinr[ue.name])
     for sat_name in self.agent_names:
-      for beam_idx, user_num in self.main_sats[sat_name].cell_topo.serving_status.items():
+      for beam_idx, user_num in self.leo_agents[sat_name].sat.cell_topo.serving_status.items():
         cell_sinr[sat_name][beam_idx] = util.todb(cell_sinr[sat_name][beam_idx] / user_num)
 
     beam_power = {}
     for sat_name in self.agent_names:
       tmp_beam_power = np.zeros((self.cell_num, ))
-      sat = self.main_sats[sat_name]
+      sat = self.leo_agents[sat_name].sat
       for beam_idx in range(self.cell_num):
         tmp_beam_power[beam_idx] = sat.get_beam_info(beam_idx)[0]
       beam_power[sat_name] = tmp_beam_power
@@ -180,24 +192,31 @@ class LEOSatEnv(gym.Env):
       # print(self.ue_dict[ue_name].servable)
       if last_satbeam is not None:
         sat_name, _ = last_satbeam
-        sat_power = self.main_sats[sat_name].all_power
+        sat_power = self.leo_agents[sat_name].sat.all_power
         if util.tolinear(sat_power) > constant.MIN_POSITIVE_FLOAT:
           if sat_name not in sat_tran_ratio:
-            overhead = max(self.main_sats[sat_name].beam_training_latency + )
+            dt_comp_latency = max([dt.computation_latency for dt in self.digital_agents.values()])
+            agent = self.real_agents[sat_name]
+            leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
+
+            overhead = (max(agent.sat.beam_training_latency + agent.computation_latency,
+                            dt_comp_latency + self.dt_server.trans_latency(agent.action_dim * constant.INT_SIZE) + util.propagation_delay(leo2dt_distance))
+                        + agent.sat.trans_latency(constant.FLOAT_SIZE) + util.propagation_delay(leo2dt_distance))
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.TIMESLOT)
+
           self.reward[sat_name] += sat_tran_ratio[sat_name] * throughput / util.tolinear(sat_power) / 1e3
 
   def get_state_info(self, cell_sinr, beam_power, init=False):
     sat_pos = {}
     sinr_diff_dict = {}
-    for sat_name in self.main_sats:
+    for sat_name in self.leo_agents:
       sat_pos[sat_name] = self.get_scaled_pos(sat_name=sat_name)
 
     if init:
-      for sat_name in self.main_sats:
+      for sat_name in self.leo_agents:
         sinr_diff_dict[sat_name] = np.zeros((self.cell_num, ))
     else:
-      for sat_name in self.main_sats:
+      for sat_name in self.leo_agents:
         sinr_diff = cell_sinr[sat_name] - self.prev_cell_sinr[sat_name]
         power_diff = beam_power[sat_name] - self.prev_beam_power[sat_name]
 
@@ -221,7 +240,7 @@ class LEOSatEnv(gym.Env):
     return state_dict
 
   def get_scaled_pos(self, sat_name: str) -> npt.NDArray[np.float32]:
-    sat = self.main_sats[sat_name]
+    sat = self.leo_agents[sat_name].sat
     return np.array([util.rescale_value(sat.position.geodetic.longitude,
                                         constant.ORIGIN_LONG - self.obs_range,
                                         constant.ORIGIN_LONG + self.obs_range,
@@ -257,7 +276,7 @@ class LEOSatEnv(gym.Env):
         Dict[int, float]: Dict of the power of each turned on beam.
     """
     # print(f'action: {power_action}')
-    online_beam = self.main_sats[sat_name].cell_topo.online_beam_set
+    online_beam = self.leo_agents[sat_name].sat.cell_topo.online_beam_set
     power_dict = {}
     for beam_idx in range(self.cell_num):
       if beam_idx in online_beam:
@@ -292,7 +311,7 @@ class LEOSatEnv(gym.Env):
         self.constel.all_sat[intefere_sat_name].cell_topo.serving.clear()
       self.additional_beam_set.clear()
       for intefere_sat_name, sat in self.constel.all_sat.items():
-        if self.in_range(sat, 5) and intefere_sat_name not in self.main_sats:
+        if self.in_range(sat, 5) and intefere_sat_name not in self.leo_agents:
           beam_set = random.sample(range(self.cell_num), self.random_interfer_beam_num)
           # print(f'intefere_sat_name: {intefere_sat_name}, beams: {beam_set}')
           for beam_idx in beam_set:
@@ -336,20 +355,23 @@ class LEOSatEnv(gym.Env):
     self.wireless_channel = Channel()
     self.constel = self.make_constellation(channel=self.wireless_channel)
     self.ues = self.make_ues()
+    self.dt_server = User('DT server', position=Position(geodetic=Geodetic(longitude=constant.ORIGIN_LONG,
+                                                                           latitude=constant.ORIGIN_LATI,
+                                                                           height=constant.R_EARTH)))
     for ue in self.ues:
       self.ue_dict[ue.name] = ue
     self.nmc = self.make_nmc(constel=self.constel, ues=self.ues)
 
     for sat_name in self.agent_names:
-      self.main_sats[sat_name] = self.constel.all_sat[sat_name]
-      self.main_sats[sat_name].servable = self.ues
-      cell_num = self.main_sats[sat_name].cell_topo.cell_number
+      self.leo_agents[sat_name].sat = self.constel.all_sat[sat_name]
+      self.leo_agents[sat_name].sat.servable = self.ues
+      cell_num = self.leo_agents[sat_name].sat.cell_topo.cell_number
       self.prev_cell_sinr[sat_name] = np.zeros((cell_num, ))
       self.prev_beam_power[sat_name] = np.zeros((cell_num, ))
       self.reward[sat_name] = 0.0
 
     # TODO would not be feasible if cell_num is dynamic or is non-identical
-    self.cell_num = self.main_sats[self.agent_names[0]].cell_topo.cell_number
+    self.cell_num = self.leo_agents[self.agent_names[0]].sat.cell_topo.cell_number
 
   def render(self):
     sat_name = '3_0_24'
@@ -361,7 +383,7 @@ class LEOSatEnv(gym.Env):
       self.ax.scatter(ue_long, ue_lati, s=constant.UE_MARKER_SIZE, c='g')
     for sat in self.constel.all_sat.values():
       if self.in_range(sat, self.obs_range):
-        if sat.name in self.main_sats:
+        if sat.name in self.leo_agents:
           cell_plot_mode = 'active_and_training'
           self.ax.text(sat.position.geodetic.longitude,
                        sat.position.geodetic.latitude,
@@ -381,8 +403,8 @@ class LEOSatEnv(gym.Env):
              constant.ORIGIN_LATI + self.obs_range))
     self.ax.set_title(f't: {self.step_num},\n'
                       f'reward: {self.reward[sat_name]:7.2f}, '
-                      f'power: {self.main_sats[sat_name].all_power:3.2f} dBm', {'fontsize': 28})
-    # self.main_sats[sat_name].cell_topo.print_all_beams()
+                      f'power: {self.leo_agents[sat_name].sat.all_power:3.2f} dBm', {'fontsize': 28})
+    # self.leo_agents[sat_name].sat.cell_topo.print_all_beams()
     plt.show()
     plt.pause(0.1)
 
