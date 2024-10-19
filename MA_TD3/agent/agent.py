@@ -1,17 +1,33 @@
 """agent.py"""
-from typing import Literal
+from __future__ import annotations
+from typing import Literal, Dict
+from logging import Logger
+from gymnasium import spaces
+from torch import device
+from tensorboardX import SummaryWriter
 import numpy as np
+import numpy.typing as npt
 from ..misc.replay_buffer import ReplayBuffer
 from ..policy.model import TD3, DDPG
+from low_earth_orbit.util.position import Position, Geodetic
 from low_earth_orbit.util import constant
 from low_earth_orbit.satellite.satellite import Satellite
-from gym_env.leosat.leosat_env import LEOSatEnv
+from low_earth_orbit.cell.cell_topology import CellTopology
+from low_earth_orbit.antenna.antenna import Antenna
+from low_earth_orbit.util import util
 
 
 class Agent(object):
-  def __init__(self, env: LEOSatEnv, policy_name: Literal['TD3', 'DDPG'], tb_writer, log, args, name, agent_type, device, comp_freq=constant.DEFAULT_CPU_CYCLE):
+  def __init__(self,
+               policy_name: Literal['TD3', 'DDPG'],
+               tb_writer: SummaryWriter,
+               log: Dict[str, Logger],
+               args,
+               name: str,
+               agent_type: str,
+               device: device,
+               comp_freq: float = constant.DEFAULT_CPU_CYCLE):
 
-    self.env = env
     self.log = log
     self.tb_writer = tb_writer
     self.args = args
@@ -19,20 +35,25 @@ class Agent(object):
     self.agent_type = agent_type
     self.device = device
     self.comp_freq = comp_freq
-    self.sat = None
+    self.sat = Satellite(shell_index=0,
+                         plane_index=0,
+                         sat_index=0,
+                         angle_speed=0,
+                         position=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
+                         cell_topo=CellTopology(center_point=Position(geodetic=Geodetic(0, 0, constant.R_EARTH))),
+                         antenna=Antenna(),
+                         channel=None)
 
     if agent_type == 'real_LEO':
       pass
     elif agent_type == 'digital_LEO':
-      self.set_dim()
+      self._init_dim()
       self.set_policy(policy_name)
     else:
       raise ValueError('No such agent type')
 
     self.memory = ReplayBuffer(max_size=args.replay_buffer_size)
     self.epsilon = 1  # For exploration
-    self.max_action = self.env.action_space.high[0]
-    self.min_action = self.env.action_space.low[0]
     self.sharing_weight = 1
     self.beta = args.historical_smoothing_coef
     self.beta_pow_n = self.beta
@@ -42,9 +63,51 @@ class Agent(object):
     self.cur_actorlayer_idx = 1
     self.cur_criticlayer_idx = 1
 
-  def set_dim(self):
-    self.state_dim = self.env.observation_space.shape[0]
-    self.action_dim = self.env.action_space.shape[0]
+  def _init_dim(self):
+    cell_num = self.sat.cell_topo.cell_number
+    beam_action_low = np.array([-1] * cell_num)
+    beam_action_high = np.array([1] * cell_num)
+    self.beam_slice = slice(0, cell_num)
+
+    self.total_power_low = np.array([-1])
+    self.total_power_high = np.array([1])
+    self.min_power = 40
+    self.max_power = self.sat.max_power
+    self.power_slice = slice(0, cell_num + 1)
+
+    self.beamwidth_action_low = np.array([-1] * cell_num)
+    self.beamwidth_action_high = np.array([1] * cell_num)
+    self.beamwidth_slice = slice(cell_num + 1, cell_num * 2 + 1)
+    self.min_beamwidth = 2 * constant.PI_IN_RAD
+    self.max_beamwidth = 4 * constant.PI_IN_RAD
+
+    action_low = np.concatenate(
+      (beam_action_low, self.total_power_low, self.beamwidth_action_low))
+
+    action_high = np.concatenate(
+      (beam_action_high, self.total_power_high, self.beamwidth_action_high))
+
+    self.action_space = spaces.Box(low=np.float32(action_low),
+                                   high=np.float32(action_high),
+                                   dtype=np.float32)
+
+    self.pos_low = np.array([-1] * 2)
+    self.pos_high = np.array([1] * 2)
+    sinr_diff_low = np.array([-1] * cell_num)
+    sinr_diff_high = np.array([1] * cell_num)
+
+    obs_low = np.concatenate((self.pos_low, sinr_diff_low))
+    obs_high = np.concatenate((self.pos_high, sinr_diff_high))
+
+    self.observation_space = spaces.Box(low=np.float32(obs_low),  #
+                                        high=np.float32(obs_high),
+                                        dtype=np.float32)
+
+    self.max_actions = self.action_space.high
+    self.min_actions = self.action_space.low
+
+    self.state_dim = self.observation_space.shape[0]
+    self.action_dim = self.action_space.shape[0]
     self.actor_n_hidden = self.args.ra_actor_n_hidden
     self.critic_n_hidden = self.args.ra_critic_n_hidden
 
@@ -52,6 +115,30 @@ class Agent(object):
         self.name, self.state_dim))
     self.log[self.args.log_name].info('[{}] Action dim: {}'.format(
         self.name, self.action_dim))
+
+  def set_policy(self, policy_name):
+    denom = [1, 2, 4, 8, 16, 32]
+    self.actor_hidden_nodes = [round(self.actor_n_hidden / x) for x in denom]
+    self.critic_hidden_nodes = [round(self.critic_n_hidden / x) for x in denom]
+    if policy_name == 'TD3':
+      self.policy = TD3(
+          actor_input_dim=self.state_dim,
+          actor_output_dim=self.action_dim,
+          critic_input_dim=self.state_dim + self.action_dim,
+          actor_hidden_nodes=self.actor_hidden_nodes,
+          critic_hidden_nodes=self.critic_hidden_nodes,
+          name=self.name,
+          args=self.args,
+          action_low=self.action_space.low,
+          action_high=self.action_space.high,
+          device=self.device)
+    elif policy_name == 'DDPG':
+      self.policy = DDPG(state_dim=self.state_dim,
+                         action_dim=self.action_dim,
+                         device=self.device,
+                         args=self.args)
+    else:
+      raise ValueError(f'No {policy_name} policy')
 
   @property
   def sat(self) -> Satellite:
@@ -150,26 +237,17 @@ class Agent(object):
   def computation_latency(self) -> float:
     return constant.F_0 * self.nn_param_num / self.comp_freq
 
-  def set_policy(self, policy_name):
-    if policy_name == 'TD3':
-      self.policy = TD3(
-          actor_input_dim=self.state_dim,
-          actor_output_dim=self.action_dim,
-          critic_input_dim=self.state_dim + self.action_dim,
-          actor_n_hidden=self.actor_n_hidden,
-          critic_n_hidden=self.critic_n_hidden,
-          name=self.name,
-          args=self.args,
-          action_low=self.env.action_space.low,
-          action_high=self.env.action_space.high,
-          device=self.device)
-    elif policy_name == 'DDPG':
-      self.policy = DDPG(state_dim=self.state_dim,
-                         action_dim=self.action_dim,
-                         device=self.device,
-                         args=self.args)
-    else:
-      raise ValueError(f'No {policy_name} policy')
+  def get_scaled_pos(self, plot_range: float) -> npt.NDArray[np.float32]:
+    return np.array([util.rescale_value(self.sat.position.geodetic.longitude,
+                                        constant.ORIGIN_LONG - plot_range,
+                                        constant.ORIGIN_LONG + plot_range,
+                                        self.pos_low[0],
+                                        self.pos_high[0]),
+                     util.rescale_value(self.sat.position.geodetic.latitude,
+                                        constant.ORIGIN_LATI - plot_range,
+                                        constant.ORIGIN_LATI + plot_range,
+                                        self.pos_low[1],
+                                        self.pos_high[1])])
 
   def load_actor_state_dict(self, state_dict):
     self.policy.load_actor_state_dict(state_dict)
@@ -200,17 +278,16 @@ class Agent(object):
   def select_stochastic_action(self, obs, total_timesteps):
     if np.random.rand() > self.epsilon:
       action = self.policy.select_action(obs)
-      noise = np.random.normal((self.max_action + self.min_action) / 2,
-                               (self.max_action - self.min_action) * self.args.expl_noise,
-                               size=len(action))
+      noise = np.array([np.random.normal((max_a + min_a) / 2, (max_a - min_a) * self.args.expl_noise)
+                       for max_a, min_a in zip(self.max_actions, self.min_actions)])
 
       assert np.size(action) == np.size(noise)
       action = np.clip(action + noise,
-                       self.env.action_space.low,
-                       self.env.action_space.high)
+                       self.action_space.low,
+                       self.action_space.high)
       # print(f'ep-greedy: {action}')
     else:
-      action = self.env.action_space.sample()
+      action = self.action_space.sample()
       # print(f'ep-greedy: {action}')
 
     if self.epsilon > self.args.min_epsilon and total_timesteps > self.args.full_explore_steps:
@@ -223,7 +300,7 @@ class Agent(object):
     assert not np.isnan(action).any()
 
     self.tb_writer.add_scalar(
-        f'debug/{self.env.name} {self.name}_epsilon', self.epsilon, total_timesteps)
+        f'debug/{self.agent_type} {self.name}_epsilon', self.epsilon, total_timesteps)
 
     return action
 
@@ -237,9 +314,9 @@ class Agent(object):
 
     self.sharing_weight = min(self.args.max_sharing_weight, r / self.historical_avg_reward)
 
-    self.tb_writer.add_scalars(f'{self.env.name} {self.name}/historical_avg_reward',
+    self.tb_writer.add_scalars(f'{self.agent_type} {self.name}/historical_avg_reward',
                                {self.name: self.historical_avg_reward}, total_train_iter)
-    self.tb_writer.add_scalars(f'{self.env.name} {self.name}/sharing_weight',
+    self.tb_writer.add_scalars(f'{self.agent_type} {self.name}/sharing_weight',
                                {self.name: self.sharing_weight}, total_train_iter)
 
   def update_policy(self, total_train_iter):
@@ -254,4 +331,4 @@ class Agent(object):
 
       for key, value in debug.items():
         self.tb_writer.add_scalars(
-          f'{self.env.name} {self.name}/{key}', {self.name: value}, total_train_iter)
+          f'{self.agent_type} {self.name}/{key}', {self.name: value}, total_train_iter)

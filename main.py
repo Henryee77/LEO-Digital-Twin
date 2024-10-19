@@ -42,37 +42,51 @@ def main(args):
   plt.ion()
 
   agent_name_list = ['3_0_24', '2_0_1', '1_0_9']
-  # Create env
-  real_env = misc.make_env(args.real_env_name, args=args, ax=ax, agent_names=agent_name_list)
-  digital_env = misc.make_env(args.digital_env_name, args=args, ax=ax, agent_names=agent_name_list)
-
   # Initialize agents
   realworld_agent_dict = {}
   digitalworld_agent_dict = {}
   for agent_name in agent_name_list:
-    realworld_agent_dict[agent_name] = Agent(env=real_env,
-                                             policy_name=args.model,
+    realworld_agent_dict[agent_name] = Agent(policy_name=args.model,
                                              tb_writer=tb_writer,
                                              log=log,
                                              name=agent_name,
                                              agent_type='real_LEO',
                                              args=args,
                                              device=device)
-    digitalworld_agent_dict[agent_name] = Agent(env=digital_env,
-                                                policy_name=args.model,
+    digitalworld_agent_dict[agent_name] = Agent(policy_name=args.model,
                                                 tb_writer=tb_writer,
                                                 log=log,
                                                 name=agent_name,
                                                 agent_type='digital_LEO',
                                                 args=args,
                                                 device=device)
-  real_env.leo_agents = realworld_agent_dict
+
+  # Create env
+  real_env = misc.make_env(args.real_env_name,
+                           args=args,
+                           ax=ax,
+                           agent_dict=realworld_agent_dict,
+                           real_agents=realworld_agent_dict,
+                           digital_agents=digitalworld_agent_dict,
+                           agent_names=agent_name_list)
+  digital_env = misc.make_env(args.digital_env_name,
+                              args=args,
+                              ax=ax,
+                              agent_dict=digitalworld_agent_dict,
+                              real_agents=realworld_agent_dict,
+                              digital_agents=digitalworld_agent_dict,
+                              agent_names=agent_name_list)
+  print(f'real env name: {real_env.name}')
+  print(f'digital env name: {digital_env.name}')
+  '''real_env.leo_agents = realworld_agent_dict
   real_env.real_agents = realworld_agent_dict
   real_env.digital_agents = digitalworld_agent_dict
+  real_env.reset()
 
   digital_env.leo_agents = digitalworld_agent_dict
   digital_env.real_agents = realworld_agent_dict
   digital_env.digital_agents = digitalworld_agent_dict
+  digital_env.reset()'''
   # Start training
   trainer_dict = {'TD3': 'Off-Policy',
                   'DDPG': 'Off-Policy',
@@ -247,10 +261,10 @@ if __name__ == '__main__':
 
   # ------------------- Env -------------------------
   parser.add_argument(
-      '--real-env-name', type=str, default='DigitalWorld-v0',
+      '--real-env-name', type=str, default='RealWorld-v0',
       help='OpenAI gym environment name. Correspond to the real world')
   parser.add_argument(
-      '--digital-env-name', type=str, default='RealWorld-v0',
+      '--digital-env-name', type=str, default='DigitalWorld-v0',
       help='OpenAI gym environment name. Correspond to the digital twins')
   parser.add_argument(
       '--ep-max-timesteps', type=int, required=True,

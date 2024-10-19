@@ -109,16 +109,16 @@ class Satellite(object):
     distance_to_ues = [self.position.calculate_distance(ue.position) for ue in self.serving_ues]
     return sum(distance_to_ues) / len(distance_to_ues) / constant.LIGHT_SPEED
 
-  @property
+  @ property
   def beam_training_latency(self) -> float:
-    return self.beam_training_latency + self.ues_feedback_latency + self.ack_latency + 2 * self.avg_ue_prop_latency
+    return self.beam_sweeping_latency + self.ues_feedback_latency + self.ack_latency + 2 * self.avg_ue_prop_latency
 
-  @property
   def trans_latency(self, data_size: int, target) -> float:
     """Transmission latency
 
     Args:
         data_size (int): byte
+        target (User): transmission target
 
     Returns:
         float: latency
@@ -160,7 +160,7 @@ class Satellite(object):
     Returns:
         (List[float]): The List of rsrp for each beam.
     """
-    rsrp_list = [None] * self.cell_topo.cell_number
+    rsrp_list = [constant.MIN_NEG_FLOAT] * self.cell_topo.cell_number
     for cell_index in self.cell_topo.training_beam:
       rsrp = self.cal_rsrp_one_beam(
           self.cell_topo.beam_list[cell_index].center_point, ue)
@@ -176,7 +176,7 @@ class Satellite(object):
         ue (User): The target ue that in in servable range
 
     Returns:
-        (float): The rx power in dBW
+        (float): The rx power in dBm
     """
     epsilon = self.position.cal_elevation_angle(beam_pos)
     dis_sat_ue = self.position.calculate_distance(ue.position)
