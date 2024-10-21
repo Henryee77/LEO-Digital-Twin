@@ -38,7 +38,11 @@ class OffPolicyTrainer(object):
 
   @property
   def total_eps(self):
-    return self.total_eps
+    return self._total_eps
+
+  @total_eps.setter
+  def total_eps(self, eps):
+    self._total_eps = eps
 
   def federated_upload(self):
     """Federated uploading for the models of the given agents."""
@@ -149,6 +153,10 @@ class OffPolicyTrainer(object):
     self.param_sharing_time += time.time() - ps_start_time
 
   def train(self):
+    """
+    1. Train the neural network.
+    2. Parameter sharing.
+    """
     for _ in range(self.args.iter_num):
       self.total_train_iter += 1
       nn_start_time = time.time()
@@ -158,10 +166,10 @@ class OffPolicyTrainer(object):
       self.nn_train_time += time.time() - nn_start_time
 
       if self.total_eps % self.args.federated_upload_freq == 0:
-        self.federated_upload(agent_names=list(self.leo_agent_dict.keys()))
+        self.federated_upload()
 
       if self.total_eps % self.args.federated_download_freq == 0:
-        self.federated_download(agent_names=list(self.leo_agent_dict.keys()))
+        self.federated_download()
 
   ''' # old train function
   def train(self, env, log, tb_writer):
@@ -269,6 +277,8 @@ class OffPolicyTrainer(object):
     Returns:
         Dict[str, float]: Reward
     """
+    sim_start_time = time.time()
+
     ep_reward = {}
     for agent_name in self.leo_agent_dict:
       ep_reward[agent_name] = 0.0
@@ -316,6 +326,7 @@ class OffPolicyTrainer(object):
       self.tb_writer.add_scalars(
         f'{self.env.name} {agent_name}/reward', {'train_reward': ep_reward[agent_name]}, self.total_eps)
 
+    self.sat_sim_time += time.time() - sim_start_time
     return ep_reward
 
   def test(self):

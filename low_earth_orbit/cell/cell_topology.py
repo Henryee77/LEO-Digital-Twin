@@ -110,13 +110,20 @@ class CellTopology(object):
 
   @property
   def serving_status(self) -> Dict[int, int]:
-    ans: Dict[int, int] = {}
-    for item in self.serving.values():
-      if item in ans:
-        ans[item] += 1
+    """Number of users in each beam.
+
+    Returns:
+        Dict[int, int]: Number of users in each beam.
+    """
+    res: Dict[int, int] = {}
+
+    for beam_index in self.serving.values():
+      if beam_index in res:
+        res[beam_index] += 1
       else:
-        ans[item] = 1
-    return ans
+        res[beam_index] = 1
+
+    return res
 
   @property
   def online_beam_set(self) -> Set[int]:
@@ -514,12 +521,12 @@ class CellTopology(object):
       dis = beam_pos.calculate_distance(ue_pos)
       return dis <= r
 
-    ans = set(
+    res = set(
         i
         for i, item in enumerate(self.beam_list)
         if _dis(item.center_point, ue_pos, r)
     )
-    return ans
+    return res
 
   def set_beam_power(self, beam_idx: int, tx_power: float):
     """Set the tx power of the beam
@@ -604,10 +611,10 @@ class CellTopology(object):
     d_long, d_lati, _ = beam_one.pos_different(beam_two)
     return d_long, d_lati
 
-  def cal_graph_beam_dis(
+  '''def cal_graph_beam_dis(
       self, scale: tuple[float, float], beam_link=constant.BEAM_NEIGHBOR
   ):
-    ans = []
+    res = []
     for cell_list in beam_link:
       temp_list = [0] * self.cell_number
       for baem_one, beam_two in cell_list:
@@ -615,5 +622,6 @@ class CellTopology(object):
         s_long, s_lati = scale
         inner = s_long * d_long + s_lati * d_lati
         temp_list[beam_two] = np.maximum(0, inner)
-      ans.append(temp_list)
-    return np.array(ans)
+      res.append(temp_list)
+    return np.array(res)
+  '''

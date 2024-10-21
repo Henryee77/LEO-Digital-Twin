@@ -24,7 +24,7 @@ def main(args):
     os.makedirs('./config')
 
   # Set logs
-  tb_writer = SummaryWriter(f'./log/tb_{args.log_name}')
+  tb_writer = SummaryWriter(logdir=f'./log/tb_{args.log_name}', flush_secs=60)
   log = misc.set_log(args)
   saving_directory = 'pytorch_models'
   loading_directory = 'pytorch_models'
@@ -41,33 +41,52 @@ def main(args):
   ax.set_aspect('equal', adjustable='box')
   plt.ion()
 
-  # Create env
-  real_env = misc.make_env(args.real_env_name, args=args, ax=ax, agent_names=agent_name_list)
-  digital_env = misc.make_env(args.digital_env_name, args=args, ax=ax, agent_names=agent_name_list)
-
-  # Initialize agents
   agent_name_list = ['3_0_24', '2_0_1', '1_0_9']
+  # Initialize agents
   realworld_agent_dict = {}
   digitalworld_agent_dict = {}
   for agent_name in agent_name_list:
-    realworld_agent_dict[agent_name] = Agent(env=real_env,
-                                             policy_name=args.model,
+    realworld_agent_dict[agent_name] = Agent(policy_name=args.model,
                                              tb_writer=tb_writer,
                                              log=log,
                                              name=agent_name,
-                                             agent_type='LEO',
+                                             agent_type='real_LEO',
                                              args=args,
                                              device=device)
-    digitalworld_agent_dict[agent_name] = Agent(env=digital_env,
-                                                policy_name=args.model,
+    digitalworld_agent_dict[agent_name] = Agent(policy_name=args.model,
                                                 tb_writer=tb_writer,
                                                 log=log,
                                                 name=agent_name,
-                                                agent_type='LEO',
+                                                agent_type='digital_LEO',
                                                 args=args,
                                                 device=device)
-  real_env.leo_agents = realworld_agent_dict
+
+  # Create env
+  real_env = misc.make_env(args.real_env_name,
+                           args=args,
+                           ax=ax,
+                           agent_dict=realworld_agent_dict,
+                           real_agents=realworld_agent_dict,
+                           digital_agents=digitalworld_agent_dict,
+                           agent_names=agent_name_list)
+  digital_env = misc.make_env(args.digital_env_name,
+                              args=args,
+                              ax=ax,
+                              agent_dict=digitalworld_agent_dict,
+                              real_agents=realworld_agent_dict,
+                              digital_agents=digitalworld_agent_dict,
+                              agent_names=agent_name_list)
+  print(f'real env name: {real_env.name}')
+  print(f'digital env name: {digital_env.name}')
+  '''real_env.leo_agents = realworld_agent_dict
+  real_env.real_agents = realworld_agent_dict
+  real_env.digital_agents = digitalworld_agent_dict
+  real_env.reset()
+
   digital_env.leo_agents = digitalworld_agent_dict
+  digital_env.real_agents = realworld_agent_dict
+  digital_env.digital_agents = digitalworld_agent_dict
+  digital_env.reset()'''
   # Start training
   trainer_dict = {'TD3': 'Off-Policy',
                   'DDPG': 'Off-Policy',
@@ -87,10 +106,10 @@ def main(args):
                                             leo_agent_dict=digitalworld_agent_dict)
     if args.running_mode == 'training':
       while digitalworld_trainer.total_eps < args.ep_max_timesteps:
-        training_process(realworld_trainer, digitalworld_trainer)
+        pre_training_process(args, realworld_trainer, digitalworld_trainer)
 
       digitalworld_trainer.print_time()
-      realworld_trainer.print_time()
+      # realworld_trainer.print_time()
 
       for agent_name, agent in realworld_agent_dict.items():
         agent.policy.save(
@@ -119,20 +138,16 @@ def main(args):
   tb_writer.close()
 
 
-def training_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+def pre_training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
   # run one episode with epsilon greedy
-  realworld_trainer.collect_one_episode()
   digitalworld_trainer.collect_one_episode()
 
   # train the neural network
-  realworld_trainer.train()
   digitalworld_trainer.train()
 
-  # real world digital twin joint RA
-
   # evaluate performance
-  realworld_trainer.eval_progress()
-  digitalworld_trainer.eval_progress()
+  if digitalworld_trainer.total_eps % args.eval_period == 0:
+    digitalworld_trainer.eval_progress()
 
 
 def testing_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
@@ -246,10 +261,10 @@ if __name__ == '__main__':
 
   # ------------------- Env -------------------------
   parser.add_argument(
-      '--real-env-name', type=str, required=True,
+      '--real-env-name', type=str, default='RealWorld-v0',
       help='OpenAI gym environment name. Correspond to the real world')
   parser.add_argument(
-      '--digital-env-name', type=str, required=True,
+      '--digital-env-name', type=str, default='DigitalWorld-v0',
       help='OpenAI gym environment name. Correspond to the digital twins')
   parser.add_argument(
       '--ep-max-timesteps', type=int, required=True,
@@ -281,6 +296,6 @@ if __name__ == '__main__':
 
   now = datetime.now()
   time_string = now.strftime('%Y_%m_%d_%H_%M_%S')
-  args.log_name = f'{args.env_name}_{args.prefix}_log_{time_string}'
+  args.log_name = f'{args.prefix}_log_{time_string}'
 
   main(args=args)

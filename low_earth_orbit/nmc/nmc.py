@@ -65,4 +65,8 @@ class NMC(object):
       serving_num = len(sat.cell_topo.serving)
       sat.clear_power()
       for key, item in sat.cell_topo.serving_status.items():
+        # print(f'sat_name:, {sat_name}, serving_num: {serving_num}, key: {key}, item: {item}, power_ratio: {util.todb(item / serving_num)}')
         sat.set_beam_power(key, sat.max_power + util.todb(item / serving_num))
+
+      # print('nmc:')
+      # sat.cell_topo.print_all_beams()

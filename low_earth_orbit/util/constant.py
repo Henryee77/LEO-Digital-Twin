@@ -23,11 +23,11 @@ TIMESLOT = 2  # training period (sec)
 
 # Beam-Training Parameteres
 SINR_THRESHOLD = 10  # (dB)
-TRAINING_WINDOW_SIZE = 4
+DEFAULT_TRAINING_WINDOW_SIZE = 4
 BEAM_TRAINING_ACCURACY_THRESHOLD = 0.75
-T_BEAM = 0.15  # (s)
-T_FB = 0.01
-T_ACK = 0.01
+T_BEAM = 0.015  # (s)
+T_FB = 0.005
+T_ACK = 0.005
 A3_INTER_SAT_OFFSET = 6
 A3_INTRA_SAT_OFFSET = 3
 A3_HYSTERESIS = 0
@@ -83,15 +83,15 @@ ANT_GAIN_COEFF = 2.07123
 # because one of a denominator in the antenna gain fomula is raised to the power 3
 MIN_POSITIVE_FLOAT = float(sys.float_info.min**(1. / 4))
 MIN_NEG_FLOAT = -1 * sys.float_info.max
-
-# Constellation
-ORIGIN_LONG = 121
-ORIGIN_LATI = 23.5
+INT_SIZE = 4  # bytes
+FLOAT_SIZE = 4
 
 # Sat
 MAX_POWER = 50  # dBm
 
 # Plot
+ORIGIN_LONG = 121
+ORIGIN_LATI = 23.5
 SAT_MARKER_SIZE = 100
 UE_MARKER_SIZE = 50
 DEFAULT_TOPO_CENTER_COLOR = 'b'
@@ -100,5 +100,8 @@ DEFAULT_CELL_SCAN_COLOR = 'r'
 DEFAULT_CELL_SERV_COLOR = 'g'
 CELL_ALPHA = 0.5
 
-# Beam training
-DEFAULT_TRAINING_WINDOW = 4
+# Latency
+DEFAULT_CPU_CYCLE = 5e9
+F_0 = 50
+DEFAULT_RT_DELAY = 0.5
+DEFAULT_GATEWAY_THROUGHPUT = 100e6  # bytes/s

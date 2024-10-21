@@ -31,7 +31,7 @@ class User(object):
       name: str,
       position: Position,
       rx_gain: float = constant.DEFAULT_RX_GAIN,
-      training_window: int = constant.DEFAULT_TRAINING_WINDOW,
+      training_window: int = constant.DEFAULT_TRAINING_WINDOW_SIZE
   ):
     """The __init__ funciton for user.
 
@@ -74,11 +74,26 @@ class User(object):
   def online(self):
     return self._online
 
+  @property
+  def data_rate(self) -> float:
+    return constant.DEFAULT_GATEWAY_THROUGHPUT
+
   @online.setter
   def online(self, status: bool):
     self._online = status
     if not status:
       self.serving_sinr = constant.MIN_NEG_FLOAT
+
+  def trans_latency(self, data_size: int) -> float:
+    """Transmission latency
+
+    Args:
+        data_size (int): byte
+
+    Returns:
+        float: latency
+    """
+    return data_size / self.data_rate
 
   def servable_clear(self) -> None:
     """Clear the servable dict."""

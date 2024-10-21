@@ -20,7 +20,7 @@ class Beam(object):
 
   def __init__(self,
                center_point: Position,
-               tx_power: float = 0,
+               tx_power: float = constant.MIN_NEG_FLOAT,
                central_frequency: float = constant.DEFAULT_CENTRAL_FREQUENCY,
                bandwidth: float = constant.DEFAULT_BANDWIDTH,
                beamwidth_3db: float = constant.DEFAULT_BEAMWIDTH_3DB):
@@ -122,7 +122,7 @@ class Beam(object):
           'Cannot remove the user which is not in the served dict')
 
     if not self.served_ue:
-      self.tx_power = 0
+      self.tx_power = constant.MIN_NEG_FLOAT
 
   def calc_sinr(self,
                 ue: User,
@@ -169,7 +169,7 @@ class Beam(object):
     other_max_freq = other_beam.central_frequency + 0.5 * other_beam.bandwidth
     other_min_freq = other_beam.central_frequency - 0.5 * other_beam.bandwidth
 
-    both_beam_is_on = self.tx_power > 0 and other_beam.tx_power > 0
+    both_beam_is_on = self.tx_power > constant.MIN_NEG_FLOAT and other_beam.tx_power > constant.MIN_NEG_FLOAT
     self_freq_greater_and_overlap = (
         self_max_freq > other_min_freq and
         self.central_frequency <= other_beam.central_frequency)

@@ -3,6 +3,7 @@
 from typing import List, Dict, Set
 from typing import Tuple
 import collections
+import math
 
 from ..antenna import Antenna
 from ..cell import CellTopology
@@ -10,6 +11,7 @@ from ..channel import Channel
 from ..util import Position
 from ..util import constant
 from ..ground_user import User
+from ..util import util
 
 
 class Satellite(object):
@@ -26,6 +28,7 @@ class Satellite(object):
                antenna: Antenna,
                channel: Channel,
                max_power: float = constant.MAX_POWER,
+               total_bandwidth=constant.DEFAULT_BANDWIDTH,
                beam_alg: int = constant.DEFAULT_BEAM_SWEEPING_ALG):
 
     self._shell_index = shell_index
@@ -37,6 +40,7 @@ class Satellite(object):
     self.antenna = antenna
     self.wireless_channel = channel
     self.max_power = max_power
+    self.total_bandwidth = total_bandwidth
     self.beam_alg = beam_alg
 
   @property
@@ -85,9 +89,43 @@ class Satellite(object):
     return self.cell_topo.all_beam_power()
 
   @property
+  def serving_ues(self) -> List[User]:
+    return [ue for ue in self.servable if ue.name in self.cell_topo.serving.keys()]
+
+  @property
+  def beam_sweeping_latency(self) -> float:
+    return self.cell_topo.training_beam_num * constant.T_BEAM
+
+  @property
+  def ues_feedback_latency(self) -> float:
+    return constant.T_FB * len(self.serving_ues)
+
+  @property
+  def ack_latency(self) -> float:
+    return constant.T_ACK * len(self.serving_ues)
+
+  @property
+  def avg_ue_prop_latency(self) -> float:
+    distance_to_ues = [self.position.calculate_distance(ue.position) for ue in self.serving_ues]
+    return sum(distance_to_ues) / len(distance_to_ues) / constant.LIGHT_SPEED
+
+  @ property
   def beam_training_latency(self) -> float:
-    return ((self.cell_topo.training_beam_num + 1) * constant.T_BEAM
-            + constant.T_FB + constant.T_ACK)
+    return self.beam_sweeping_latency + self.ues_feedback_latency + self.ack_latency + 2 * self.avg_ue_prop_latency
+
+  def trans_latency(self, data_size: int, target) -> float:
+    """Transmission latency
+
+    Args:
+        data_size (int): byte
+        target (User): transmission target
+
+    Returns:
+        float: latency
+    """
+    max_rsrp = max(self.cal_rsrp(ue=target))
+    noise_power = constant.THERMAL_NOISE_POWER + util.todb(self.total_bandwidth)
+    return data_size / (self.total_bandwidth * math.log2(1 + util.tolinear(max_rsrp - noise_power)))
 
   def clear_power(self):
     """Set all the beam power to zero"""
@@ -113,16 +151,22 @@ class Satellite(object):
                                     constant.R_EARTH)
     return epsilon_bool and distance_bool
 
-  def cal_rsrp(self, ue: User):
+  def cal_rsrp(self, ue: User) -> List[float]:
     """Calculate the rsrp with one ue.
 
     Args:
         ue (User): The target ue that in in servable range
+
+    Returns:
+        (List[float]): The List of rsrp for each beam.
     """
+    rsrp_list = [constant.MIN_NEG_FLOAT] * self.cell_topo.cell_number
     for cell_index in self.cell_topo.training_beam:
       rsrp = self.cal_rsrp_one_beam(
           self.cell_topo.beam_list[cell_index].center_point, ue)
       ue.servable_add(self.name, cell_index, rsrp)
+      rsrp_list[cell_index] = rsrp
+    return rsrp_list
 
   def cal_rsrp_one_beam(self, beam_pos: Position, ue: User) -> float:
     """Calculate the rsrp with one beam.
@@ -132,7 +176,7 @@ class Satellite(object):
         ue (User): The target ue that in in servable range
 
     Returns:
-        (float): The rx power in dBW
+        (float): The rx power in dBm
     """
     epsilon = self.position.cal_elevation_angle(beam_pos)
     dis_sat_ue = self.position.calculate_distance(ue.position)
@@ -142,7 +186,7 @@ class Satellite(object):
 
     path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
                                                      freq=self.antenna.central_frequency,
-                                                     epsilon=epsilon)
+                                                     elevation_angle=epsilon)
 
     rx_power = constant.MAX_POWER - path_loss + antenna_gain + ue.rx_gain
 
@@ -174,7 +218,7 @@ class Satellite(object):
 
       path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
                                                        freq=self.antenna.central_frequency,
-                                                       epsilon=epsilon)
+                                                       elevation_angle=epsilon)
       channel_loss.append(path_loss)
 
     return self.cell_topo.sinr_of_users(serving_ue=serving_ue,

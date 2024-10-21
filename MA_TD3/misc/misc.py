@@ -1,9 +1,14 @@
 """utils.py for NN training"""
-import logging
 import csv
+import copy
+import logging
+from logging import Logger
 from datetime import datetime
-from typing import List, Tuple, Dict
+from collections import OrderedDict
+from typing import List, Tuple, Dict, OrderedDict
+
 import torch
+from torch import nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import gymnasium as gym
@@ -11,8 +16,10 @@ import yaml
 import git
 import numpy as np
 import matplotlib.pyplot as plt
+from gym_env.leosat import LEOSatEnv
 import gym_env  # this line is neccessary, don't delete it.
 
+from MA_TD3.agent.agent import Agent
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -60,9 +67,8 @@ def set_logger(logger_name, log_file, level=logging.INFO):
   log.addHandler(streamHandler)
 
 
-def set_log(args, path="."):
-  """Loads and replaces default parameters with experiment
-  specific parameters
+def set_log(args, path=".") -> Dict[str, Logger]:
+  """Loads and replaces default parameters with experiment specific parameters.
 
   Args:
       args (argparse): Python argparse that contains arguments
@@ -90,8 +96,14 @@ def set_log(args, path="."):
   return log
 
 
-def make_env(env_name, args, ax: plt.Axes, agent_dict=None, agent_names=None) -> gym.Env:
-  env = gym.make(env_name, ax=ax, args=args, agent_dict=agent_dict, agent_names=agent_names)
+def make_env(env_name, args, ax: plt.Axes, agent_dict: Dict[str, Agent], real_agents: Dict[str, Agent], digital_agents: Dict[str, Agent], agent_names: List[str]) -> LEOSatEnv:
+  env = gym.make(env_name,
+                 ax=ax,
+                 args=args,
+                 agent_dict=agent_dict,
+                 real_agents=real_agents,
+                 digital_agents=digital_agents,
+                 agent_names=agent_names)
 
   return env
 
@@ -187,3 +199,14 @@ def load_rt_file() -> Dict[str, Dict[int, Dict[str, float]]]:
       rt_result[sat_name][t] = row
 
   return rt_result
+
+
+def construct_dnn_dict(input_dim: int, output_dim: int, hidden_nodes: List[int], activ_func) -> OrderedDict[str, nn.Module]:
+  layer_list = []
+  layer_nodes = [input_dim] + hidden_nodes + [output_dim]
+  for i in range(len(layer_nodes) - 1):
+    # print(layer_nodes[i], layer_nodes[i + 1])
+    layer_list.append((f'fc_{i}', nn.Linear(layer_nodes[i], layer_nodes[i + 1])))
+    layer_list.append((f'activ_{i}', copy.deepcopy(activ_func)))
+
+  return OrderedDict(layer_list)
