@@ -52,8 +52,8 @@ class LEOSatEnv(gym.Env):
     self.train_per_move = 1
     self.plot_range = 2  # the plotting range
 
-    self.action_space = spaces.Box(np.array([0]), np.array([0]))  # dummy for gym template
-    self.observation_space = spaces.Box(np.array([0]), np.array([0]))
+    self.action_space = spaces.Box(np.array([-1]), np.array([1]))  # dummy for gym template
+    self.observation_space = spaces.Box(np.array([-10]), np.array([10]))
 
     self.max_power = constant.MAX_POWER
     self.min_diff_sinr = -20
@@ -182,38 +182,11 @@ class LEOSatEnv(gym.Env):
 
           self.reward[sat_name] += sat_tran_ratio[sat_name] * throughput / util.tolinear(agent.sat.all_power) / 1e3
 
-  def get_state_info(self, cell_sinr, beam_power, init=False):
-    sat_pos = {}
-    sinr_diff_dict = {}
-    for sat_name in self.leo_agents:
-      sat_pos[sat_name] = self.leo_agents[sat_name].get_scaled_pos(plot_range=self.plot_range)
+  def get_position_state(self, sat_name) -> npt.NDArray[np.float32]:
+    return self.leo_agents[sat_name].get_scaled_pos(plot_range=self.plot_range)
 
-    if init:
-      for sat_name in self.leo_agents:
-        sinr_diff_dict[sat_name] = np.zeros((self.cell_num, ))
-    else:
-      for sat_name in self.leo_agents:
-        sinr_diff = cell_sinr[sat_name] - self.prev_cell_sinr[sat_name]
-        power_diff = beam_power[sat_name] - self.prev_beam_power[sat_name]
-
-        estimated_channel_diff = sinr_diff - power_diff
-        closed_beam_bool = np.logical_or(
-          cell_sinr[sat_name] == 0, self.prev_cell_sinr[sat_name] == 0)
-        estimated_channel_diff[closed_beam_bool] = 0  # Set the diff of closed beams to zero
-        assert not np.isnan(estimated_channel_diff).any()
-
-        sinr_diff_dict[sat_name] = np.clip(estimated_channel_diff,
-                                           self.min_diff_sinr,
-                                           self.max_diff_sinr) / self.max_diff_sinr
-        self.prev_cell_sinr[sat_name] = cell_sinr[sat_name]
-        self.prev_beam_power[sat_name] = beam_power[sat_name]
-
-    state_dict = {}
-    for sat_name, pos in sat_pos.items():
-      state_dict[sat_name] = np.float32(np.concatenate((pos, sinr_diff_dict[sat_name])))
-      # state_dict[sat_name] = np.float32(pos)
-
-    return state_dict
+  def get_state_info(self, cell_sinr, beam_power, init=False) -> Dict[str, List[float]]:
+    pass
 
   def _take_action(self):
     """Take action"""

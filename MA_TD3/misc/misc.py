@@ -186,7 +186,20 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
 
 
 def load_rt_file() -> Dict[str, Dict[int, Dict[str, float]]]:
-  """Load the ray tracing simulation result file."""
+  """Load the ray tracing simulation result file.
+  ### Nested dictionary hierarchy:
+    {sat_name: {t: {ray tracing data}}}
+  ### Key of ray tracing data: 
+    - beam_index
+    - ue
+    - received power(W)
+    - phase(radians)
+    - path loss(dB)
+    - path gain(dB)
+  ### Example:
+    path_loss = misc.load_rt_file()[sat_name][t]['path loss(dB)']
+  """
+
   rt_result = {}
   with open('MA_TD3/misc/rt_result.csv', mode='r', newline='') as f:
     reader = csv.DictReader(f)
@@ -205,7 +218,7 @@ def construct_dnn_dict(input_dim: int, output_dim: int, hidden_nodes: List[int],
   layer_list = []
   layer_nodes = [input_dim] + hidden_nodes + [output_dim]
   for i in range(len(layer_nodes) - 1):
-    # print(layer_nodes[i], layer_nodes[i + 1])
+    # print(f'fc_{i}', layer_nodes[i], layer_nodes[i + 1])
     layer_list.append((f'fc_{i}', nn.Linear(layer_nodes[i], layer_nodes[i + 1])))
     layer_list.append((f'activ_{i}', copy.deepcopy(activ_func)))
 

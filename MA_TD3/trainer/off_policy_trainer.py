@@ -1,12 +1,16 @@
 """off_policy_trainer.py"""
+from logging import Logger
+from collections import OrderedDict
+from typing import Dict, List
 import copy
 import time
 import random
-from collections import OrderedDict
-from typing import Dict, List
+from argparse import Namespace
+from tensorboardX import SummaryWriter
 import torch
 import numpy as np
 
+from gym_env.leosat.leosat_env import LEOSatEnv
 from ..agent import Agent
 from ..misc import misc
 
@@ -14,7 +18,7 @@ from ..misc import misc
 class OffPolicyTrainer(object):
   """The trainer class"""
 
-  def __init__(self, args, log, tb_writer, env, leo_agent_dict: Dict[str, Agent]):
+  def __init__(self, args: Namespace, log: Dict[str, Logger], tb_writer: SummaryWriter, env: LEOSatEnv, leo_agent_dict: Dict[str, Agent]):
     self.args = args
     self.log = log
     self.tb_writer = tb_writer
@@ -56,9 +60,9 @@ class OffPolicyTrainer(object):
           agent.critic_state_dict)
       else:
         if self.args.partial_upload_type == 'random':
-          a_rand_idx = random.sample(range(1, int(agent.actor_layer_num) + 1),
+          a_rand_idx = random.sample(range(0, int(agent.actor_layer_num)),
                                      self.args.uploaded_layer_num_per_turn)
-          c_rand_idx = random.sample(range(1, int(agent.critic_layer_num) + 1),
+          c_rand_idx = random.sample(range(0, int(agent.critic_layer_num)),
                                      self.args.uploaded_layer_num_per_turn)
 
         elif self.args.partial_upload_type == 'by-turns':
@@ -69,9 +73,6 @@ class OffPolicyTrainer(object):
           c_rand_idx, agent.cur_criticlayer_idx = misc.circ_range(agent.cur_criticlayer_idx,
                                                                   self.args.uploaded_layer_num_per_turn,
                                                                   agent.actor_layer_num)
-          # 1-index
-          # a_rand_idx = [round(idx + 1) for idx in a_rand_idx]
-          # c_rand_idx = [round(idx + 1) for idx in c_rand_idx]
 
         else:
           raise ValueError(
@@ -165,11 +166,11 @@ class OffPolicyTrainer(object):
         agent.update_policy(self.total_train_iter)
       self.nn_train_time += time.time() - nn_start_time
 
-      if self.total_eps % self.args.federated_upload_freq == 0:
-        self.federated_upload()
+    if self.total_eps % self.args.federated_upload_freq == 0:
+      self.federated_upload()
 
-      if self.total_eps % self.args.federated_download_freq == 0:
-        self.federated_download()
+    if self.total_eps % self.args.federated_download_freq == 0:
+      self.federated_download()
 
   ''' # old train function
   def train(self, env, log, tb_writer):

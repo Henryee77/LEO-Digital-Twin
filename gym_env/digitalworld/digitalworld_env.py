@@ -8,6 +8,7 @@ from gym_env.leosat.leosat_env import LEOSatEnv
 from low_earth_orbit.util import util
 from low_earth_orbit.util import constant
 from MA_TD3.agent.agent import Agent
+from MA_TD3.misc import misc
 
 
 class DigitalWorldEnv(LEOSatEnv):
@@ -27,6 +28,22 @@ class DigitalWorldEnv(LEOSatEnv):
                      digital_agents=digital_agents,
                      agent_names=agent_names)
     self.name = 'Digital World'
+
+  def get_rt_path_loss(self, sat_name):
+    info = misc.load_rt_file()[sat_name][self.step_num]
+
+  def get_state_info(self, cell_sinr, beam_power, init=False) -> Dict[str, List[float]]:
+    state_dict = {}
+
+    if init:
+      for sat_name in self.leo_agents:
+        state_dict[sat_name] = np.float32(np.concatenate((self.get_position_state(sat_name),
+                                                          np.zeros((self.cell_num, )))))
+    else:
+      for sat_name in self.leo_agents:
+        state_dict[sat_name] = np.float32(np.concatenate((self.get_position_state(sat_name),
+                                                          )))
+    return state_dict
 
   def _take_action(self, action, sat_name):
     train_set = self.action_to_trainset(action[self.leo_agents[sat_name].beam_slice])
