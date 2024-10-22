@@ -28,6 +28,7 @@ class Satellite(object):
                antenna: Antenna,
                channel: Channel,
                max_power: float = constant.MAX_POWER,
+               min_power: float = constant.MIN_POWER,
                total_bandwidth=constant.DEFAULT_BANDWIDTH,
                beam_alg: int = constant.DEFAULT_BEAM_SWEEPING_ALG):
 
@@ -40,6 +41,7 @@ class Satellite(object):
     self.antenna = antenna
     self.wireless_channel = channel
     self.max_power = max_power
+    self.min_power = min_power
     self.total_bandwidth = total_bandwidth
     self.beam_alg = beam_alg
 
@@ -69,6 +71,14 @@ class Satellite(object):
       self._position = pos
     else:
       raise ValueError('Cannot set the position of satellite to None')
+
+  @property
+  def min_beamwidth(self) -> float:
+    return constant.DEFAULT_MIN_BEAMWIDTH
+
+  @property
+  def max_beamwidth(self) -> float:
+    return constant.DEFAULT_MAX_BEAMWIDTH
 
   @property
   def beam_number(self) -> int:

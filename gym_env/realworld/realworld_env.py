@@ -29,6 +29,9 @@ class RealWorldEnv(LEOSatEnv):
                      agent_names=agent_names)
     self.name = 'Real World'
 
+    self.max_diff_sinr = 20
+    self.min_diff_sinr = -self.max_diff_sinr
+
   def step(self, action_n: Dict[str, npt.NDArray]):
     if self.step_num % self.train_per_move == 0:
       self.constel.update_sat_position()

@@ -29,6 +29,11 @@ class OffPolicyTrainer(object):
     self.leo_agent_dict = leo_agent_dict
     self.agent_num = len(self.leo_agent_dict)
 
+    self.ep_reward = {}
+    self.cur_states = {}
+    for agent_name, agent in self.leo_agent_dict.items():
+      self.cur_states[agent_name] = [0] *agent.state_dim
+
     self.parameter_db = {}
     for agent_name in leo_agent_dict.keys():
       self.parameter_db[agent_name] = {}
@@ -44,9 +49,23 @@ class OffPolicyTrainer(object):
   def total_eps(self):
     return self._total_eps
 
+  @property
+  def cur_states(self):
+    return self.__cur_states
+
+  @cur_states.setter
+  def cur_states(self, state):
+    self.__cur_states = state
+
   @total_eps.setter
   def total_eps(self, eps):
     self._total_eps = eps
+
+  def set_twin_trainer(self, twin_trainer: LEOSatEnv):
+    self.twin_trainer = twin_trainer
+
+  def drop_twin_trainer(self):
+    self.twin_trainer = None
 
   def federated_upload(self):
     """Federated uploading for the models of the given agents."""
@@ -216,24 +235,24 @@ class OffPolicyTrainer(object):
     for agent_name in self.leo_agent_dict:
       eval_reward[agent_name] = 0.0
     step_count = 0
-    env_observation, _ = self.env.reset()
+    self.cur_states, _ = self.env.reset()
 
     while True:
       # print(f'{ep_timesteps}, {eval_reward}')
       # Select action
-      # print(f'obs: {env_observation}, {type(env_observation)}')
-      action_n = {}
+      # print(f'obs: {self.cur_states}, {type(self.cur_states)}')
+      action_dict = {}
       for agent_name, agent in self.leo_agent_dict.items():
         agent_action = agent.select_deterministic_action(
-            np.array(env_observation[agent_name]))
-        action_n[agent_name] = agent_action
+            np.array(self.cur_states[agent_name]))
+        action_dict[agent_name] = agent_action
       # print(f'act: {agent_action}')
       # Take action in env
       new_env_observation, env_reward, done, truncated, _ = self.env.step(
-          copy.deepcopy(action_n))
+          copy.deepcopy(action_dict))
       # print(f'new obs: {new_env_observation}')
       # For next timestep
-      env_observation = new_env_observation
+      self.cur_states = new_env_observation
       for agent_name in env_reward:
         eval_reward[agent_name] += env_reward[agent_name]
       step_count += 1
@@ -280,55 +299,58 @@ class OffPolicyTrainer(object):
     """
     sim_start_time = time.time()
 
-    ep_reward = {}
-    for agent_name in self.leo_agent_dict:
-      ep_reward[agent_name] = 0.0
-    step_count = 0
-    env_observation, _ = self.env.reset()
-
     while True:
       # Select action
-      # print(f'obs: {env_observation}')
-      action_n = {}
-      for agent_name, leo_agent in self.leo_agent_dict.items():
-        agent_action = leo_agent.select_stochastic_action(
-          np.array(env_observation[agent_name]), self.total_timesteps)
-        action_n[agent_name] = agent_action
-
-      # Take action in env
-      new_env_observation, env_reward, done, truncated, _ = self.env.step(action_n)
-
-      # Add experience to memory
-      total_reward = sum(env_reward.values())
-      for agent_name, leo_agent in self.leo_agent_dict.items():
-        leo_agent.add_memory(
-            obs=env_observation[agent_name],
-            new_obs=new_env_observation[agent_name],
-            action=action_n[agent_name],
-            reward=total_reward,
-            done=done)
+      # print(f'obs: {self.cur_states}')
 
       # For next timestep
-      env_observation = new_env_observation
+      self.cur_states = new_env_observation
       step_count += 1
       self.total_timesteps += 1
       for agent_name in env_reward:
-        ep_reward[agent_name] += env_reward[agent_name]
+        self.ep_reward[agent_name] += env_reward[agent_name]
 
       if done or truncated:
         break
 
-    for agent_name in ep_reward:
-      ep_reward[agent_name] /= step_count
+    for agent_name in self.ep_reward:
+      self.ep_reward[agent_name] /= step_count
     self.total_eps += 1
     for agent_name in self.leo_agent_dict:
       self.log[self.args.log_name].info(
-          f'Agent {agent_name}: Train episode reward {ep_reward[agent_name]:.6f} at episode {self.total_eps}')
+          f'Agent {agent_name}: Train episode reward {self.ep_reward[agent_name]:.6f} at episode {self.total_eps}')
       self.tb_writer.add_scalars(
-        f'{self.env.name} {agent_name}/reward', {'train_reward': ep_reward[agent_name]}, self.total_eps)
+        f'{self.env.name} {agent_name}/reward', {'train_reward': self.ep_reward[agent_name]}, self.total_eps)
 
     self.sat_sim_time += time.time() - sim_start_time
-    return ep_reward
+    return self.ep_reward
+
+  def take_action(self, action_dict):
+    # Take action in env
+    new_env_observation, env_reward, done, truncated, _ = self.env.step(action_dict)
+
+    # Add experience to memory
+    total_reward = sum(env_reward.values())
+    for agent_name, leo_agent in self.leo_agent_dict.items():
+      leo_agent.add_memory(
+          obs=self.cur_states[agent_name],
+          new_obs=new_env_observation[agent_name],
+          action=action_dict[agent_name],
+          reward=total_reward,
+          done=done)
+
+  def stochastic_actions(self):
+    action_dict = {}
+    for agent_name, leo_agent in self.leo_agent_dict.items():
+      agent_action = leo_agent.select_stochastic_action(
+        np.array(self.cur_states[agent_name]), self.total_timesteps)
+      action_dict[agent_name] = agent_action
+    return action_dict
+
+  def reset_env(self):
+    for agent_name in self.leo_agent_dict:
+      self.ep_reward[agent_name] = 0.0
+    self.cur_states, _ = self.env.reset()
 
   def test(self):
     self.eval_progress(running_mode='testing')

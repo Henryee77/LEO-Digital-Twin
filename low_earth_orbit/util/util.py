@@ -65,15 +65,20 @@ def sign(x: float) -> int:
   raise ValueError("NAN")
 
 
-def rescale_value(x, r_min, r_max, t_min, t_max) -> float:
+@overload
+def rescale_value(x: npt.NDArray, r_min: float, r_max: float, t_min: float, t_max: float) -> npt.NDArray:
+  ...
+
+
+def rescale_value(x: float, r_min: float, r_max: float, t_min: float, t_max: float) -> float:
   """Rescale the value from domain R to doamin T
 
   Args:
-      x (_type_): The input value
-      r_min (_type_): min value of space R
-      r_max (_type_): max value of space R
-      t_min (_type_): min value of space T
-      t_max (_type_): max value of space T
+      x (float): The input value
+      r_min (float): min value of space R
+      r_max (float): max value of space R
+      t_min (float): min value of space T
+      t_max (float): max value of space T
 
   Returns:
       float: The rescaled value
@@ -81,6 +86,25 @@ def rescale_value(x, r_min, r_max, t_min, t_max) -> float:
   res = (x - r_min) / (r_max - r_min) * (t_max - t_min) + t_min
   # print(f'debug: {x}, {res}, {t_min}, {t_max}')
   return res
+
+
+@overload
+def standardize(x: npt.NDArray, mean: float, stdv: float) -> npt.NDArray:
+  ...
+
+
+def standardize(x: float, mean: float, stdv: float) -> float:
+  """Standardization
+
+  Args:
+      x (float): input
+      mean (float): mean
+      stdv (float): standard deviation
+
+  Returns:
+      float: (x - mean) / stdv
+  """
+  return (x - mean) / stdv
 
 
 def truncate(x: float, precision: int = 3) -> float:

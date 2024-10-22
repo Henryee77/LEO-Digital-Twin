@@ -12,6 +12,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import gymnasium as gym
+from gymnasium import spaces
 import yaml
 import git
 import numpy as np
@@ -20,6 +21,7 @@ from gym_env.leosat import LEOSatEnv
 import gym_env  # this line is neccessary, don't delete it.
 
 from MA_TD3.agent.agent import Agent
+from low_earth_orbit.util import constant
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -188,28 +190,39 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
 def load_rt_file() -> Dict[str, Dict[int, Dict[str, float]]]:
   """Load the ray tracing simulation result file.
   ### Nested dictionary hierarchy:
-    {sat_name: {t: {ray tracing data}}}
+    {t: {sat_name: {beam_index: [ray tracing data 1, ..., ray tracing data N]}}}
   ### Key of ray tracing data: 
-    - beam_index
     - ue
-    - received power(W)
-    - phase(radians)
-    - path loss(dB)
-    - path gain(dB)
+    - received power (W)
+    - phase (radians)
+    - path loss (dB)
+    - path gain (dB)
   ### Example:
-    path_loss = misc.load_rt_file()[sat_name][t]['path loss(dB)']
+    ray_tracing_data = misc.load_rt_file()
+    target_ue_path_loss = [data['path loss (dB)'] for data in ray_tracing_data[t][sat_name][beam_index] if data['ue'] == target_ue]
   """
 
   rt_result = {}
   with open('MA_TD3/misc/rt_result.csv', mode='r', newline='') as f:
     reader = csv.DictReader(f)
     for row in reader:
-      print(row)
       sat_name = row.pop('sat_name')
       t = int(row.pop('t'))
-      if sat_name not in rt_result:
-        rt_result[sat_name] = {}
-      rt_result[sat_name][t] = row
+      b_i = int(row.pop('beam_index'))
+      if t not in rt_result:
+        rt_result[t] = {}
+      if sat_name not in rt_result[t]:
+        rt_result[t][sat_name] = {}
+      if b_i not in rt_result[t][sat_name]:
+        rt_result[t][sat_name][b_i] = []
+
+      for key in row:
+        if key == 'ue':
+          row[key] = int(row[key]) - 1
+        else:
+          row[key] = float(row[key])
+      # print(row)
+      rt_result[t][sat_name][b_i].append(row)
 
   return rt_result
 
@@ -223,3 +236,52 @@ def construct_dnn_dict(input_dim: int, output_dim: int, hidden_nodes: List[int],
     layer_list.append((f'activ_{i}', copy.deepcopy(activ_func)))
 
   return OrderedDict(layer_list)
+
+
+def generate_action_space(cell_num: int):
+  beam_action_low = np.array([-1] * cell_num)
+  beam_action_high = np.array([1] * cell_num)
+  beam_slice = slice(0, cell_num)
+
+  total_power_low = np.array([-1])
+  total_power_high = np.array([1])
+  power_slice = slice(0, cell_num + 1)
+
+  beamwidth_action_low = np.array([-1] * cell_num)
+  beamwidth_action_high = np.array([1] * cell_num)
+  beamwidth_slice = slice(cell_num + 1, cell_num * 2 + 1)
+
+  action_low = np.concatenate(
+      (beam_action_low, total_power_low, beamwidth_action_low))
+
+  action_high = np.concatenate(
+      (beam_action_high, total_power_high, beamwidth_action_high))
+
+  action_space = spaces.Box(low=np.float32(action_low),
+                            high=np.float32(action_high),
+                            dtype=np.float32)
+
+  return action_space, beam_slice, power_slice, beamwidth_slice
+
+
+def generate_state_space(cell_num: int, pos_dim: int = 2):
+  pos_low = np.array([-1] * pos_dim)
+  pos_high = np.array([1] * pos_dim)
+  pos_slice = slice(0, pos_dim)
+
+  beam_info_low = np.array([-1] * cell_num)
+  beam_info_high = np.array([1] * cell_num)
+  beam_info_slice = slice(pos_dim, pos_dim + cell_num)
+
+  obs_low = np.concatenate((pos_low, beam_info_low))
+  obs_high = np.concatenate((pos_high, beam_info_high))
+
+  # repeat for DT state (real + digital)
+  obs_low = np.tile(obs_low, 2)
+  obs_high = np.tile(obs_high, 2)
+
+  observation_space = spaces.Box(low=np.float32(obs_low),
+                                 high=np.float32(obs_high),
+                                 dtype=np.float32)
+
+  return observation_space, pos_slice, beam_info_slice

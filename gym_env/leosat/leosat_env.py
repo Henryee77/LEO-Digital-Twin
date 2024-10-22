@@ -1,6 +1,6 @@
 """leosat_env.py"""
 from __future__ import annotations
-from typing import List, Set, Dict
+from typing import List, Set, Dict, Tuple, Any
 import random
 import gymnasium as gym
 import numpy as np
@@ -49,15 +49,12 @@ class LEOSatEnv(gym.Env):
 
     self.step_num = 0
     self.max_step = args.step_per_ep
-    self.train_per_move = 1
     self.plot_range = 2  # the plotting range
 
     self.action_space = spaces.Box(np.array([-1]), np.array([1]))  # dummy for gym template
     self.observation_space = spaces.Box(np.array([-10]), np.array([10]))
 
     self.max_power = constant.MAX_POWER
-    self.min_diff_sinr = -20
-    self.max_diff_sinr = 20
 
     self.additional_beam_set = set()
     self.random_interfer_beam_num = 2
@@ -102,10 +99,12 @@ class LEOSatEnv(gym.Env):
       raise ValueError('Digital agents cannot be None type')
     self._digital_agents = agent_dict
 
+  # def step_constellation_movement(self):
+
   def step(self, action_n: Dict[str, npt.NDArray]):
     # moving satellites
-    if self.step_num % self.train_per_move == 0:
-      self.constel.update_sat_position()
+    self.constel.update_sat_position()
+
     for ue in self.ues:
       ue.servable_clear()
 
@@ -231,7 +230,7 @@ class LEOSatEnv(gym.Env):
     # print(train_set)
     return train_set
 
-  def reset(self, seed=None, options=None):
+  def reset(self, seed=None, options=None) -> Tuple[Dict[str, List[float]], Any]:
     super().reset(seed=seed)
 
     self._init_env()

@@ -5,9 +5,11 @@ from logging import Logger
 from gymnasium import spaces
 from torch import device
 from tensorboardX import SummaryWriter
+from argparse import Namespace
 import numpy as np
 import numpy.typing as npt
 from ..misc.replay_buffer import ReplayBuffer
+from ..misc import misc
 from ..policy.model import TD3, DDPG
 from low_earth_orbit.util.position import Position, Geodetic
 from low_earth_orbit.util import constant
@@ -22,7 +24,7 @@ class Agent(object):
                policy_name: Literal['TD3', 'DDPG'],
                tb_writer: SummaryWriter,
                log: Dict[str, Logger],
-               args,
+               args: Namespace,
                name: str,
                agent_type: str,
                device: device,
@@ -44,13 +46,8 @@ class Agent(object):
                          antenna=Antenna(),
                          channel=None)
 
-    if agent_type == 'real_LEO':
-      pass
-    elif agent_type == 'digital_LEO':
-      self._init_dim()
-      self.set_policy(policy_name)
-    else:
-      raise ValueError('No such agent type')
+    self._init_dim()
+    self.set_policy(policy_name)
 
     self.memory = ReplayBuffer(max_size=args.replay_buffer_size)
     self.epsilon = 1  # For exploration
@@ -64,52 +61,21 @@ class Agent(object):
     self.cur_criticlayer_idx = 1
 
   def _init_dim(self):
-    cell_num = self.sat.cell_topo.cell_number
-    beam_action_low = np.array([-1] * cell_num)
-    beam_action_high = np.array([1] * cell_num)
-    self.beam_slice = slice(0, cell_num)
 
-    self.total_power_low = np.array([-1])
-    self.total_power_high = np.array([1])
-    self.min_power = 40
-    self.max_power = self.sat.max_power
-    self.power_slice = slice(0, cell_num + 1)
+    (self.action_space,
+     self.beam_slice,
+     self.power_slice,
+     self.beamwidth_slice) = misc.generate_action_space(self.sat.cell_topo.cell_number)
 
-    self.beamwidth_action_low = np.array([-1] * cell_num)
-    self.beamwidth_action_high = np.array([1] * cell_num)
-    self.beamwidth_slice = slice(cell_num + 1, cell_num * 2 + 1)
-    self.min_beamwidth = 2 * constant.PI_IN_RAD
-    self.max_beamwidth = 4 * constant.PI_IN_RAD
+    (self.observation_space,
+     self.pos_slice,
+     self.beam_info_slice) = misc.generate_state_space(cell_num=self.sat.cell_topo.cell_number)
 
-    action_low = np.concatenate(
-      (beam_action_low, self.total_power_low, self.beamwidth_action_low))
-
-    action_high = np.concatenate(
-      (beam_action_high, self.total_power_high, self.beamwidth_action_high))
-
-    self.action_space = spaces.Box(low=np.float32(action_low),
-                                   high=np.float32(action_high),
-                                   dtype=np.float32)
-
-    self.pos_low = np.array([-1] * 2)
-    self.pos_high = np.array([1] * 2)
-    sinr_diff_low = np.array([-1] * cell_num)
-    sinr_diff_high = np.array([1] * cell_num)
-
-    obs_low = np.concatenate((self.pos_low, sinr_diff_low))
-    obs_high = np.concatenate((self.pos_high, sinr_diff_high))
-
-    self.observation_space = spaces.Box(low=np.float32(obs_low),  #
-                                        high=np.float32(obs_high),
-                                        dtype=np.float32)
-
-    self.max_actions = self.action_space.high
     self.min_actions = self.action_space.low
+    self.max_actions = self.action_space.high
 
     self.state_dim = self.observation_space.shape[0]
     self.action_dim = self.action_space.shape[0]
-    self.actor_n_hidden = self.args.ra_actor_n_hidden
-    self.critic_n_hidden = self.args.ra_critic_n_hidden
 
     self.log[self.args.log_name].info('[{}] State dim: {}'.format(
         self.name, self.state_dim))
@@ -118,8 +84,8 @@ class Agent(object):
 
   def set_policy(self, policy_name):
     denom = [1, 2, 4, 8, 16, 32]
-    self.actor_hidden_nodes = [round(self.actor_n_hidden / x) for x in denom]
-    self.critic_hidden_nodes = [round(self.critic_n_hidden / x) for x in denom]
+    self.actor_hidden_nodes = [round(self.args.actor_n_hidden / x) for x in denom]
+    self.critic_hidden_nodes = [round(self.args.critic_n_hidden / x) for x in denom]
     if policy_name == 'TD3':
       self.policy = TD3(
           actor_input_dim=self.state_dim,
@@ -129,8 +95,8 @@ class Agent(object):
           critic_hidden_nodes=self.critic_hidden_nodes,
           name=self.name,
           args=self.args,
-          action_low=self.action_space.low,
-          action_high=self.action_space.high,
+          action_low=self.min_actions,
+          action_high=self.max_actions,
           device=self.device)
     elif policy_name == 'DDPG':
       self.policy = DDPG(state_dim=self.state_dim,

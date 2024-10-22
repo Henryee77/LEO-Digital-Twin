@@ -150,6 +150,11 @@ def pre_training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld
     digitalworld_trainer.eval_progress()
 
 
+def run_one_step(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+  digitalworld_trainer.reset_env()
+  realworld_trainer.reset_env()
+
+
 def testing_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
   realworld_trainer.eval_progress(str='testing')
   digitalworld_trainer.eval_progress(str='testing')
@@ -184,16 +189,10 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--ra-actor-n-hidden', default=3200, type=int,
+      '--actor-n-hidden', default=3200, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--ra-critic-n-hidden', default=6400, type=int,
-      help='Number of hidden neuron')
-  parser.add_argument(
-      '--ch-actor-n-hidden', default=1200, type=int,
-      help='Number of hidden neuron')
-  parser.add_argument(
-      '--ch-critic-n-hidden', default=2400, type=int,
+      '--critic-n-hidden', default=6400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
       '--iter-num', default=4, type=int,
