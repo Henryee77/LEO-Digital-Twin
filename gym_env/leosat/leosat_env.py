@@ -293,7 +293,7 @@ class LEOSatEnv(gym.Env):
              constant.ORIGIN_LONG + self.plot_range))
     plt.ylim((constant.ORIGIN_LATI - self.plot_range,
              constant.ORIGIN_LATI + self.plot_range))
-    self.ax.set_title(f't: {self.step_num},\n'
+    self.ax.set_title(f'{self.name}     t: {self.step_num},\n'
                       f'reward: {self.reward[sat_name]:7.2f}, '
                       f'power: {self.leo_agents[sat_name].sat.all_power:3.2f} dBm', {'fontsize': 28})
     # self.leo_agents[sat_name].sat.cell_topo.print_all_beams()

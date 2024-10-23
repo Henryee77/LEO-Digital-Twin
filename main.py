@@ -106,10 +106,12 @@ def main(args):
                                             leo_agent_dict=digitalworld_agent_dict)
     if args.running_mode == 'training':
       while digitalworld_trainer.total_eps < args.ep_max_timesteps:
-        pre_training_process(args, realworld_trainer, digitalworld_trainer)
+        training_process(args, realworld_trainer, digitalworld_trainer)
+        # evaluate performance
+        if digitalworld_trainer.total_eps % args.eval_period == 0:
+          eval_process(args, realworld_trainer, digitalworld_trainer)
 
       digitalworld_trainer.print_time()
-      # realworld_trainer.print_time()
 
       for agent_name, agent in realworld_agent_dict.items():
         agent.policy.save(
@@ -128,9 +130,9 @@ def main(args):
         agent.policy.load(
           filename=f'{filename}_digital_world_{agent_name}', directory=loading_directory)
 
-      testing_process()
+      eval_process(args, realworld_trainer, digitalworld_trainer, running_mode=args.running_mode)
     else:
-      raise ValueError(f'No {args.running_mode} running mode')
+      raise ValueError(f'No \'{args.running_mode}\' running mode')
 
   else:
     raise ValueError('On-policy trainer dict is not yet finished.')
@@ -138,26 +140,55 @@ def main(args):
   tb_writer.close()
 
 
-def pre_training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
   # run one episode with epsilon greedy
-  digitalworld_trainer.collect_one_episode()
+  run_one_eps(args=args,
+              realworld_trainer=realworld_trainer,
+              digitalworld_trainer=digitalworld_trainer)
 
   # train the neural network
   digitalworld_trainer.train()
-
-  # evaluate performance
-  if digitalworld_trainer.total_eps % args.eval_period == 0:
-    digitalworld_trainer.eval_progress()
+  realworld_trainer.train()
 
 
-def run_one_step(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
-  digitalworld_trainer.reset_env()
-  realworld_trainer.reset_env()
+def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer, running_mode='training'):
+  step_count = 0
+  digital_ep_reward = digitalworld_trainer.reset_env()
+  real_ep_reward = realworld_trainer.reset_env()
+
+  while step_count < args.max_step_per_ep and not (d_done or r_done):
+    digital_actions = digitalworld_trainer.deterministic_actions()
+    real_actions = realworld_trainer.deterministic_actions()
+
+    digital_ep_reward, d_done = digitalworld_trainer.take_action(
+      digital_actions, digital_ep_reward, save_data=False, running_mode=running_mode)
+    real_ep_reward, r_done = realworld_trainer.take_action(
+      real_actions, real_ep_reward, save_data=False, running_mode=running_mode)
+    assert d_done == r_done
+
+    step_count += 1
+
+  digitalworld_trainer.save_eval_result(digital_ep_reward, step_count)
+  realworld_trainer.save_eval_result(real_ep_reward, step_count)
 
 
-def testing_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
-  realworld_trainer.eval_progress(str='testing')
-  digitalworld_trainer.eval_progress(str='testing')
+def run_one_eps(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+  step_count = 0
+  digital_ep_reward = digitalworld_trainer.reset_env()
+  real_ep_reward = realworld_trainer.reset_env()
+
+  while step_count < args.max_step_per_ep and not (d_done or r_done):
+    digital_actions = digitalworld_trainer.stochastic_actions()
+    real_actions = realworld_trainer.stochastic_actions()
+
+    digital_ep_reward, d_done = digitalworld_trainer.take_action(digital_actions, digital_ep_reward, save_data=True)
+    real_ep_reward, r_done = realworld_trainer.take_action(real_actions, real_ep_reward, save_data=True)
+    assert d_done == r_done
+
+    step_count += 1
+
+  digitalworld_trainer.save_training_result(digital_ep_reward, step_count)
+  realworld_trainer.save_training_result(real_ep_reward, step_count)
 
 
 if __name__ == '__main__':
@@ -269,7 +300,7 @@ if __name__ == '__main__':
       '--ep-max-timesteps', type=int, required=True,
       help='Total number of episodes')
   parser.add_argument(
-      '--step-per-ep', default=50, type=int,
+      '--max-step-per-ep', default=50, type=int,
       help='Total number of steps in one episode')
   parser.add_argument(
       '--eval-period', default=10, type=int,

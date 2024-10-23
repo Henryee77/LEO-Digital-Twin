@@ -1,7 +1,8 @@
 """off_policy_trainer.py"""
+from __future__ import annotations
 from logging import Logger
 from collections import OrderedDict
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import copy
 import time
 import random
@@ -9,6 +10,7 @@ from argparse import Namespace
 from tensorboardX import SummaryWriter
 import torch
 import numpy as np
+import numpy.typing as npt
 
 from gym_env.leosat.leosat_env import LEOSatEnv
 from ..agent import Agent
@@ -29,10 +31,9 @@ class OffPolicyTrainer(object):
     self.leo_agent_dict = leo_agent_dict
     self.agent_num = len(self.leo_agent_dict)
 
-    self.ep_reward = {}
     self.cur_states = {}
     for agent_name, agent in self.leo_agent_dict.items():
-      self.cur_states[agent_name] = [0] *agent.state_dim
+      self.cur_states[agent_name] = [0] * agent.state_dim
 
     self.parameter_db = {}
     for agent_name in leo_agent_dict.keys():
@@ -61,7 +62,7 @@ class OffPolicyTrainer(object):
   def total_eps(self, eps):
     self._total_eps = eps
 
-  def set_twin_trainer(self, twin_trainer: LEOSatEnv):
+  def set_twin_trainer(self, twin_trainer: OffPolicyTrainer):
     self.twin_trainer = twin_trainer
 
   def drop_twin_trainer(self):
@@ -191,31 +192,6 @@ class OffPolicyTrainer(object):
     if self.total_eps % self.args.federated_download_freq == 0:
       self.federated_download()
 
-  ''' # old train function
-  def train(self, env, log, tb_writer):
-    sim_start_time = time.time()
-    self.collect_one_episode(env=env, log=log, tb_writer=tb_writer)
-    self.sat_sim_time += time.time() - sim_start_time
-
-    for _ in range(self.args.iter_num):
-      self.total_train_iter += 1
-      nn_start_time = time.time()
-      for _, agent in self.leo_agent_dict.items():
-        # Update policy (iteration of training is args.iter_num)
-        agent.update_policy(self.total_train_iter)
-      self.nn_train_time += time.time() - nn_start_time
-
-      if self.total_eps % self.args.federated_upload_freq == 0:
-        self.federated_upload(agent_names=list(self.leo_agent_dict.keys()))
-
-      if self.total_eps % self.args.federated_download_freq == 0:
-        self.federated_download(agent_names=list(self.leo_agent_dict.keys()))
-
-      # Measure performance  # or (self.total_eps <= 20 and self.total_eps % 2 == 0)
-      if self.total_eps % self.args.eval_period == 0:
-        self.eval_progress(env=env, log=log, tb_writer=tb_writer)
-  '''
-
   def print_time(self):
     self.total_training_time = self.sat_sim_time + self.nn_train_time + self.param_sharing_time + self.eval_time
     print(
@@ -231,54 +207,9 @@ class OffPolicyTrainer(object):
   def eval_progress(self, running_mode='training'):
     eval_start_time = time.time()
 
-    eval_reward = {}
-    for agent_name in self.leo_agent_dict:
-      eval_reward[agent_name] = 0.0
-    step_count = 0
-    self.cur_states, _ = self.env.reset()
+    self.eval_time = time.time() - eval_start_time
 
-    while True:
-      # print(f'{ep_timesteps}, {eval_reward}')
-      # Select action
-      # print(f'obs: {self.cur_states}, {type(self.cur_states)}')
-      action_dict = {}
-      for agent_name, agent in self.leo_agent_dict.items():
-        agent_action = agent.select_deterministic_action(
-            np.array(self.cur_states[agent_name]))
-        action_dict[agent_name] = agent_action
-      # print(f'act: {agent_action}')
-      # Take action in env
-      new_env_observation, env_reward, done, truncated, _ = self.env.step(
-          copy.deepcopy(action_dict))
-      # print(f'new obs: {new_env_observation}')
-      # For next timestep
-      self.cur_states = new_env_observation
-      for agent_name in env_reward:
-        eval_reward[agent_name] += env_reward[agent_name]
-      step_count += 1
-
-      if running_mode == "testing":
-        self.env.render()
-
-      # TODO
-      # Need to be modified to multi-agent ver.
-      if running_mode == 'testing':
-        beam_power_actions = agent_action[self.env.power_slice]
-        for i, action in enumerate(beam_power_actions):
-          if i < self.env.cell_num:
-            self.tb_writer.add_scalars('actions/power ratio',
-                                       {f'beam {i}': action}, step_count)
-          else:
-            self.tb_writer.add_scalars('actions/total power',
-                                       {'total power': action}, step_count)
-
-        beamwidth_action = agent_action[self.env.beamwidth_slice]
-        for i, action in enumerate(beamwidth_action):
-          self.tb_writer.add_scalars('actions/beamwidth',
-                                     {f'beam {i}': action}, step_count)
-
-      if done or truncated:
-        break
+  def save_eval_result(self, eval_reward, step_count: int) -> Dict[str, float]:
     for agent_name in eval_reward:
       eval_reward[agent_name] /= step_count
     for agent_name in self.leo_agent_dict:
@@ -289,68 +220,68 @@ class OffPolicyTrainer(object):
     self.tb_writer.add_scalars(
       'Eval_reward', {f'{self.env.name} total reward': sum(eval_reward.values())}, self.total_eps)
 
-    self.eval_time = time.time() - eval_start_time
-
-  def collect_one_episode(self) -> Dict[str, float]:
-    """Run an episode and store the state action information to replay buffer.
-
-    Returns:
-        Dict[str, float]: Reward
-    """
+  def save_training_result(self, ep_reward, step_count: int):
     sim_start_time = time.time()
 
-    while True:
-      # Select action
-      # print(f'obs: {self.cur_states}')
-
-      # For next timestep
-      self.cur_states = new_env_observation
-      step_count += 1
-      self.total_timesteps += 1
-      for agent_name in env_reward:
-        self.ep_reward[agent_name] += env_reward[agent_name]
-
-      if done or truncated:
-        break
-
-    for agent_name in self.ep_reward:
-      self.ep_reward[agent_name] /= step_count
+    for agent_name in ep_reward:
+      ep_reward[agent_name] /= step_count
     self.total_eps += 1
     for agent_name in self.leo_agent_dict:
       self.log[self.args.log_name].info(
-          f'Agent {agent_name}: Train episode reward {self.ep_reward[agent_name]:.6f} at episode {self.total_eps}')
+          f'Agent {agent_name}: Train episode reward {ep_reward[agent_name]:.6f} at episode {self.total_eps}')
       self.tb_writer.add_scalars(
-        f'{self.env.name} {agent_name}/reward', {'train_reward': self.ep_reward[agent_name]}, self.total_eps)
+        f'{self.env.name} {agent_name}/reward', {'train_reward': ep_reward[agent_name]}, self.total_eps)
 
     self.sat_sim_time += time.time() - sim_start_time
-    return self.ep_reward
 
-  def take_action(self, action_dict):
+  def take_action(self, action_dict, ep_reward, save_data=False, running_mode='training') -> Tuple[Dict[str, float], bool]:
     # Take action in env
     new_env_observation, env_reward, done, truncated, _ = self.env.step(action_dict)
 
-    # Add experience to memory
-    total_reward = sum(env_reward.values())
-    for agent_name, leo_agent in self.leo_agent_dict.items():
-      leo_agent.add_memory(
-          obs=self.cur_states[agent_name],
-          new_obs=new_env_observation[agent_name],
-          action=action_dict[agent_name],
-          reward=total_reward,
-          done=done)
+    if running_mode == "testing":
+      self.env.render()
 
-  def stochastic_actions(self):
+    # Add experience to memory
+    if save_data:
+      total_reward = sum(env_reward.values())
+      for agent_name, leo_agent in self.leo_agent_dict.items():
+        leo_agent.add_memory(
+            obs=self.cur_states[agent_name],
+            new_obs=new_env_observation[agent_name],
+            action=action_dict[agent_name],
+            reward=total_reward,
+            done=done)
+
+    # For next timestep
+    self.cur_states = new_env_observation
+    self.total_timesteps += 1
+    for agent_name in env_reward:
+      ep_reward[agent_name] += env_reward[agent_name]
+
+    return ep_reward, (done or truncated)
+
+  def stochastic_actions(self) -> Dict[str, npt.NDArray[np.float32]]:
     action_dict = {}
     for agent_name, leo_agent in self.leo_agent_dict.items():
       agent_action = leo_agent.select_stochastic_action(
-        np.array(self.cur_states[agent_name]), self.total_timesteps)
+        np.array(self.cur_states[agent_name] + self.twin_trainer.cur_states[agent_name]), self.total_timesteps)
+      action_dict[agent_name] = agent_action
+    return action_dict
+
+  def deterministic_actions(self) -> Dict[str, npt.NDArray[np.float32]]:
+    action_dict = {}
+    for agent_name, leo_agent in self.leo_agent_dict.items():
+      agent_action = leo_agent.select_deterministic_action(
+        np.array(self.cur_states[agent_name] + self.twin_trainer.cur_states[agent_name]), self.total_timesteps)
       action_dict[agent_name] = agent_action
     return action_dict
 
   def reset_env(self):
+    ep_reward = {}
     for agent_name in self.leo_agent_dict:
-      self.ep_reward[agent_name] = 0.0
+      ep_reward[agent_name] = 0.0
     self.cur_states, _ = self.env.reset()
+    return ep_reward
 
   def test(self):
     self.eval_progress(running_mode='testing')
