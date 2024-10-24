@@ -173,9 +173,11 @@ class LEOSatEnv(gym.Env):
             dt_comp_latency = max([dt.computation_latency for dt in self.digital_agents.values()])
             leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
 
-            overhead = (max(agent.sat.beam_training_latency + agent.computation_latency,
-                            dt_comp_latency + self.dt_server.trans_latency(agent.action_dim * constant.INT_SIZE) + util.propagation_delay(leo2dt_distance))
-                        + agent.sat.trans_latency(constant.FLOAT_SIZE, self.dt_server) + util.propagation_delay(leo2dt_distance))
+            overhead = (max(agent.sat.beam_training_latency,
+                            (util.rt_delay(len(self.leo_agents) * len(self.ues))
+                             + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
+                             + util.propagation_delay(leo2dt_distance)))
+                        + agent.computation_latency + agent.sat.trans_latency(len(self.ues) * constant.FLOAT_SIZE, self.dt_server) + util.propagation_delay(leo2dt_distance))
             # print(agent.sat.beam_training_latency, agent.computation_latency)
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.TIMESLOT)
 
@@ -293,7 +295,7 @@ class LEOSatEnv(gym.Env):
              constant.ORIGIN_LONG + self.plot_range))
     plt.ylim((constant.ORIGIN_LATI - self.plot_range,
              constant.ORIGIN_LATI + self.plot_range))
-    self.ax.set_title(f'{self.name}     t: {self.step_num},\n'
+    self.ax.set_title(f'{self.name}    t: {self.step_num},\n'
                       f'reward: {self.reward[sat_name]:7.2f}, '
                       f'power: {self.leo_agents[sat_name].sat.all_power:3.2f} dBm', {'fontsize': 28})
     # self.leo_agents[sat_name].sat.cell_topo.print_all_beams()

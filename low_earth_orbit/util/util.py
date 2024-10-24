@@ -144,3 +144,7 @@ def plot_taiwan_shape(ax: plt.Axes):
 
 def propagation_delay(distance) -> float:
   return distance / constant.LIGHT_SPEED
+
+
+def rt_delay(unit_num) -> float:
+  return unit_num * constant.RT_DELAY_PER_UNIT
