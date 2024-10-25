@@ -104,23 +104,12 @@ class LEOSatEnv(gym.Env):
   def step(self, action_n: Dict[str, npt.NDArray]):
     # moving satellites
     self.constel.update_sat_position()
+    self.step_num += 1
 
     for ue in self.ues:
       ue.servable_clear()
 
-    for sat_name, action in action_n.items():
-      # print(f'{sat_name} action: {action}')
-      self._take_action(action, sat_name)
-
-    self.nmc.a3_event_check()
-    # self.add_random_interference()
-
-    for sat_name, action in action_n.items():
-      # set the beam power of the main satellite
-      power_dict = self.action_to_power_dict(action[self.leo_agents[sat_name].power_slice], sat_name)
-      self.leo_agents[sat_name].sat.clear_power()
-      for beam_idx, power in power_dict.items():
-        self.leo_agents[sat_name].sat.set_beam_power(beam_idx=beam_idx, tx_power=power)
+    self._take_action(action_n)
 
     ue_sinr = self.constel.cal_transmission_sinr(ues=self.ues,
                                                  interference_beams=self.additional_beam_set)
@@ -128,33 +117,87 @@ class LEOSatEnv(gym.Env):
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
 
-    cell_sinr = {}
-    for sat_name in self.agent_names:
-      cell_sinr[sat_name] = np.zeros((self.cell_num, ))
-    for ue in self.ues:
-      if ue.last_serving is not None:
-        sat_name, beam_idx = ue.last_serving
-        cell_sinr[sat_name][beam_idx] += util.tolinear(ue_sinr[ue.name])
-    for sat_name in self.agent_names:
-      for beam_idx, user_num in self.leo_agents[sat_name].sat.cell_topo.serving_status.items():
-        cell_sinr[sat_name][beam_idx] = util.todb(cell_sinr[sat_name][beam_idx] / user_num)
-
-    beam_power = {}
-    for sat_name in self.agent_names:
-      tmp_beam_power = np.zeros((self.cell_num, ))
-      sat = self.leo_agents[sat_name].sat
-      for beam_idx in range(self.cell_num):
-        tmp_beam_power[beam_idx] = sat.get_beam_info(beam_idx)[0]
-      beam_power[sat_name] = tmp_beam_power
-
     self._cal_reward(ue_throughput=ue_throughput)
 
-    self.step_num += 1
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
 
-    obs = self.get_state_info(cell_sinr, beam_power)
+    obs = self.get_state_info()
     return (obs, self.reward, done, truncated, {})
+
+  def _take_action(self, action_n: Dict[str, List[float]]):
+    for sat_name, action in action_n.items():
+      turned_on_beams = self.action_to_beam_list(action=action)
+      satbeam_list = [(sat_name, beam_idx) for beam_idx in turned_on_beams]
+      for ue in self.ues:
+        ue.filter_servable(satbeam_list)
+    # beam decision and handover
+    self.nmc.a3_event_check()
+
+    dbm_power_dict = self.action_to_power_dict(action[self.leo_agents[sat_name].power_slice], sat_name)
+    self.leo_agents[sat_name].sat.clear_power()
+    for beam_idx, dbm_power in dbm_power_dict.items():
+      self.leo_agents[sat_name].sat.set_beam_power(beam_idx=beam_idx, tx_power=dbm_power)
+
+    beamwidth_dict = self.action_to_beamwidth_dict(action[self.leo_agents[sat_name].beamwidth_slice], sat_name=sat_name)
+    for beam_idx, beamwidth in beamwidth_dict.items():
+      self.leo_agents[sat_name].sat.set_beamwidth(beam_idx=beam_idx, beamwidth=beamwidth)
+
+  def action_to_beam_list(self, action: npt.NDArray[np.float64]) -> List[int]:
+    """Map the action output to the serving beam set.
+
+    Args:
+        action (float): Action of beams
+
+    Returns:
+        Set[int]: Serving beam set.
+    """
+    return [i for i, power in enumerate(action) if power > 0]
+
+  def action_to_power_dict(self, power_action: npt.NDArray[np.float64], sat_name) -> Dict[int, float]:
+    """Map the action output to the beam tx power.
+    Args:
+        power_action (npt.NDArray[np.float64]): Action of the power
+                                                of all beams and total power.
+    Returns:
+        Dict[int, float]: Dict of the power of each turned on beam.
+    """
+    online_beam = self.leo_agents[sat_name].sat.cell_topo.online_beam_set
+    mw_power_dict = {}
+    dbm_power_dict = {}
+    for beam_idx in range(self.cell_num):
+      if beam_idx in online_beam:
+        mw_power_dict[beam_idx] = abs(power_action[beam_idx])
+      else:
+        mw_power_dict[beam_idx] = 0
+    agent = self.leo_agents[sat_name]
+    total_power_mw = util.tolinear(util.rescale_value(power_action[-1],
+                                                      agent.total_power_low,
+                                                      agent.total_power_high,
+                                                      agent.sat.min_power,
+                                                      agent.sat.max_power))
+
+    multiplier = (total_power_mw
+                  / (np.sum(np.fromiter(mw_power_dict.values(), dtype=float)) + constant.MIN_POSITIVE_FLOAT))
+    for beam_idx in online_beam:
+      mw_power_dict[beam_idx] *= multiplier
+
+    for beam_idx in mw_power_dict:
+      dbm_power_dict[beam_idx] = util.todb(mw_power_dict[beam_idx])
+
+    return dbm_power_dict
+
+  def action_to_beamwidth_dict(self, beamwidth_action: npt.NDArray[np.float64], sat_name) -> Dict[int, float]:
+    res = {}
+    agent = self.leo_agents[sat_name]
+    for i, beamwidth in enumerate(beamwidth_action):
+      res[i] = util.rescale_value(beamwidth,
+                                  agent.beamwidth_action_low[i],
+                                  agent.beamwidth_action_high[i],
+                                  agent.sat.min_beamwidth,
+                                  agent.sat.max_beamwidth)
+
+    return res
 
   def _cal_reward(self, ue_throughput):
     for key in self.reward:
@@ -170,7 +213,7 @@ class LEOSatEnv(gym.Env):
         agent = self.leo_agents[sat_name]
         if len(agent.sat.cell_topo.serving) > 0:
           if sat_name not in sat_tran_ratio:
-            dt_comp_latency = max([dt.computation_latency for dt in self.digital_agents.values()])
+            # dt_comp_latency = max([dt.computation_latency for dt in self.digital_agents.values()])
             leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
 
             overhead = (max(agent.sat.beam_training_latency,
@@ -186,15 +229,8 @@ class LEOSatEnv(gym.Env):
   def get_position_state(self, sat_name) -> npt.NDArray[np.float32]:
     return self.leo_agents[sat_name].get_scaled_pos(plot_range=self.plot_range)
 
-  def get_state_info(self, cell_sinr, beam_power, init=False) -> Dict[str, List[float]]:
+  def get_state_info(self, init=False) -> Dict[str, List[float]]:
     pass
-
-  def _take_action(self):
-    """Take action"""
-    raise ValueError('At template funtion')
-
-  def action_to_power_dict(self, power_action: npt.NDArray[np.float64], sat_name) -> Dict[int, float]:
-    raise ValueError('At template funtion')
 
   def add_random_interference(self):
     """Other satellites have random beam act as interference """
@@ -214,29 +250,11 @@ class LEOSatEnv(gym.Env):
             sat.cell_topo.add_serving(f'{beam_idx}', beam_idx)
             self.additional_beam_set.add((intefere_sat_name, beam_idx))
 
-  def action_to_trainset(self, action: npt.NDArray[np.float64]) -> Set[int]:
-    """Map the action output to the training beam set.
-
-    Args:
-        action (float): Action
-
-    Returns:
-        Set[int]: Training beam set.
-    """
-    train_set = set()
-    # print(action)
-    for i, act in enumerate(action):
-      if act >= 0:
-        train_set.add(i)
-    # print(action)
-    # print(train_set)
-    return train_set
-
   def reset(self, seed=None, options=None) -> Tuple[Dict[str, List[float]], Any]:
     super().reset(seed=seed)
 
     self._init_env()
-    state = self.get_state_info(self.prev_cell_sinr, self.prev_beam_power, init=True)
+    state = self.get_state_info(init=True)
 
     if seed:
       np.random.seed(seed)

@@ -135,7 +135,7 @@ class Beam(object):
     Args:
         ue (User): The user this beam is serving
         tx_gain (float): The tx antenna gain (in dB) this user gets
-        interference_power (float): The interference power (in dB)
+        interference_power (float): The interference power (in dBm)
                                     this user gets
         mode (str): the mode this function is running
                     (run or debug)
@@ -147,12 +147,12 @@ class Beam(object):
     n_and_i = util.todb(
         util.tolinear(interference_power) + util.tolinear(noise_power))
     if mode == 'debug':
-      print(f'Tx Power: {self.tx_power}, '
+      print(f'Tx Power: {self.tx_power} dBm, '
             f'Tx Gain: {tx_gain}, '
             f'UE Rx Gain: {ue.rx_gain}, '
-            f'Channel Loss: {channel_loss}, '
-            f'Interference Power: {interference_power}, '
-            f'Interference and Noise: {n_and_i}')
+            f'Channel Loss: {channel_loss} dB, '
+            f'Interference Power: {interference_power} dBm, '
+            f'Interference and Noise: {n_and_i} dBm')
     return self.tx_power + tx_gain + ue.rx_gain - channel_loss - n_and_i
 
   def has_interference(self, other_beam: Beam) -> bool:

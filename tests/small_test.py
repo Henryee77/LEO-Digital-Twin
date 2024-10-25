@@ -1,6 +1,2 @@
 
-A = [5, 5, 5, 5]
-
-for i in range(len(A)):
-  print(i)
-print(len(A))
+A = [[1, 4, 7], [8, 5, 2], [3, 6, 3]]

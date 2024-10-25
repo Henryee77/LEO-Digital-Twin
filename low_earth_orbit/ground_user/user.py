@@ -1,6 +1,6 @@
 """The Ground User module."""
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 import collections
 
 from ..util import Position
@@ -109,6 +109,13 @@ class User(object):
     """
     rx_data = RxData(rsrp=rsrp)
     self.servable[(name_sat, beam_num)] = rx_data
+
+  def filter_servable(self, filter_target: List[SatBeamID]):
+    new_servable = {}
+    for sat_beam in filter_target:
+      new_servable[sat_beam] = self.servable[sat_beam]
+
+    self.servable = new_servable
 
   def serving_add(self, sat_beam: SatBeamID) -> None:
     """Add final result for the serving.

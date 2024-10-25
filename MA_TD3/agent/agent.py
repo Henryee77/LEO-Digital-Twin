@@ -116,23 +116,39 @@ class Agent(object):
 
   @property
   def action_dim(self):
-    return self._action_dim
+    return self.__action_dim
 
   @action_dim.setter
   def action_dim(self, dim):
     if not isinstance(dim, int):
       raise TypeError('Action dimension must be int')
-    self._action_dim = dim
+    self.__action_dim = dim
 
   @property
   def state_dim(self):
-    return self._state_dim
+    return self.__state_dim
 
   @state_dim.setter
   def state_dim(self, dim):
     if not isinstance(dim, int):
       raise TypeError('State dimension must be int')
-    self._state_dim = dim
+    self.__state_dim = dim
+
+  @property
+  def total_power_low(self):
+    return self.action_space.low[self.power_slice][-1]
+
+  @property
+  def total_power_high(self):
+    return self.action_space.high[self.power_slice][-1]
+
+  @property
+  def beamwidth_action_low(self):
+    return self.action_space.low[self.beamwidth_slice]
+
+  @property
+  def beamwidth_action_high(self):
+    return self.action_space.high[self.beamwidth_slice]
 
   @property
   def actor_state_dict(self):

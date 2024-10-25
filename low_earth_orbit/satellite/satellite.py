@@ -40,8 +40,8 @@ class Satellite(object):
     self.cell_topo = cell_topo
     self.antenna = antenna
     self.wireless_channel = channel
-    self.max_power = max_power
-    self.min_power = min_power
+    self.__max_power = max_power
+    self.__min_power = min_power
     self.total_bandwidth = total_bandwidth
     self.beam_alg = beam_alg
 
@@ -71,6 +71,16 @@ class Satellite(object):
       self._position = pos
     else:
       raise ValueError('Cannot set the position of satellite to None')
+
+  @property
+  def max_power(self):
+    """Maximum power in dBm"""
+    return self.__max_power
+
+  @property
+  def min_power(self):
+    """Minimum power in dBm"""
+    return self.__min_power
 
   @property
   def min_beamwidth(self) -> float:
@@ -245,10 +255,13 @@ class Satellite(object):
     """Update the information of which beam is serving the ue"""
     self.cell_topo.remove_serving(ue_name)
 
-  def scan_beam(self):
+  def scan_beams(self) -> Dict[str, List[float]]:
     """Calculate the RSRP of the training beam set"""
+    ues_sinr = {}
     for ue in self.servable:
-      self.cal_rsrp(ue)
+      ues_sinr[ue.name] = self.cal_rsrp(ue)
+
+    return ues_sinr
 
   def set_beam_power(self, beam_idx: int, tx_power: float):
     """Set the tx power of the beam
@@ -274,7 +287,7 @@ class Satellite(object):
     """
     self.cell_topo.set_beamwidth(beam_idx, beamwidth)
 
-  def select_train_by_topo(self, ues: List[User]):
+  def select_train_by_topo(self, ues: List[User]) -> Dict[str, List[float]]:
     """Select the training beams
 
     Args:
@@ -287,7 +300,9 @@ class Satellite(object):
           self.cell_topo.find_nearby(ue.position))
 
     if self.cell_topo.training_beam:
-      self.scan_beam()
+      ues_sinr = self.scan_beams()
+
+    return ues_sinr
 
   def get_ue_data(
           self, ues: List[User]) -> Dict[str, collections.deque[Tuple[str, int]]]:

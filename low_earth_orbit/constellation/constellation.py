@@ -154,7 +154,7 @@ class Constellation(object):
               })
     plt.pause(0.1)
 
-  def scan_ue(self, ues: List[User]):
+  def scan_ues(self, ues: List[User], sat_name_list: List[str] = None) -> Dict[str, Dict[str, List[float]]]:
     """Select the training beam and calculate the RSRP,
        and add the servable data to the user
 
@@ -163,8 +163,15 @@ class Constellation(object):
     """
     for ue in ues:
       ue.servable_clear()
-    for sat in self.all_sat.values():
-      sat.select_train_by_topo(ues)
+
+    if sat_name_list is None:
+      sat_name_list = self.all_sat.keys()
+
+    sat_ues_sinr = {}
+    for sat_name in sat_name_list:
+      sat_ues_sinr[sat_name] = self.all_sat[sat_name].select_train_by_topo(ues)
+
+    return sat_ues_sinr
 
   def cal_transmission_sinr(self,
                             ues: List[User],
@@ -274,7 +281,7 @@ class Constellation(object):
   def assign_training_set(self, sat_name: str, train_set: Set[int]):
     """Assign the training set to the satellite
        (This is dsigned to be used for other training algorithm.
-       No need to call this when using 'scan_ue'.)
+       No need to call this when using 'scan_ues'.)
 
     Args:
         sat_name (str): The name the satellite

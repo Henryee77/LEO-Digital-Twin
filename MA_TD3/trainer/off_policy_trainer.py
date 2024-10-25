@@ -178,13 +178,15 @@ class OffPolicyTrainer(object):
     1. Train the neural network.
     2. Parameter sharing.
     """
+    nn_start_time = time.time()
+
     for _ in range(self.args.iter_num):
       self.total_train_iter += 1
-      nn_start_time = time.time()
       for _, agent in self.leo_agent_dict.items():
         # Update policy (iteration of training is args.iter_num)
         agent.update_policy(self.total_train_iter)
-      self.nn_train_time += time.time() - nn_start_time
+
+    self.nn_train_time += time.time() - nn_start_time
 
     if self.total_eps % self.args.federated_upload_freq == 0:
       self.federated_upload()
@@ -221,8 +223,6 @@ class OffPolicyTrainer(object):
       'Eval_reward', {f'{self.env.name} total reward': sum(eval_reward.values())}, self.total_eps)
 
   def save_training_result(self, ep_reward, step_count: int):
-    sim_start_time = time.time()
-
     for agent_name in ep_reward:
       ep_reward[agent_name] /= step_count
     self.total_eps += 1
@@ -232,10 +232,10 @@ class OffPolicyTrainer(object):
       self.tb_writer.add_scalars(
         f'{self.env.name} {agent_name}/reward', {'train_reward': ep_reward[agent_name]}, self.total_eps)
 
-    self.sat_sim_time += time.time() - sim_start_time
-
   def take_action(self, action_dict, ep_reward, save_data=False, running_mode='training') -> Tuple[Dict[str, float], bool]:
     # Take action in env
+    sim_start_time = time.time()
+
     new_env_observation, env_reward, done, truncated, _ = self.env.step(action_dict)
 
     if running_mode == "testing":
@@ -257,6 +257,8 @@ class OffPolicyTrainer(object):
     self.total_timesteps += 1
     for agent_name in env_reward:
       ep_reward[agent_name] += env_reward[agent_name]
+
+    self.sat_sim_time += time.time() - sim_start_time
 
     return ep_reward, (done or truncated)
 
