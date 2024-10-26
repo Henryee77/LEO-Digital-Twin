@@ -153,7 +153,8 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
 
   # train the neural network
   digitalworld_trainer.train()
-  realworld_trainer.train()
+  if digitalworld_trainer.total_eps > args.pretraining_eps:
+    realworld_trainer.train()
 
 
 def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer, running_mode='training'):
@@ -164,16 +165,18 @@ def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer
 
   while step_count < args.max_step_per_ep and not (digital_done or real_done):
     digital_actions = digitalworld_trainer.deterministic_actions()
-    real_actions = realworld_trainer.deterministic_actions()
+    if digitalworld_trainer.total_eps > args.pretraining_eps:
+      real_actions = realworld_trainer.deterministic_actions()
 
     _, _, _, digital_done = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
-    _, _, _, real_done = realworld_trainer.take_action(real_actions, running_mode=running_mode)
-    assert digital_done == real_done
+    if digitalworld_trainer.total_eps > args.pretraining_eps:
+      _, _, _, real_done = realworld_trainer.take_action(real_actions, running_mode=running_mode)
 
     step_count += 1
 
   digitalworld_trainer.save_eval_result(step_count)
-  realworld_trainer.save_eval_result(step_count)
+  if digitalworld_trainer.total_eps > args.pretraining_eps:
+    realworld_trainer.save_eval_result(step_count)
 
 
 def run_one_eps(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
@@ -325,6 +328,9 @@ if __name__ == '__main__':
   parser.add_argument(
       '--eval-period', default=10, type=int,
       help='The evaluation frequency')
+  parser.add_argument(
+      '--pretraining-eps', default=7000, type=int,
+      help='The number of episodes for pretraining digital twins')
 
   # ------------------ Misc -------------------------
   parser.add_argument(

@@ -63,7 +63,7 @@ obj_nmc = NMC(constellation=LEO_constellation, ues=user_list)
 sat_name_list = ['3_0_24']  # ['3_0_24', '2_0_1', '1_0_9']
 r = 5
 
-f = misc.load_rt_file('rotated_rt_result')
+f = misc.load_rt_file()
 
 path_loss_array = np.asarray([data['path loss (dB)']
                               for t in f
@@ -118,10 +118,10 @@ for t in range(simulation_time + 1):
   plt.xlim((long - r, long + r))
   plt.ylim((lati - r, lati + r))
   plt.show()
-  if t < 3:
+  if t < 13:
     plt.pause(0.2)
   else:
-    plt.pause(15)
+    plt.pause(0.8)
 
   LEO_constellation.scan_ues(user_list)
   # print(f'---{time.time() - _time}')

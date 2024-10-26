@@ -20,7 +20,7 @@ from ..misc import misc
 class OffPolicyTrainer(object):
   """The trainer class"""
 
-  def __init__(self, args: Namespace, log: Dict[str, Logger], tb_writer: SummaryWriter, env: LEOSatEnv, leo_agent_dict: Dict[str, Agent]):
+  def __init__(self, args: Namespace, log: Dict[str, Logger], tb_writer: SummaryWriter, env: LEOSatEnv, leo_agent_dict: Dict[str, Agent], online=True):
     self.args = args
     self.log = log
     self.tb_writer = tb_writer
@@ -30,6 +30,7 @@ class OffPolicyTrainer(object):
     self.total_eps = 0  # steps of episodes
     self.leo_agent_dict = leo_agent_dict
     self.agent_num = len(self.leo_agent_dict)
+    self.__online = online
 
     self.cur_states = {}
     for agent_name, agent in self.leo_agent_dict.items():
@@ -50,6 +51,10 @@ class OffPolicyTrainer(object):
   def total_eps(self):
     return self._total_eps
 
+  @total_eps.setter
+  def total_eps(self, eps):
+    self._total_eps = eps
+
   @property
   def cur_states(self):
     return self.__cur_states
@@ -58,9 +63,15 @@ class OffPolicyTrainer(object):
   def cur_states(self, state):
     self.__cur_states = state
 
-  @total_eps.setter
-  def total_eps(self, eps):
-    self._total_eps = eps
+  @property
+  def online(self):
+    return self.__online
+
+  @online.setter
+  def online(self, online):
+    if type(online) is not bool:
+      raise TypeError('online can only be bool.')
+    self.__online = online
 
   def combined_state(self, sat_name) -> npt.NDArray[np.float32]:
     return np.concatenate((self.cur_states[sat_name], self.twin_trainer.cur_states[sat_name]))
