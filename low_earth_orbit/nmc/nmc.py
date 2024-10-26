@@ -37,6 +37,8 @@ class NMC(object):
     handing_sat = set()
     for ue in self.ues:
       handoff, last_serving, next_serving = ue.a3_event_check()
+      # print(ue.name, handoff, last_serving, next_serving)
+      # print(ue.servable)
       if handoff:
         self.handoff(ue, next_serving)
         if last_serving:

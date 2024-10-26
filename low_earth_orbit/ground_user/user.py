@@ -113,7 +113,8 @@ class User(object):
   def filter_servable(self, filter_target: List[SatBeamID]):
     new_servable = {}
     for sat_beam in filter_target:
-      new_servable[sat_beam] = self.servable[sat_beam]
+      if sat_beam in self.servable:
+        new_servable[sat_beam] = self.servable[sat_beam]
 
     self.servable = new_servable
 

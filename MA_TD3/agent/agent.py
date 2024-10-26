@@ -25,7 +25,7 @@ class Agent(object):
                tb_writer: SummaryWriter,
                log: Dict[str, Logger],
                args: Namespace,
-               name: str,
+               sat_name: str,
                agent_type: str,
                device: device,
                comp_freq: float = constant.DEFAULT_CPU_CYCLE):
@@ -33,13 +33,13 @@ class Agent(object):
     self.log = log
     self.tb_writer = tb_writer
     self.args = args
-    self.name = name
     self.agent_type = agent_type
     self.device = device
     self.comp_freq = comp_freq
-    self.sat = Satellite(shell_index=0,
-                         plane_index=0,
-                         sat_index=0,
+    sat_indices = sat_name.split('_')
+    self.sat = Satellite(shell_index=sat_indices[0],
+                         plane_index=sat_indices[1],
+                         sat_index=sat_indices[2],
                          angle_speed=0,
                          position=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
                          cell_topo=CellTopology(center_point=Position(geodetic=Geodetic(0, 0, constant.R_EARTH))),
@@ -115,6 +115,14 @@ class Agent(object):
     self._sat = sat
 
   @property
+  def sat_name(self) -> str:
+    return self.sat.name
+
+  @property
+  def name(self) -> str:
+    return self.agent_type + '_' + self.sat_name
+
+  @property
   def action_dim(self):
     return self.__action_dim
 
@@ -133,6 +141,14 @@ class Agent(object):
     if not isinstance(dim, int):
       raise TypeError('State dimension must be int')
     self.__state_dim = dim
+
+  @property
+  def pos_low(self):
+    return self.observation_space.low[self.pos_slice]
+
+  @property
+  def pos_high(self):
+    return self.observation_space.high[self.pos_slice]
 
   @property
   def total_power_low(self):
@@ -282,7 +298,7 @@ class Agent(object):
     assert not np.isnan(action).any()
 
     self.tb_writer.add_scalar(
-        f'debug/{self.agent_type} {self.name}_epsilon', self.epsilon, total_timesteps)
+        f'debug/{self.name}_epsilon', self.epsilon, total_timesteps)
 
     return action
 
@@ -296,9 +312,9 @@ class Agent(object):
 
     self.sharing_weight = min(self.args.max_sharing_weight, r / self.historical_avg_reward)
 
-    self.tb_writer.add_scalars(f'{self.agent_type} {self.name}/historical_avg_reward',
+    self.tb_writer.add_scalars(f'{self.name}/historical_avg_reward',
                                {self.name: self.historical_avg_reward}, total_train_iter)
-    self.tb_writer.add_scalars(f'{self.agent_type} {self.name}/sharing_weight',
+    self.tb_writer.add_scalars(f'{self.name}/sharing_weight',
                                {self.name: self.sharing_weight}, total_train_iter)
 
   def update_policy(self, total_train_iter):
@@ -313,4 +329,4 @@ class Agent(object):
 
       for key, value in debug.items():
         self.tb_writer.add_scalars(
-          f'{self.agent_type} {self.name}/{key}', {self.name: value}, total_train_iter)
+          f'{self.name}/{key}', {self.name: value}, total_train_iter)

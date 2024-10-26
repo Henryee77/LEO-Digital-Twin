@@ -11,6 +11,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from tensorboardX import SummaryWriter
 import gymnasium as gym
 from gymnasium import spaces
 import yaml
@@ -98,10 +99,11 @@ def set_log(args, path=".") -> Dict[str, Logger]:
   return log
 
 
-def make_env(env_name, args, ax: plt.Axes, agent_dict: Dict[str, Agent], real_agents: Dict[str, Agent], digital_agents: Dict[str, Agent], agent_names: List[str]) -> LEOSatEnv:
+def make_env(env_name, args, ax: plt.Axes, tb_writer: SummaryWriter, agent_dict: Dict[str, Agent], real_agents: Dict[str, Agent], digital_agents: Dict[str, Agent], agent_names: List[str]) -> LEOSatEnv:
   env = gym.make(env_name,
                  ax=ax,
                  args=args,
+                 tb_writer=tb_writer,
                  agent_dict=agent_dict,
                  real_agents=real_agents,
                  digital_agents=digital_agents,
@@ -187,7 +189,7 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
   return result, index
 
 
-def load_rt_file() -> Dict[str, Dict[int, Dict[str, float]]]:
+def load_rt_file(filename: str = 'rt_result') -> Dict[str, Dict[int, Dict[str, float]]]:
   """Load the ray tracing simulation result file.
   ### Nested dictionary hierarchy:
     {t: {sat_name: {beam_index: [ray tracing data 1, ..., ray tracing data N]}}}
@@ -203,7 +205,7 @@ def load_rt_file() -> Dict[str, Dict[int, Dict[str, float]]]:
   """
 
   rt_result = {}
-  with open('MA_TD3/misc/rt_result.csv', mode='r', newline='') as f:
+  with open(f'MA_TD3/misc/{filename}.csv', mode='r', newline='') as f:
     reader = csv.DictReader(f)
     for row in reader:
       sat_name = row.pop('sat_name')
@@ -229,11 +231,13 @@ def load_rt_file() -> Dict[str, Dict[int, Dict[str, float]]]:
 
 def construct_dnn_dict(input_dim: int, output_dim: int, hidden_nodes: List[int], activ_func) -> OrderedDict[str, nn.Module]:
   layer_list = []
+  assert hidden_nodes[-1] > output_dim
   layer_nodes = [input_dim] + hidden_nodes + [output_dim]
   for i in range(len(layer_nodes) - 1):
     # print(f'fc_{i}', layer_nodes[i], layer_nodes[i + 1])
     layer_list.append((f'fc_{i}', nn.Linear(layer_nodes[i], layer_nodes[i + 1])))
-    layer_list.append((f'activ_{i}', copy.deepcopy(activ_func)))
+    if i != len(layer_nodes) - 2:
+      layer_list.append((f'activ_{i}', copy.deepcopy(activ_func)))
 
   return OrderedDict(layer_list)
 

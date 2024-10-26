@@ -41,41 +41,43 @@ def main(args):
   ax.set_aspect('equal', adjustable='box')
   plt.ion()
 
-  agent_name_list = ['3_0_24', '2_0_1', '1_0_9']
+  sat_name_list = ['3_0_24', '2_0_1', '1_0_9']
   # Initialize agents
   realworld_agent_dict = {}
   digitalworld_agent_dict = {}
-  for agent_name in agent_name_list:
-    realworld_agent_dict[agent_name] = Agent(policy_name=args.model,
-                                             tb_writer=tb_writer,
-                                             log=log,
-                                             name=agent_name,
-                                             agent_type='real_LEO',
-                                             args=args,
-                                             device=device)
-    digitalworld_agent_dict[agent_name] = Agent(policy_name=args.model,
-                                                tb_writer=tb_writer,
-                                                log=log,
-                                                name=agent_name,
-                                                agent_type='digital_LEO',
-                                                args=args,
-                                                device=device)
+  for sat_name in sat_name_list:
+    realworld_agent_dict[sat_name] = Agent(policy_name=args.model,
+                                           tb_writer=tb_writer,
+                                           log=log,
+                                           sat_name=sat_name,
+                                           agent_type='real_LEO',
+                                           args=args,
+                                           device=device)
+    digitalworld_agent_dict[sat_name] = Agent(policy_name=args.model,
+                                              tb_writer=tb_writer,
+                                              log=log,
+                                              sat_name=sat_name,
+                                              agent_type='digital_LEO',
+                                              args=args,
+                                              device=device)
 
   # Create env
   real_env = misc.make_env(args.real_env_name,
                            args=args,
                            ax=ax,
+                           tb_writer=tb_writer,
                            agent_dict=realworld_agent_dict,
                            real_agents=realworld_agent_dict,
                            digital_agents=digitalworld_agent_dict,
-                           agent_names=agent_name_list)
+                           agent_names=sat_name_list)
   digital_env = misc.make_env(args.digital_env_name,
                               args=args,
                               ax=ax,
+                              tb_writer=tb_writer,
                               agent_dict=digitalworld_agent_dict,
                               real_agents=realworld_agent_dict,
                               digital_agents=digitalworld_agent_dict,
-                              agent_names=agent_name_list)
+                              agent_names=sat_name_list)
   print(f'real env name: {real_env.name}')
   print(f'digital env name: {digital_env.name}')
   '''real_env.leo_agents = realworld_agent_dict
@@ -104,6 +106,9 @@ def main(args):
                                             tb_writer=tb_writer,
                                             env=digital_env,
                                             leo_agent_dict=digitalworld_agent_dict)
+    realworld_trainer.set_twin_trainer(digitalworld_trainer)
+    digitalworld_trainer.set_twin_trainer(realworld_trainer)
+
     if args.running_mode == 'training':
       while digitalworld_trainer.total_eps < args.ep_max_timesteps:
         training_process(args, realworld_trainer, digitalworld_trainer)
@@ -153,42 +158,57 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
 
 def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer, running_mode='training'):
   step_count = 0
-  digital_ep_reward = digitalworld_trainer.reset_env()
-  real_ep_reward = realworld_trainer.reset_env()
+  digital_done = real_done = False
+  digitalworld_trainer.reset_env()
+  realworld_trainer.reset_env()
 
-  while step_count < args.max_step_per_ep and not (d_done or r_done):
+  while step_count < args.max_step_per_ep and not (digital_done or real_done):
     digital_actions = digitalworld_trainer.deterministic_actions()
     real_actions = realworld_trainer.deterministic_actions()
 
-    digital_ep_reward, d_done = digitalworld_trainer.take_action(
-      digital_actions, digital_ep_reward, save_data=False, running_mode=running_mode)
-    real_ep_reward, r_done = realworld_trainer.take_action(
-      real_actions, real_ep_reward, save_data=False, running_mode=running_mode)
-    assert d_done == r_done
+    _, _, _, digital_done = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
+    _, _, _, real_done = realworld_trainer.take_action(real_actions, running_mode=running_mode)
+    assert digital_done == real_done
 
     step_count += 1
 
-  digitalworld_trainer.save_eval_result(digital_ep_reward, step_count)
-  realworld_trainer.save_eval_result(real_ep_reward, step_count)
+  digitalworld_trainer.save_eval_result(step_count)
+  realworld_trainer.save_eval_result(step_count)
 
 
 def run_one_eps(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
   step_count = 0
-  digital_ep_reward = digitalworld_trainer.reset_env()
-  real_ep_reward = realworld_trainer.reset_env()
+  digital_done = real_done = False
+  digitalworld_trainer.reset_env()
+  realworld_trainer.reset_env()
 
-  while step_count < args.max_step_per_ep and not (d_done or r_done):
+  while step_count < args.max_step_per_ep and not (digital_done or real_done):
     digital_actions = digitalworld_trainer.stochastic_actions()
     real_actions = realworld_trainer.stochastic_actions()
 
-    digital_ep_reward, d_done = digitalworld_trainer.take_action(digital_actions, digital_ep_reward, save_data=True)
-    real_ep_reward, r_done = realworld_trainer.take_action(real_actions, real_ep_reward, save_data=True)
-    assert d_done == r_done
+    (digital_prev_state_dict,
+     digital_action_dict,
+     digital_step_total_reward,
+     digital_done) = digitalworld_trainer.take_action(digital_actions)
+    (real_prev_state_dict,
+     real_action_dict,
+     real_step_total_reward,
+     real_done) = realworld_trainer.take_action(real_actions)
+    assert digital_done == real_done
+
+    digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
+                                              action_dict=digital_action_dict,
+                                              total_reward=digital_step_total_reward,
+                                              done=digital_done)
+    realworld_trainer.save_to_replaybuffer(prev_state_dict=real_prev_state_dict,
+                                           action_dict=real_action_dict,
+                                           total_reward=real_step_total_reward,
+                                           done=real_done)
 
     step_count += 1
 
-  digitalworld_trainer.save_training_result(digital_ep_reward, step_count)
-  realworld_trainer.save_training_result(real_ep_reward, step_count)
+  digitalworld_trainer.save_training_result(step_count)
+  realworld_trainer.save_training_result(step_count)
 
 
 if __name__ == '__main__':
@@ -220,10 +240,10 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--actor-n-hidden', default=3200, type=int,
+      '--actor-n-hidden', default=4200, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--critic-n-hidden', default=6400, type=int,
+      '--critic-n-hidden', default=8400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
       '--iter-num', default=4, type=int,

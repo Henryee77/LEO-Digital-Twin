@@ -10,6 +10,7 @@ import itur
 PI = math.pi
 PI_IN_RAD = math.pi / 180
 KM = 1000
+MILLIWATT = 1000
 
 # Nature
 R_EARTH = 6371 * KM  # 6371 km

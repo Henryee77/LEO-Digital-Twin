@@ -143,7 +143,9 @@ class Satellite(object):
     Returns:
         float: latency
     """
-    max_rsrp = max(self.cal_rsrp(ue=target))
+    max_rsrp = max(self.cal_rsrp(ue=target,
+                                 training_beams=set([i for i in range(self.cell_topo.cell_number)]),
+                                 save_servable=False))
     noise_power = constant.THERMAL_NOISE_POWER + util.todb(self.total_bandwidth)
     return data_size / (self.total_bandwidth * math.log2(1 + util.tolinear(max_rsrp - noise_power)))
 
@@ -171,7 +173,7 @@ class Satellite(object):
                                     constant.R_EARTH)
     return epsilon_bool and distance_bool
 
-  def cal_rsrp(self, ue: User) -> List[float]:
+  def cal_rsrp(self, ue: User, training_beams: Set[int] = None, save_servable=True) -> List[float]:
     """Calculate the rsrp with one ue.
 
     Args:
@@ -181,10 +183,14 @@ class Satellite(object):
         (List[float]): The List of rsrp for each beam.
     """
     rsrp_list = [constant.MIN_NEG_FLOAT] * self.cell_topo.cell_number
-    for cell_index in self.cell_topo.training_beam:
+    if training_beams is None:
+      training_beams = self.cell_topo.training_beam
+
+    for cell_index in training_beams:
       rsrp = self.cal_rsrp_one_beam(
           self.cell_topo.beam_list[cell_index].center_point, ue)
-      ue.servable_add(self.name, cell_index, rsrp)
+      if save_servable:
+        ue.servable_add(self.name, cell_index, rsrp)
       rsrp_list[cell_index] = rsrp
     return rsrp_list
 
@@ -301,6 +307,10 @@ class Satellite(object):
 
     if self.cell_topo.training_beam:
       ues_sinr = self.scan_beams()
+    else:
+      ues_sinr = {}
+      for ue in ues:
+        ues_sinr[ue.name] = [constant.MIN_NEG_FLOAT] * self.cell_topo.cell_number
 
     return ues_sinr
 

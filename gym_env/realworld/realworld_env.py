@@ -17,12 +17,14 @@ class RealWorldEnv(LEOSatEnv):
   def __init__(self,
                ax: plt.Axes,
                args,
+               tb_writer,
                agent_dict: Dict[str, Agent],
                real_agents: Dict[str, Agent],
                digital_agents: Dict[str, Agent],
                agent_names: List[str]):
     super().__init__(ax=ax,
                      args=args,
+                     tb_writer=tb_writer,
                      agent_dict=agent_dict,
                      real_agents=real_agents,
                      digital_agents=digital_agents,
@@ -31,10 +33,6 @@ class RealWorldEnv(LEOSatEnv):
 
     self.max_sinr = 20
     self.min_sinr = -self.max_sinr
-
-  def step(self, action_n: Dict[str, npt.NDArray]):
-    if self.step_num % self.train_per_move == 0:
-      self.constel.update_sat_position()
 
   def get_sinr_diff_state(self, cell_sinr, beam_power, sat_name) -> npt.NDArray[np.float32]:
     sinr_diff = cell_sinr[sat_name] - self.prev_cell_sinr[sat_name]
@@ -54,26 +52,32 @@ class RealWorldEnv(LEOSatEnv):
 
     return sinr_diff_state
 
-  def get_beam_training_state(self, sat_name) -> npt.NDArray[np.float32]:
-    agent = self.leo_agents[sat_name]
-    state = np.zeros(len(agent.observation_space[agent.beam_info_slice]))
+  def get_beam_training_state(self) -> npt.NDArray[np.float32]:
+    agent = self.leo_agents[self.agent_names[0]]
+    state = np.zeros(len(agent.observation_space.low[agent.beam_info_slice]))
+    state_dict = {}
 
     # Beam Training
-    ues_sinr = self.constel.scan_ues(ues=self.ues, sat_name_list=[sat_name])[sat_name]
+    ues_sinr = self.constel.scan_ues(ues=self.ues, sat_name_list=self.agent_names)
 
-    # Sinr feedback to state
-    for i in range(len(state)):
-      state[i] = max([sinr_list[i] for sinr_list in ues_sinr.values()])
+    for sat_name in self.agent_names:
+      # Sinr feedback to state
+      for i in range(len(state)):
+        state[i] = max([sinr_list[i] for sinr_list in ues_sinr[sat_name].values()])
 
-    return np.clip(state,
-                   self.min_sinr,
-                   self.max_sinr) / self.max_sinr
+      state_dict[sat_name] = np.clip(state,
+                                     self.min_sinr,
+                                     self.max_sinr) / self.max_sinr
+
+    return state_dict
 
   def get_state_info(self, init=False) -> Dict[str, List[float]]:
     state_dict = {}
 
+    bt_state_dict = self.get_beam_training_state()
+
     for sat_name in self.leo_agents:
       state_dict[sat_name] = np.float32(np.concatenate((self.get_position_state(sat_name),
-                                                        self.get_beam_training_state(sat_name=sat_name))))
+                                                        bt_state_dict[sat_name])))
 
     return state_dict

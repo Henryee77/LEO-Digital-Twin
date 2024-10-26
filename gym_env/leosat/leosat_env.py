@@ -6,6 +6,7 @@ import gymnasium as gym
 import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
+from tensorboardX import SummaryWriter
 from gymnasium import spaces
 from low_earth_orbit.ground_user import User
 from low_earth_orbit.constellation import Constellation
@@ -25,6 +26,7 @@ class LEOSatEnv(gym.Env):
   def __init__(self,
                ax: plt.Axes,
                args,
+               tb_writer: SummaryWriter,
                agent_dict: Dict[str, Agent],
                real_agents: Dict[str, Agent],
                digital_agents: Dict[str, Agent],
@@ -32,7 +34,7 @@ class LEOSatEnv(gym.Env):
     super(LEOSatEnv, self).__init__()
     self.name = 'LEOSat'
     self.ax = ax
-    # self.main_sat_name = '0_3_8'
+    self.tb_writer = tb_writer
     self.constel = self.ues = self.nmc = None
     self.ue_dict = {}
     self.prev_cell_sinr = {}
@@ -48,8 +50,9 @@ class LEOSatEnv(gym.Env):
       self._init_env()
 
     self.step_num = 0
-    self.max_step = args.step_per_ep
-    self.plot_range = 2  # the plotting range
+    self.reset_count = 0
+    self.max_step = args.max_step_per_ep
+    self.plot_range = 2.5  # the plotting range
 
     self.action_space = spaces.Box(np.array([-1]), np.array([1]))  # dummy for gym template
     self.observation_space = spaces.Box(np.array([-10]), np.array([10]))
@@ -101,13 +104,10 @@ class LEOSatEnv(gym.Env):
 
   # def step_constellation_movement(self):
 
-  def step(self, action_n: Dict[str, npt.NDArray]):
+  def step(self, action_n: Dict[str, npt.NDArray]) -> Tuple[Dict[str, npt.NDArray[np.float32]], Dict[str, float], bool, bool, Any]:
     # moving satellites
     self.constel.update_sat_position()
     self.step_num += 1
-
-    for ue in self.ues:
-      ue.servable_clear()
 
     self._take_action(action_n)
 
@@ -126,20 +126,24 @@ class LEOSatEnv(gym.Env):
     return (obs, self.reward, done, truncated, {})
 
   def _take_action(self, action_n: Dict[str, List[float]]):
+    satbeam_list = []
     for sat_name, action in action_n.items():
-      turned_on_beams = self.action_to_beam_list(action=action)
-      satbeam_list = [(sat_name, beam_idx) for beam_idx in turned_on_beams]
-      for ue in self.ues:
-        ue.filter_servable(satbeam_list)
+      agent = self.leo_agents[sat_name]
+      turned_on_beams = self.action_to_beam_list(action=action[agent.beam_slice])
+      satbeam_list = satbeam_list + [(sat_name, beam_idx) for beam_idx in turned_on_beams]
+    for ue in self.ues:
+      ue.filter_servable(satbeam_list)
+      # print(self.name, self.step_num, ue.servable)
+
     # beam decision and handover
     self.nmc.a3_event_check()
 
-    dbm_power_dict = self.action_to_power_dict(action[self.leo_agents[sat_name].power_slice], sat_name)
+    dbm_power_dict = self.action_to_power_dict(action[agent.power_slice], sat_name)
     self.leo_agents[sat_name].sat.clear_power()
     for beam_idx, dbm_power in dbm_power_dict.items():
       self.leo_agents[sat_name].sat.set_beam_power(beam_idx=beam_idx, tx_power=dbm_power)
 
-    beamwidth_dict = self.action_to_beamwidth_dict(action[self.leo_agents[sat_name].beamwidth_slice], sat_name=sat_name)
+    beamwidth_dict = self.action_to_beamwidth_dict(action[agent.beamwidth_slice], sat_name)
     for beam_idx, beamwidth in beamwidth_dict.items():
       self.leo_agents[sat_name].sat.set_beamwidth(beam_idx=beam_idx, beamwidth=beamwidth)
 
@@ -213,18 +217,42 @@ class LEOSatEnv(gym.Env):
         agent = self.leo_agents[sat_name]
         if len(agent.sat.cell_topo.serving) > 0:
           if sat_name not in sat_tran_ratio:
-            # dt_comp_latency = max([dt.computation_latency for dt in self.digital_agents.values()])
-            leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
-
-            overhead = (max(agent.sat.beam_training_latency,
-                            (util.rt_delay(len(self.leo_agents) * len(self.ues))
-                             + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
-                             + util.propagation_delay(leo2dt_distance)))
-                        + agent.computation_latency + agent.sat.trans_latency(len(self.ues) * constant.FLOAT_SIZE, self.dt_server) + util.propagation_delay(leo2dt_distance))
-            # print(agent.sat.beam_training_latency, agent.computation_latency)
+            overhead = self._cal_overhead(agent)
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.TIMESLOT)
 
-          self.reward[sat_name] += sat_tran_ratio[sat_name] * throughput / util.tolinear(agent.sat.all_power) / 1e3
+          self.reward[sat_name] += (sat_tran_ratio[sat_name] * throughput /
+                                    (util.tolinear(agent.sat.all_power) / constant.MILLIWATT))
+
+  def _cal_overhead(self, agent: Agent) -> float:
+    leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
+
+    realworld_header = agent.sat.beam_training_latency
+    digitalworld_header = (util.rt_delay(len(self.leo_agents) * len(self.ues))
+                           + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
+                           + util.propagation_delay(leo2dt_distance))
+
+    feedback_overhead = (agent.sat.trans_latency(len(self.ues) * constant.FLOAT_SIZE, self.dt_server)
+                         + util.propagation_delay(leo2dt_distance))
+
+    overhead = (max(realworld_header, digitalworld_header)
+                + agent.computation_latency + feedback_overhead)
+
+    self.tb_writer.add_scalars(f'{self.name} Env Param/overhead',
+                               {agent.name: overhead},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name}/realworld_header overhead',
+                               {agent.name: realworld_header},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name}/digitalworld_header overhead',
+                               {agent.name: realworld_header},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name}/comp header',
+                               {agent.name: agent.computation_latency},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name}/feedback_overhead',
+                               {agent.name: feedback_overhead},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    return overhead
 
   def get_position_state(self, sat_name) -> npt.NDArray[np.float32]:
     return self.leo_agents[sat_name].get_scaled_pos(plot_range=self.plot_range)
@@ -255,6 +283,7 @@ class LEOSatEnv(gym.Env):
 
     self._init_env()
     state = self.get_state_info(init=True)
+    self.reset_count += 1
 
     if seed:
       np.random.seed(seed)

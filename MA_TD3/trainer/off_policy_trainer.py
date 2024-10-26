@@ -62,6 +62,9 @@ class OffPolicyTrainer(object):
   def total_eps(self, eps):
     self._total_eps = eps
 
+  def combined_state(self, sat_name) -> npt.NDArray[np.float32]:
+    return np.concatenate((self.cur_states[sat_name], self.twin_trainer.cur_states[sat_name]))
+
   def set_twin_trainer(self, twin_trainer: OffPolicyTrainer):
     self.twin_trainer = twin_trainer
 
@@ -206,84 +209,80 @@ class OffPolicyTrainer(object):
       f'Evaluation time ratio: {self.eval_time / self.total_training_time * 100 :.2f} %')
     print(f'total running time: {self.total_training_time / 3600: .2f} hr')
 
-  def eval_progress(self, running_mode='training'):
-    eval_start_time = time.time()
-
-    self.eval_time = time.time() - eval_start_time
-
-  def save_eval_result(self, eval_reward, step_count: int) -> Dict[str, float]:
-    for agent_name in eval_reward:
-      eval_reward[agent_name] /= step_count
-    for agent_name in self.leo_agent_dict:
+  def save_eval_result(self, step_count: int) -> Dict[str, float]:
+    for agent_name in self.ep_reward:
+      self.ep_reward[agent_name] /= step_count
+    for agent_name, agent in self.leo_agent_dict.items():
       self.log[self.args.log_name].info(
-          f'Agent {agent_name}: Evaluation Reward {eval_reward[agent_name]:.6f} at episode {self.total_eps}')
+          f'Agent {agent.name}: Evaluation Reward {self.ep_reward[agent_name]:.6f} at episode {self.total_eps}')
       self.tb_writer.add_scalars(
-        'Eval_reward', {f'{self.env.name} {agent_name} reward': eval_reward[agent_name]}, self.total_eps)
+        'Eval_reward', {f'{self.env.name} {agent_name} reward': self.ep_reward[agent_name]}, self.total_eps)
     self.tb_writer.add_scalars(
-      'Eval_reward', {f'{self.env.name} total reward': sum(eval_reward.values())}, self.total_eps)
+      'Eval_reward', {f'{self.env.name} total reward': sum(self.ep_reward.values())}, self.total_eps)
 
-  def save_training_result(self, ep_reward, step_count: int):
-    for agent_name in ep_reward:
-      ep_reward[agent_name] /= step_count
+  def save_training_result(self, step_count: int):
+    for agent_name in self.ep_reward:
+      self.ep_reward[agent_name] /= step_count
     self.total_eps += 1
-    for agent_name in self.leo_agent_dict:
+    for agent_name, agent in self.leo_agent_dict.items():
       self.log[self.args.log_name].info(
-          f'Agent {agent_name}: Train episode reward {ep_reward[agent_name]:.6f} at episode {self.total_eps}')
+          f'Agent {agent.name}: Training episode reward {self.ep_reward[agent_name]:.6f} at episode {self.total_eps}')
       self.tb_writer.add_scalars(
-        f'{self.env.name} {agent_name}/reward', {'train_reward': ep_reward[agent_name]}, self.total_eps)
+        f'{agent.name}/training_reward', {'training_reward': self.ep_reward[agent_name]}, self.total_eps)
 
-  def take_action(self, action_dict, ep_reward, save_data=False, running_mode='training') -> Tuple[Dict[str, float], bool]:
+  def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], Dict[str, npt.NDArray[np.float32]], float, bool]:
     # Take action in env
     sim_start_time = time.time()
 
-    new_env_observation, env_reward, done, truncated, _ = self.env.step(action_dict)
+    new_env_observation, env_reward, done, _, _ = self.env.step(action_dict)
 
     if running_mode == "testing":
       self.env.render()
 
-    # Add experience to memory
-    if save_data:
-      total_reward = sum(env_reward.values())
-      for agent_name, leo_agent in self.leo_agent_dict.items():
-        leo_agent.add_memory(
-            obs=self.cur_states[agent_name],
-            new_obs=new_env_observation[agent_name],
-            action=action_dict[agent_name],
-            reward=total_reward,
-            done=done)
-
     # For next timestep
+    prev_state_dict = {}
+    for agent_name in self.leo_agent_dict:
+      prev_state_dict[agent_name] = self.combined_state(agent_name)
     self.cur_states = new_env_observation
     self.total_timesteps += 1
     for agent_name in env_reward:
-      ep_reward[agent_name] += env_reward[agent_name]
+      self.ep_reward[agent_name] += env_reward[agent_name]
 
     self.sat_sim_time += time.time() - sim_start_time
 
-    return ep_reward, (done or truncated)
+    return prev_state_dict, action_dict, sum(env_reward.values()), done
+
+  def save_to_replaybuffer(self, prev_state_dict, action_dict, total_reward, done):
+    for agent_name, leo_agent in self.leo_agent_dict.items():
+      leo_agent.add_memory(
+          obs=prev_state_dict[agent_name],
+          new_obs=self.combined_state(agent_name),
+          action=action_dict[agent_name],
+          reward=total_reward,
+          done=done)
 
   def stochastic_actions(self) -> Dict[str, npt.NDArray[np.float32]]:
     action_dict = {}
     for agent_name, leo_agent in self.leo_agent_dict.items():
       agent_action = leo_agent.select_stochastic_action(
-        np.array(self.cur_states[agent_name] + self.twin_trainer.cur_states[agent_name]), self.total_timesteps)
+        np.asarray(self.combined_state(agent_name)), self.total_timesteps)
       action_dict[agent_name] = agent_action
     return action_dict
 
   def deterministic_actions(self) -> Dict[str, npt.NDArray[np.float32]]:
+    eval_start_time = time.time()
+
     action_dict = {}
     for agent_name, leo_agent in self.leo_agent_dict.items():
       agent_action = leo_agent.select_deterministic_action(
-        np.array(self.cur_states[agent_name] + self.twin_trainer.cur_states[agent_name]), self.total_timesteps)
+        np.asarray(self.combined_state(agent_name)))
       action_dict[agent_name] = agent_action
+
+    self.eval_time = time.time() - eval_start_time
     return action_dict
 
   def reset_env(self):
-    ep_reward = {}
+    self.ep_reward = {}
     for agent_name in self.leo_agent_dict:
-      ep_reward[agent_name] = 0.0
+      self.ep_reward[agent_name] = 0.0
     self.cur_states, _ = self.env.reset()
-    return ep_reward
-
-  def test(self):
-    self.eval_progress(running_mode='testing')
