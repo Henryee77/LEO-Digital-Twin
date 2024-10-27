@@ -240,16 +240,16 @@ class LEOSatEnv(gym.Env):
     self.tb_writer.add_scalars(f'{self.name} Env Param/overhead',
                                {agent.name: overhead},
                                self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name}/realworld_header overhead',
+    self.tb_writer.add_scalars(f'{self.name} Env Param/realworld_header overhead',
                                {agent.name: realworld_header},
                                self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name}/digitalworld_header overhead',
-                               {agent.name: realworld_header},
+    self.tb_writer.add_scalars(f'{self.name} Env Param/digitalworld_header overhead',
+                               {agent.name: digitalworld_header},
                                self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name}/comp header',
+    self.tb_writer.add_scalars(f'{self.name} Env Param/comp header',
                                {agent.name: agent.computation_latency},
                                self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name}/feedback_overhead',
+    self.tb_writer.add_scalars(f'{self.name} Env Param/feedback_overhead',
                                {agent.name: feedback_overhead},
                                self.step_num + (self.reset_count - 1) * self.max_step)
     return overhead

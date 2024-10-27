@@ -25,12 +25,12 @@ class OffPolicyTrainer(object):
     self.log = log
     self.tb_writer = tb_writer
     self.env = env
+    self._online = online
     self.total_timesteps = 0  # steps of collecting experience
     self.total_train_iter = 0  # steps of training iteration
     self.total_eps = 0  # steps of episodes
     self.leo_agent_dict = leo_agent_dict
     self.agent_num = len(self.leo_agent_dict)
-    self.__online = online
 
     self.cur_states = {}
     for agent_name, agent in self.leo_agent_dict.items():
@@ -57,6 +57,8 @@ class OffPolicyTrainer(object):
 
   @property
   def cur_states(self):
+    if not self.online:
+      return self.twin_trainer.cur_states
     return self.__cur_states
 
   @cur_states.setter
@@ -65,15 +67,17 @@ class OffPolicyTrainer(object):
 
   @property
   def online(self):
-    return self.__online
+    return self._online
 
   @online.setter
   def online(self, online):
     if type(online) is not bool:
       raise TypeError('online can only be bool.')
-    self.__online = online
+    self._online = online
 
   def combined_state(self, sat_name) -> npt.NDArray[np.float32]:
+    if not self.online:
+      raise ValueError(f'{self.env.name} is offline.')
     return np.concatenate((self.cur_states[sat_name], self.twin_trainer.cur_states[sat_name]))
 
   def set_twin_trainer(self, twin_trainer: OffPolicyTrainer):
@@ -192,6 +196,9 @@ class OffPolicyTrainer(object):
     1. Train the neural network.
     2. Parameter sharing.
     """
+    if not self.online:
+      print(f'{self.env.name} is offline')
+      return
     nn_start_time = time.time()
 
     for _ in range(self.args.iter_num):
@@ -221,6 +228,8 @@ class OffPolicyTrainer(object):
     print(f'total running time: {self.total_training_time / 3600: .2f} hr')
 
   def save_eval_result(self, step_count: int) -> Dict[str, float]:
+    if not self.online:
+      return
     for agent_name in self.ep_reward:
       self.ep_reward[agent_name] /= step_count
     for agent_name, agent in self.leo_agent_dict.items():
@@ -232,6 +241,8 @@ class OffPolicyTrainer(object):
       'Eval_reward', {f'{self.env.name} total reward': sum(self.ep_reward.values())}, self.total_eps)
 
   def save_training_result(self, step_count: int):
+    if not self.online:
+      return
     for agent_name in self.ep_reward:
       self.ep_reward[agent_name] /= step_count
     self.total_eps += 1
@@ -242,6 +253,8 @@ class OffPolicyTrainer(object):
         f'{agent.name}/training_reward', {'training_reward': self.ep_reward[agent_name]}, self.total_eps)
 
   def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], Dict[str, npt.NDArray[np.float32]], float, bool]:
+    if not self.online:
+      return None, None, None, False
     # Take action in env
     sim_start_time = time.time()
 
@@ -264,6 +277,8 @@ class OffPolicyTrainer(object):
     return prev_state_dict, action_dict, sum(env_reward.values()), done
 
   def save_to_replaybuffer(self, prev_state_dict, action_dict, total_reward, done):
+    if prev_state_dict is None or action_dict is None:
+      return
     for agent_name, leo_agent in self.leo_agent_dict.items():
       leo_agent.add_memory(
           obs=prev_state_dict[agent_name],
@@ -273,6 +288,8 @@ class OffPolicyTrainer(object):
           done=done)
 
   def stochastic_actions(self) -> Dict[str, npt.NDArray[np.float32]]:
+    if not self.online:
+      return None
     action_dict = {}
     for agent_name, leo_agent in self.leo_agent_dict.items():
       agent_action = leo_agent.select_stochastic_action(
@@ -281,6 +298,8 @@ class OffPolicyTrainer(object):
     return action_dict
 
   def deterministic_actions(self) -> Dict[str, npt.NDArray[np.float32]]:
+    if not self.online:
+      return None
     eval_start_time = time.time()
 
     action_dict = {}
@@ -293,6 +312,8 @@ class OffPolicyTrainer(object):
     return action_dict
 
   def reset_env(self):
+    if not self.online:
+      return
     self.ep_reward = {}
     for agent_name in self.leo_agent_dict:
       self.ep_reward[agent_name] = 0.0

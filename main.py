@@ -110,9 +110,15 @@ def main(args):
     digitalworld_trainer.set_twin_trainer(realworld_trainer)
 
     if args.running_mode == 'training':
+      # Turn off the real world trainer, only digital twins are doing pretraining
+      realworld_trainer.online = False
+
       while digitalworld_trainer.total_eps < args.ep_max_timesteps:
         training_process(args, realworld_trainer, digitalworld_trainer)
-        # evaluate performance
+        if digitalworld_trainer.total_eps > args.pretraining_eps:
+          realworld_trainer.online = True
+
+          # evaluate performance every certain steps
         if digitalworld_trainer.total_eps % args.eval_period == 0:
           eval_process(args, realworld_trainer, digitalworld_trainer)
 
@@ -153,8 +159,7 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
 
   # train the neural network
   digitalworld_trainer.train()
-  if digitalworld_trainer.total_eps > args.pretraining_eps:
-    realworld_trainer.train()
+  realworld_trainer.train()
 
 
 def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer, running_mode='training'):
@@ -165,18 +170,15 @@ def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer
 
   while step_count < args.max_step_per_ep and not (digital_done or real_done):
     digital_actions = digitalworld_trainer.deterministic_actions()
-    if digitalworld_trainer.total_eps > args.pretraining_eps:
-      real_actions = realworld_trainer.deterministic_actions()
+    real_actions = realworld_trainer.deterministic_actions()
 
     _, _, _, digital_done = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
-    if digitalworld_trainer.total_eps > args.pretraining_eps:
-      _, _, _, real_done = realworld_trainer.take_action(real_actions, running_mode=running_mode)
+    _, _, _, real_done = realworld_trainer.take_action(real_actions, running_mode=running_mode)
 
     step_count += 1
 
   digitalworld_trainer.save_eval_result(step_count)
-  if digitalworld_trainer.total_eps > args.pretraining_eps:
-    realworld_trainer.save_eval_result(step_count)
+  realworld_trainer.save_eval_result(step_count)
 
 
 def run_one_eps(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
@@ -197,7 +199,6 @@ def run_one_eps(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer:
      real_action_dict,
      real_step_total_reward,
      real_done) = realworld_trainer.take_action(real_actions)
-    assert digital_done == real_done
 
     digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
                                               action_dict=digital_action_dict,
