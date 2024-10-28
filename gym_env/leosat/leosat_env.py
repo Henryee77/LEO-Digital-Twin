@@ -138,14 +138,16 @@ class LEOSatEnv(gym.Env):
     # beam decision and handover
     self.nmc.a3_event_check()
 
-    dbm_power_dict = self.action_to_power_dict(action[agent.power_slice], sat_name)
-    self.leo_agents[sat_name].sat.clear_power()
-    for beam_idx, dbm_power in dbm_power_dict.items():
-      self.leo_agents[sat_name].sat.set_beam_power(beam_idx=beam_idx, tx_power=dbm_power)
+    for sat_name, action in action_n.items():
+      agent = self.leo_agents[sat_name]
+      dbm_power_dict = self.action_to_power_dict(action[agent.power_slice], sat_name)
+      self.leo_agents[sat_name].sat.clear_power()
+      for beam_idx, dbm_power in dbm_power_dict.items():
+        self.leo_agents[sat_name].sat.set_beam_power(beam_idx=beam_idx, tx_power=dbm_power)
 
-    beamwidth_dict = self.action_to_beamwidth_dict(action[agent.beamwidth_slice], sat_name)
-    for beam_idx, beamwidth in beamwidth_dict.items():
-      self.leo_agents[sat_name].sat.set_beamwidth(beam_idx=beam_idx, beamwidth=beamwidth)
+      beamwidth_dict = self.action_to_beamwidth_dict(action[agent.beamwidth_slice], sat_name)
+      for beam_idx, beamwidth in beamwidth_dict.items():
+        self.leo_agents[sat_name].sat.set_beamwidth(beam_idx=beam_idx, beamwidth=beamwidth)
 
   def action_to_beam_list(self, action: npt.NDArray[np.float64]) -> List[int]:
     """Map the action output to the serving beam set.

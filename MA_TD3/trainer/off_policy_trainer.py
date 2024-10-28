@@ -271,7 +271,7 @@ class OffPolicyTrainer(object):
     if running_mode == "testing":
       self.env.render()
 
-    # For next timestep
+    # For next timesteps
     prev_state_dict = {}
     for agent_name in self.leo_agent_dict:
       prev_state_dict[agent_name] = self.combined_state(agent_name)
@@ -317,6 +317,7 @@ class OffPolicyTrainer(object):
       action_dict[agent_name] = agent_action
 
     self.eval_time = time.time() - eval_start_time
+    # print(action_dict)
     return action_dict
 
   def reset_env(self):

@@ -220,16 +220,16 @@ if __name__ == '__main__':
     '--batch-size', default=16, type=int,
     help='Batch size for both actor and critic')
   parser.add_argument(
-      '--actor-lr', default=1e-6, type=float,
+      '--actor-lr', default=1e-5, type=float,
       help='Learning rate for actor')
   parser.add_argument(
-      '--critic-lr', default=2e-5, type=float,
+      '--critic-lr', default=5e-5, type=float,
       help='Learning rate for critic')
   parser.add_argument(
       '--lr-reduce-factor', default=0.999, type=float,
       help='Reduce factor of learning rate')
   parser.add_argument(
-      '--lr-reduce-patience', default=5000, type=int,
+      '--lr-reduce-patience', default=500, type=int,
       help='Patience of reducing learning rate')
   parser.add_argument(
       '--lambda-l2', default=1e-9, type=float,
@@ -324,7 +324,7 @@ if __name__ == '__main__':
       '--eval-period', default=10, type=int,
       help='The evaluation frequency')
   parser.add_argument(
-      '--pretraining-eps', default=7000, type=int,
+      '--pretraining-eps', default=5000, type=int,
       help='The number of episodes for pretraining digital twins')
 
   # ------------------ Misc -------------------------
