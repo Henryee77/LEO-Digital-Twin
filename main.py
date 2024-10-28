@@ -80,15 +80,7 @@ def main(args):
                               agent_names=sat_name_list)
   print(f'real env name: {real_env.name}')
   print(f'digital env name: {digital_env.name}')
-  '''real_env.leo_agents = realworld_agent_dict
-  real_env.real_agents = realworld_agent_dict
-  real_env.digital_agents = digitalworld_agent_dict
-  real_env.reset()
 
-  digital_env.leo_agents = digitalworld_agent_dict
-  digital_env.real_agents = realworld_agent_dict
-  digital_env.digital_agents = digitalworld_agent_dict
-  digital_env.reset()'''
   # Start training
   trainer_dict = {'TD3': 'Off-Policy',
                   'DDPG': 'Off-Policy',
@@ -115,8 +107,10 @@ def main(args):
 
       while digitalworld_trainer.total_eps < args.ep_max_timesteps:
         training_process(args, realworld_trainer, digitalworld_trainer)
-        if digitalworld_trainer.total_eps > args.pretraining_eps:
+        if digitalworld_trainer.total_eps == args.pretraining_eps:
+          realworld_trainer.copy_NN_from_twin()
           realworld_trainer.online = True
+          realworld_trainer.total_eps = digitalworld_trainer.total_eps
 
           # evaluate performance every certain steps
         if digitalworld_trainer.total_eps % args.eval_period == 0:

@@ -87,7 +87,7 @@ class Agent(object):
     self.actor_hidden_nodes = [round(self.args.actor_n_hidden / x) for x in denom]
     self.critic_hidden_nodes = [round(self.args.critic_n_hidden / x) for x in denom]
     if policy_name == 'TD3':
-      self.policy = TD3(
+      self.__policy = TD3(
           actor_input_dim=self.state_dim,
           actor_output_dim=self.action_dim,
           critic_input_dim=self.state_dim + self.action_dim,
@@ -99,10 +99,10 @@ class Agent(object):
           action_high=self.max_actions,
           device=self.device)
     elif policy_name == 'DDPG':
-      self.policy = DDPG(state_dim=self.state_dim,
-                         action_dim=self.action_dim,
-                         device=self.device,
-                         args=self.args)
+      self.__policy = DDPG(state_dim=self.state_dim,
+                           action_dim=self.action_dim,
+                           device=self.device,
+                           args=self.args)
     else:
       raise ValueError(f'No {policy_name} policy')
 
@@ -121,6 +121,14 @@ class Agent(object):
   @property
   def name(self) -> str:
     return self.agent_type + '_' + self.sat_name
+
+  @property
+  def policy(self):
+    return self.__policy
+
+  @policy.setter
+  def policy(self, pol):
+    self.__policy = pol
 
   @property
   def action_dim(self):
@@ -251,7 +259,7 @@ class Agent(object):
     self.policy.load_actor_state_dict(state_dict)
 
   def load_critic_state_dict(self, state_dict):
-    self.policy.load_critic_state_dict(state_dict=state_dict)
+    self.policy.load_critic_state_dict(state_dict)
 
   def save_weight(self, filename, directory):
     self.log[self.args.log_name].info("[{}] Saved weight".format(self.name))

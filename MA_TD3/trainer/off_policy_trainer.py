@@ -86,6 +86,14 @@ class OffPolicyTrainer(object):
   def drop_twin_trainer(self):
     self.twin_trainer = None
 
+  def copy_NN_from_twin(self):
+    if self.online:
+      raise ValueError('You cannot copy the NN to the online agents.')
+    for sat_name in self.leo_agent_dict:
+      pretrained_actor, pretrained_critic = self.twin_trainer.leo_agent_dict[sat_name].model_state_dict
+      self.leo_agent_dict[sat_name].load_actor_state_dict(pretrained_actor)
+      self.leo_agent_dict[sat_name].load_critic_state_dict(pretrained_critic)
+
   def federated_upload(self):
     """Federated uploading for the models of the given agents."""
     ps_start_time = time.time()

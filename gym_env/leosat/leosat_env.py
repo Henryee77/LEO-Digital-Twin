@@ -221,7 +221,7 @@ class LEOSatEnv(gym.Env):
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.TIMESLOT)
 
           self.reward[sat_name] += (sat_tran_ratio[sat_name] * throughput /
-                                    (util.tolinear(agent.sat.all_power) / constant.MILLIWATT))
+                                    (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6)
 
   def _cal_overhead(self, agent: Agent) -> float:
     leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
