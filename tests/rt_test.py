@@ -63,7 +63,7 @@ obj_nmc = NMC(constellation=LEO_constellation, ues=user_list)
 sat_name_list = ['3_0_24']  # ['3_0_24', '2_0_1', '1_0_9']
 r = 5
 
-f = misc.load_rt_file()
+f = misc.load_rt_file(f'rt_result_ue{len(user_list)}')
 
 path_loss_array = np.asarray([data['path loss (dB)']
                               for t in f

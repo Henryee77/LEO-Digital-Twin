@@ -26,7 +26,7 @@ class CellTopology(object):
   """
 
   serving: Dict[str, int]
-  training_beam: Set[int]
+  __training_beam: Set[int]
   grid_points: List[Position]
   center_u: npt.NDArray[np.float64]
   center_v: npt.NDArray[np.float64]
@@ -74,7 +74,8 @@ class CellTopology(object):
       )
 
     self.serving = {}
-    self.training_beam = set()
+    self.__training_beam = set()
+    self.__non_training_beam = set(i for i in range(self.cell_number))
     self.grid_points = []
 
   @property
@@ -109,6 +110,22 @@ class CellTopology(object):
     return self._beam_list
 
   @property
+  def training_beam(self):
+    return self.__training_beam
+
+  @training_beam.setter
+  def training_beam(self, beam_set):
+    self.__training_beam = beam_set
+
+  @property
+  def non_training_beam(self):
+    return self.__non_training_beam
+
+  @training_beam.setter
+  def non_training_beam(self, beam_set):
+    self.__non_training_beam = beam_set
+
+  @property
   def serving_status(self) -> Dict[int, int]:
     """Number of users in each beam.
 
@@ -131,7 +148,15 @@ class CellTopology(object):
 
   @property
   def training_beam_num(self) -> float:
-    return len(self.training_beam)
+    return len(self.__training_beam)
+
+  def clear_training_beam(self):
+    self.__training_beam.clear()
+    self.non_training_beam = set(i for i in range(self.cell_number))
+
+  def add_training_beam(self, beam_set: Set[int]):
+    self.training_beam.update(beam_set)
+    self.non_training_beam.difference_update(beam_set)
 
   def generate_xyz_coord_grid(self):
     """Generate the XYZ-plane coordinate of the cell grid"""
@@ -366,7 +391,7 @@ class CellTopology(object):
     if cell_plot_mode == "active_only":
       return None
 
-    if cell_i in self.training_beam:
+    if cell_i in self.__training_beam:
       return color_dict.get("scan_cell", constant.DEFAULT_CELL_SCAN_COLOR)
     if cell_plot_mode == "active_and_training":
       return None
@@ -499,7 +524,7 @@ class CellTopology(object):
     return self.beam_list[self.serving[ue.name]].center_point
 
   def find_nearby(
-      self, ue_pos: Position, r: Optional[float] = None
+      self, ue: User, r: Optional[float] = None
   ) -> Set[int]:
     """Find the nearby beam_index within r.
 
@@ -510,7 +535,6 @@ class CellTopology(object):
     Returns:
         The list of index of the beam index.
     """
-
     # James
     search_r = 1.5
 
@@ -524,8 +548,40 @@ class CellTopology(object):
     res = set(
         i
         for i, item in enumerate(self.beam_list)
-        if _dis(item.center_point, ue_pos, r)
+        if _dis(item.center_point, ue.position, r)
     )
+    return res
+
+  def hobs(self, ue: User):
+    serv_hist = ue.serving_history
+    succ_index = 0
+    last_beam_pos = None
+    for i, serv_data in reversed(list(enumerate(serv_hist))):
+      if serv_data[-1] >= constant.SINR_THRESHOLD:
+        succ_index = i
+        last_beam_pos = serv_data[1]
+        break
+
+    if last_beam_pos is None:
+      return set(i for i in range(self.cell_number))
+
+    long_diff_list = [serv_hist[i][1].geodetic.longitude - serv_hist[i - 1][1].geodetic.longitude
+                      for i in range(1, len(serv_hist))]
+    lati_diff_list = [serv_hist[i][1].geodetic.latitude - serv_hist[i - 1][1].geodetic.latitude
+                      for i in range(1, len(serv_hist))]
+
+    s = (constant.DEFAULT_TRAINING_WINDOW_SIZE - succ_index)
+    epsilon_long = s * max([abs(x) for x in long_diff_list])
+    epsilon_lati = s * max([abs(x) for x in lati_diff_list])
+
+    res = set()
+    return res
+
+  def _get_training_area(self, last_beam_pos, long_start, long_end, lati_start, lati_end, epsilon):
+    res = []
+    for beam in self.non_training_beam:
+      if beam.
+
     return res
 
   def set_beam_power(self, beam_idx: int, tx_power: float):

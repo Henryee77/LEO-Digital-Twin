@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import List, Set, Dict, Tuple, Any
 import random
+import csv
 import gymnasium as gym
 import numpy as np
 import numpy.typing as npt
@@ -34,6 +35,7 @@ class LEOSatEnv(gym.Env):
     super(LEOSatEnv, self).__init__()
     self.name = 'LEOSat'
     self.ax = ax
+    self.args = args
     self.tb_writer = tb_writer
     self.constel = self.ues = self.nmc = None
     self.ue_dict = {}
@@ -138,16 +140,17 @@ class LEOSatEnv(gym.Env):
     # beam decision and handover
     self.nmc.a3_event_check()
 
+    dbm_power_dict = {}
     for sat_name, action in action_n.items():
       agent = self.leo_agents[sat_name]
-      dbm_power_dict = self.action_to_power_dict(action[agent.power_slice], sat_name)
-      self.leo_agents[sat_name].sat.clear_power()
-      for beam_idx, dbm_power in dbm_power_dict.items():
-        self.leo_agents[sat_name].sat.set_beam_power(beam_idx=beam_idx, tx_power=dbm_power)
+      dbm_power_dict[sat_name] = self.action_to_power_dict(action[agent.power_slice], sat_name)
 
       beamwidth_dict = self.action_to_beamwidth_dict(action[agent.beamwidth_slice], sat_name)
       for beam_idx, beamwidth in beamwidth_dict.items():
         self.leo_agents[sat_name].sat.set_beamwidth(beam_idx=beam_idx, beamwidth=beamwidth)
+
+    self.nmc.allocate_power(dbm_power_dict)
+    self.nmc.update_ues_serving_history()
 
   def action_to_beam_list(self, action: npt.NDArray[np.float64]) -> List[int]:
     """Map the action output to the serving beam set.
@@ -382,17 +385,15 @@ class LEOSatEnv(gym.Env):
     Returns:
         List[User]: The user list
     """
-    ue_long = [120.99, 121.58, 120.5]
-    ue_lati = [24.78, 25.03, 22.33]
-    if len(ue_long) != len(ue_lati):
-      raise ValueError('The length of ue_long and ue_lati is not the same.')
-    ues = [User(f'ue{i}',
-                Position(geodetic=Geodetic(
-                  longitude=ue_long[i],
-                  latitude=ue_lati[i],
-                  height=constant.R_EARTH))) for i in range(len(ue_long))]
-
-    return ues
+    with open(f'low_earth_orbit/util/ue_position/ue_position_{self.args.ue_num}.csv', mode='r', newline='') as f:
+      reader = csv.DictReader(f)
+      self.ues = []
+      for row in reader:
+        ue_idx = row.pop('ue_idx')
+        self.ues = User(name=f'ue{ue_idx}',
+                        position=Position(geodetic=Geodetic(longitude=float(row['longitude']),
+                                                            latitude=float(row['latitude']),
+                                                            height=float(row['height']))))
 
   def make_nmc(self, constel: Constellation, ues: List[User]) -> NMC:
     return NMC(constellation=constel, ues=ues)

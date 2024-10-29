@@ -115,6 +115,7 @@ def main(args):
           # evaluate performance every certain steps
         if digitalworld_trainer.total_eps % args.eval_period == 0:
           eval_process(args, realworld_trainer, digitalworld_trainer)
+          tb_writer.flush()
 
       digitalworld_trainer.print_time()
 

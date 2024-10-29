@@ -30,7 +30,7 @@ class DigitalWorldEnv(LEOSatEnv):
                      digital_agents=digital_agents,
                      agent_names=agent_names)
     self.name = 'Digital World'
-    self.rt_data = misc.load_rt_file()
+    self.rt_data = misc.load_rt_file(f'rt_result_ue{len(self.ues)}')
 
     path_loss_array = np.asarray([data['path loss (dB)']
                                   for t in self.rt_data

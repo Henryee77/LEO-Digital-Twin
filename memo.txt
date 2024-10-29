@@ -11,3 +11,8 @@ python main.py --env-name "LEOSat-v0" --model "DDPG" --ep-max-timesteps 40000 --
 python main.py --env-name "LEOSat-v0" --model "TD3" --ep-max-timesteps 20000 --prefix "test new state def (sinr_diff-power_diff)"
 
 tensorboard --logdir=""
+
+TODO:
+hobs
+weather
+ray tracing more ue number

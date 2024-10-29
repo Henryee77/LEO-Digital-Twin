@@ -300,10 +300,10 @@ class Satellite(object):
         ues (List[User]): The users this satellite is serving
     """
     self.servable = list(filter(self.filter_ue, ues))
-    self.cell_topo.training_beam.clear()
+    self.cell_topo.clear_training_beam()
     for ue in self.servable:
-      self.cell_topo.training_beam = self.cell_topo.training_beam.union(
-          self.cell_topo.find_nearby(ue.position))
+      new_training_beam = self.cell_topo.hobs(ue)
+      self.cell_topo.add_training_beam(new_training_beam)
 
     if self.cell_topo.training_beam:
       ues_sinr = self.scan_beams()

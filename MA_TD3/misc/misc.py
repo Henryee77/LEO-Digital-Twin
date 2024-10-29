@@ -189,7 +189,7 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
   return result, index
 
 
-def load_rt_file(filename: str = 'rt_result') -> Dict[str, Dict[int, Dict[str, float]]]:
+def load_rt_file(filename: str) -> Dict[str, Dict[int, Dict[str, float]]]:
   """Load the ray tracing simulation result file.
   ### Nested dictionary hierarchy:
     {t: {sat_name: {beam_index: [ray tracing data 1, ..., ray tracing data N]}}}
