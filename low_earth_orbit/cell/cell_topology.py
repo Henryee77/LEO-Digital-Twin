@@ -62,7 +62,7 @@ class CellTopology(object):
       self._cell_number += i * 6
 
     self._beam_list = [
-        Beam(center_point=center_point) for _ in range(self.cell_number)
+        Beam(index=i, center_point=center_point) for i in range(self.cell_number)
     ]
 
     self.generate_xyz_coord_grid()
@@ -512,16 +512,16 @@ class CellTopology(object):
         for i, ue in enumerate(serving_ue)
     ]
 
-  def beam_pos_of_serving_ue(self, ue: User) -> Position:
-    """Return the position of the beam which is serving the ue
+  def serving_beam_of_ue(self, ue: User) -> Beam:
+    """Return the beam which is serving the ue.
 
     Args:
         ue (User): The user
 
     Returns:
-        Position: The position of the beam center
+        Beam: The serving beam
     """
-    return self.beam_list[self.serving[ue.name]].center_point
+    return self.beam_list[self.serving[ue.name]]
 
   def find_nearby(
       self, ue: User, r: Optional[float] = None

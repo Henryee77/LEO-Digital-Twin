@@ -19,6 +19,7 @@ class Beam(object):
   served_ue: Set[str]  # set of served users
 
   def __init__(self,
+               index: int,
                center_point: Position,
                tx_power: float = constant.MIN_NEG_FLOAT,
                central_frequency: float = constant.DEFAULT_CENTRAL_FREQUENCY,
@@ -37,6 +38,7 @@ class Beam(object):
         ValueError: The value of the power, frequency and angle must be
                     non-negative.
     """
+    self.__index = index
     self.tx_power = tx_power
     self.central_frequency = central_frequency
     self.bandwidth = bandwidth
@@ -49,6 +51,10 @@ class Beam(object):
             f'central_frequency: {self.central_frequency:.1e} Hz, '
             f'bandwidth: {self.bandwidth:.1e} Hz, '
             f'beamwidth_3db: {self.beamwidth_3db / constant.PI_IN_RAD} deg')
+
+  @property
+  def index(self):
+    return self.__index
 
   @property
   def tx_power(self):

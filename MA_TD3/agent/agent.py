@@ -83,9 +83,9 @@ class Agent(object):
         self.name, self.action_dim))
 
   def set_policy(self, policy_name):
-    denom = [1, 2, 4, 8, 16]
-    self.actor_hidden_nodes = [round(self.args.actor_n_hidden / x) for x in denom]
-    self.critic_hidden_nodes = [round(self.args.critic_n_hidden / x) for x in denom]
+    hidden_layer_denom = [1, 2, 4, 8, 16]
+    self.actor_hidden_nodes = [round(self.args.actor_n_hidden / x) for x in hidden_layer_denom]
+    self.critic_hidden_nodes = [round(self.args.critic_n_hidden / x) for x in hidden_layer_denom]
     if policy_name == 'TD3':
       self.__policy = TD3(
           actor_input_dim=self.state_dim,

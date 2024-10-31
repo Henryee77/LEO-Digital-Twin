@@ -65,12 +65,12 @@ class Antenna(object):
 
   @property
   def beamwidth_3db(self):
-    return self._beamwidth_3db
+    return self.__beamwidth_3db
 
   @beamwidth_3db.setter
   def beamwidth_3db(self, beamwidth_3db: float):
     if beamwidth_3db > 0:
-      self._beamwidth_3db = beamwidth_3db
+      self.__beamwidth_3db = beamwidth_3db
     else:
       raise ValueError('The value of the angle must be positive.')
 
@@ -79,7 +79,7 @@ class Antenna(object):
     return self._efficiency
 
   def calc_antenna_gain(
-      self, theta: Union[float, npt.NDArray]) -> Union[float, npt.NDArray]:
+          self, theta: Union[float, npt.NDArray]) -> Union[float, npt.NDArray]:
     """Calculate the antenna gain based on the off-boresight angle (radian)
 
     Returns:

@@ -69,7 +69,7 @@ class DigitalWorldEnv(LEOSatEnv):
     leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
 
     realworld_header = agent.sat.beam_training_latency
-    digitalworld_header = (util.rt_delay(len(self.leo_agents) * len(self.ues))
+    digitalworld_header = (util.rt_delay(len(self.ues))
                            + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
                            + util.propagation_delay(leo2dt_distance))
 

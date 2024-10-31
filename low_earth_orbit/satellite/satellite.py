@@ -25,7 +25,6 @@ class Satellite(object):
                position: Position,
                angle_speed: float,
                cell_topo: CellTopology,
-               antenna: Antenna,
                channel: Channel,
                max_power: float = constant.MAX_POWER,
                min_power: float = constant.MIN_POWER,
@@ -38,7 +37,7 @@ class Satellite(object):
     self.position = position
     self.angle_speed = angle_speed
     self.cell_topo = cell_topo
-    self.antenna = antenna
+    self.antenna_list = [Antenna() for _ in range(self.cell_topo.cell_number)]
     self.wireless_channel = channel
     self.__max_power = max_power
     self.__min_power = min_power
@@ -153,6 +152,12 @@ class Satellite(object):
     """Set all the beam power to zero"""
     self.cell_topo.clear_power()
 
+  def reset_beamwidth(self):
+    for antenna in self.antenna_list:
+      antenna.beamwidth_3db = constant.DEFAULT_BEAMWIDTH_3DB
+    for i in range(self.cell_topo.cell_number):
+      self.cell_topo.set_beamwidth(i, constant.DEFAULT_BEAMWIDTH_3DB)
+
   def update_pos(self, time: float = constant.TIMESLOT):
     """Update the position by the given time
 
@@ -186,21 +191,21 @@ class Satellite(object):
     if training_beams is None:
       training_beams = self.cell_topo.training_beam
 
-    for cell_index in training_beams:
+    for beam_index in training_beams:
       rsrp = self.cal_rsrp_one_beam(
-          self.cell_topo.beam_list[cell_index].center_point, ue)
+          self.cell_topo.beam_list[beam_index].center_point, beam_index, ue)
       if save_servable:
-        ue.servable_add(self.name, cell_index, rsrp)
-      rsrp_list[cell_index] = rsrp
+        ue.servable_add(self.name, beam_index, rsrp)
+      rsrp_list[beam_index] = rsrp
     return rsrp_list
 
-  def cal_rsrp_one_beam(self, beam_pos: Position, ue: User) -> float:
+  def cal_rsrp_one_beam(self, beam_pos: Position, beam_index: int, ue: User) -> float:
     """Calculate the rsrp with one beam.
 
     Args:
         beam_pos (Position): The beam center position
+        beam_index (int): The index of beam
         ue (User): The target ue that in in servable range
-
     Returns:
         (float): The rx power in dBm
     """
@@ -208,10 +213,10 @@ class Satellite(object):
     dis_sat_ue = self.position.calculate_distance(ue.position)
     theta = self.position.angle_between_targets(beam_pos, ue.position)
 
-    antenna_gain = float(self.antenna.calc_antenna_gain(theta))
+    antenna_gain = float(self.antenna_list[beam_index].calc_antenna_gain(theta))
 
     path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
-                                                     freq=self.antenna.central_frequency,
+                                                     freq=self.antenna_list[beam_index].central_frequency,
                                                      elevation_angle=epsilon)
 
     rx_power = constant.MAX_POWER - path_loss + antenna_gain + ue.rx_gain
@@ -235,15 +240,17 @@ class Satellite(object):
     """
     tx_gain, channel_loss = [], []
     for ue in serving_ue:
-      beam_pos = self.cell_topo.beam_pos_of_serving_ue(ue)
+      serving_beam = self.cell_topo.serving_beam_of_ue(ue)
+      beam_pos = serving_beam.center_point
+      beam_index = serving_beam.index
       epsilon = self.position.cal_elevation_angle(beam_pos)
       dis_sat_ue = self.position.calculate_distance(ue.position)
       theta = self.position.angle_between_targets(beam_pos, ue.position)
 
-      tx_gain.append(float(self.antenna.calc_antenna_gain(theta)))
+      tx_gain.append(float(self.antenna_list[beam_index].calc_antenna_gain(theta)))
 
       path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
-                                                       freq=self.antenna.central_frequency,
+                                                       freq=self.antenna_list[beam_index].central_frequency,
                                                        elevation_angle=epsilon)
       channel_loss.append(path_loss)
 
@@ -291,6 +298,7 @@ class Satellite(object):
         beam_idx (int): beam index
         beamwidth (float): 3dB beamwidth
     """
+    self.antenna_list[beam_idx].beamwidth_3db = beamwidth
     self.cell_topo.set_beamwidth(beam_idx, beamwidth)
 
   def select_train_by_topo(self, ues: List[User]) -> Dict[str, List[float]]:

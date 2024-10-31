@@ -111,7 +111,6 @@ class Constellation(object):
                         position=Position(orbital=satellite_pos),
                         cell_topo=CellTopology(center_point=Position(
                             geodetic=projection_point)),
-                        antenna=Antenna(),
                         channel=self.wireless_channel)
 
     self.all_sat[sat_obj.name] = sat_obj
