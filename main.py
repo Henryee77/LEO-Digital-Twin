@@ -350,4 +350,8 @@ if __name__ == '__main__':
   time_string = now.strftime('%Y_%m_%d_%H_%M_%S')
   args.log_name = f'{args.prefix}_log_{time_string}'
 
+  start_time = time.time()
+
   main(args=args)
+
+  print(f'Total time from main: {(time.time()-start_time) / 3600: .2f} hr')

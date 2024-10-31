@@ -574,13 +574,17 @@ class CellTopology(object):
     epsilon_long = s * max([abs(x) for x in long_diff_list])
     epsilon_lati = s * max([abs(x) for x in lati_diff_list])
 
-    res = set()
+    res = self._get_training_area()
     return res
 
-  def _get_training_area(self, last_beam_pos, long_start, long_end, lati_start, lati_end, epsilon):
-    res = []
-    for beam in self.non_training_beam:
-      if beam.
+  def _get_training_area(self, long_start, long_end, lati_start, lati_end):
+    res = set()
+    for beam_idx in self.non_training_beam:
+      beam_long = self.beam_list[beam_idx].center_point.geodetic.longitude
+      beam_lati = self.beam_list[beam_idx].center_point.geodetic.latitude
+      if (beam_long >= long_start and beam_long <= long_end
+              and beam_lati >= lati_start and beam_lati <= lati_end):
+        res.update(beam_idx)
 
     return res
 

@@ -43,9 +43,11 @@ class OffPolicyTrainer(object):
 
     self.sat_sim_time = 0
     self.nn_train_time = 0
-    self.eval_time = 0
     self.param_sharing_time = 0
     self.total_training_time = 0
+    self.nn_action_time = 0
+    self.tb_time = 0
+    self.init_time = 0
 
   @property
   def total_eps(self):
@@ -224,7 +226,10 @@ class OffPolicyTrainer(object):
       self.federated_download()
 
   def print_time(self):
-    self.total_training_time = self.sat_sim_time + self.nn_train_time + self.param_sharing_time + self.eval_time
+    print('------------------------------')
+    print(f'{self.env.name}:')
+    self.total_training_time = (self.sat_sim_time + self.nn_train_time +
+                                self.param_sharing_time + self.nn_action_time + self.init_time + self.tb_time)
     print(
       f'Satellite simulation time ratio: {self.sat_sim_time / self.total_training_time * 100 :.2f} %')
     print(
@@ -232,12 +237,18 @@ class OffPolicyTrainer(object):
     print(
       f'Parameter sharing time ratio: {self.param_sharing_time / self.total_training_time * 100 :.2f} %')
     print(
-      f'Evaluation time ratio: {self.eval_time / self.total_training_time * 100 :.2f} %')
+      f'Initialize Env time ratio: {self.init_time / self.total_training_time * 100 :.2f} %')
+    print(
+      f'Action computation time ratio: {self.nn_action_time / self.total_training_time * 100 :.2f} %')
+    print(
+      f'Tensorboard saving time ratio: {self.tb_time / self.total_training_time * 100 :.2f} %')
     print(f'total running time: {self.total_training_time / 3600: .2f} hr')
+    print('------------------------------')
 
   def save_eval_result(self, step_count: int) -> Dict[str, float]:
     if not self.online:
       return
+    start_time = time.time()
     for agent_name in self.ep_reward:
       self.ep_reward[agent_name] /= step_count
     for agent_name, agent in self.leo_agent_dict.items():
@@ -247,10 +258,12 @@ class OffPolicyTrainer(object):
         'Eval_reward', {f'{self.env.name} {agent_name} reward': self.ep_reward[agent_name]}, self.total_eps)
     self.tb_writer.add_scalars(
       'Eval_reward', {f'{self.env.name} total reward': sum(self.ep_reward.values())}, self.total_eps)
+    self.tb_time += time.time() - start_time
 
   def save_training_result(self, step_count: int):
     if not self.online:
       return
+    start_time = time.time()
     for agent_name in self.ep_reward:
       self.ep_reward[agent_name] /= step_count
     self.total_eps += 1
@@ -259,6 +272,7 @@ class OffPolicyTrainer(object):
           f'Agent {agent.name}: Training episode reward {self.ep_reward[agent_name]:.6f} at episode {self.total_eps}')
       self.tb_writer.add_scalars(
         f'{agent.name}/training_reward', {'training_reward': self.ep_reward[agent_name]}, self.total_eps)
+    self.tb_time += time.time() - start_time
 
   def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], Dict[str, npt.NDArray[np.float32]], float, bool]:
     if not self.online:
@@ -296,6 +310,7 @@ class OffPolicyTrainer(object):
           done=done)
 
   def stochastic_actions(self) -> Dict[str, npt.NDArray[np.float32]]:
+    start_time = time.time()
     if not self.online:
       return None
     action_dict = {}
@@ -303,12 +318,14 @@ class OffPolicyTrainer(object):
       agent_action = leo_agent.select_stochastic_action(
         np.asarray(self.combined_state(agent_name)), self.total_timesteps)
       action_dict[agent_name] = agent_action
+
+    self.nn_action_time += time.time() - start_time
     return action_dict
 
   def deterministic_actions(self) -> Dict[str, npt.NDArray[np.float32]]:
+    start_time = time.time()
     if not self.online:
       return None
-    eval_start_time = time.time()
 
     action_dict = {}
     for agent_name, leo_agent in self.leo_agent_dict.items():
@@ -316,14 +333,17 @@ class OffPolicyTrainer(object):
         np.asarray(self.combined_state(agent_name)))
       action_dict[agent_name] = agent_action
 
-    self.eval_time = time.time() - eval_start_time
-    # print(action_dict)
+    self.nn_action_time += time.time() - start_time
     return action_dict
 
   def reset_env(self):
     if not self.online:
       return
+    start_time = time.time()
+
     self.ep_reward = {}
     for agent_name in self.leo_agent_dict:
       self.ep_reward[agent_name] = 0.0
     self.cur_states, _ = self.env.reset()
+
+    self.init_time += time.time() - start_time
