@@ -13,6 +13,8 @@ import numpy as np
 import numpy.typing as npt
 
 from gym_env.leosat.leosat_env import LEOSatEnv
+from gym_env.digitalworld.digitalworld_env import DigitalWorldEnv
+from gym_env.realworld.realworld_env import RealWorldEnv
 from ..agent import Agent
 from ..misc import misc
 
@@ -20,21 +22,22 @@ from ..misc import misc
 class OffPolicyTrainer(object):
   """The trainer class"""
 
-  def __init__(self, args: Namespace, log: Dict[str, Logger], tb_writer: SummaryWriter, env: LEOSatEnv, leo_agent_dict: Dict[str, Agent], online=True):
+  def __init__(self, args: Namespace, log: Dict[str, Logger], tb_writer: SummaryWriter, env: DigitalWorldEnv | RealWorldEnv, leo_agent_dict: Dict[str, Agent], online=False):
     self.args = args
     self.log = log
     self.tb_writer = tb_writer
     self.env = env
-    self._online = online
+    self.__online = online
+    self.__twin_trainer = None
     self.total_timesteps = 0  # steps of collecting experience
     self.total_train_iter = 0  # steps of training iteration
     self.total_eps = 0  # steps of episodes
     self.leo_agent_dict = leo_agent_dict
     self.agent_num = len(self.leo_agent_dict)
 
-    self.cur_states = {}
+    self.__cur_states = {}
     for agent_name, agent in self.leo_agent_dict.items():
-      self.cur_states[agent_name] = [0] * agent.state_dim
+      self.__cur_states[agent_name] = [0] * agent.state_dim
 
     self.parameter_db = {}
     for agent_name in leo_agent_dict.keys():
@@ -58,6 +61,17 @@ class OffPolicyTrainer(object):
     self._total_eps = eps
 
   @property
+  def twin_trainer(self) -> OffPolicyTrainer:
+    return self.__twin_trainer
+
+  @twin_trainer.setter
+  def twin_trainer(self, trainer: OffPolicyTrainer):
+    if not self.__twin_trainer:
+      self.__twin_trainer = trainer
+    else:
+      raise ValueError(f'{self.twin_trainer.env.name} is gonna replace by {trainer.env.name}')
+
+  @property
   def cur_states(self):
     if not self.online:
       return self.twin_trainer.cur_states
@@ -69,32 +83,33 @@ class OffPolicyTrainer(object):
 
   @property
   def online(self):
-    return self._online
+    return self.__online
 
   @online.setter
   def online(self, online):
     if type(online) is not bool:
       raise TypeError('online can only be bool.')
-    self._online = online
+    if online is True:
+      self.copy_NN_from_twin()
+      self.total_eps = self.twin_trainer.total_eps
+    self.__online = online
 
   def combined_state(self, sat_name) -> npt.NDArray[np.float32]:
     if not self.online:
       raise ValueError(f'{self.env.name} is offline.')
     return np.concatenate((self.cur_states[sat_name], self.twin_trainer.cur_states[sat_name]))
 
-  def set_twin_trainer(self, twin_trainer: OffPolicyTrainer):
-    self.twin_trainer = twin_trainer
-
-  def drop_twin_trainer(self):
-    self.twin_trainer = None
-
   def copy_NN_from_twin(self):
     if self.online:
       raise ValueError('You cannot copy the NN to the online agents.')
-    for sat_name in self.leo_agent_dict:
-      pretrained_actor, pretrained_critic = self.twin_trainer.leo_agent_dict[sat_name].model_state_dict
-      self.leo_agent_dict[sat_name].load_actor_state_dict(pretrained_actor)
-      self.leo_agent_dict[sat_name].load_critic_state_dict(pretrained_critic)
+
+    if not self.twin_trainer.online:
+      print(f'{self.twin_trainer.env.name} is not online. No NN is copied to {self.env.name}')
+    else:
+      for sat_name in self.leo_agent_dict:
+        pretrained_actor, pretrained_critic = self.twin_trainer.leo_agent_dict[sat_name].model_state_dict
+        self.leo_agent_dict[sat_name].load_actor_state_dict(pretrained_actor)
+        self.leo_agent_dict[sat_name].load_critic_state_dict(pretrained_critic)
 
   def federated_upload(self):
     """Federated uploading for the models of the given agents."""
@@ -345,5 +360,7 @@ class OffPolicyTrainer(object):
     for agent_name in self.leo_agent_dict:
       self.ep_reward[agent_name] = 0.0
     self.cur_states, _ = self.env.reset()
+
+    self.env.twin_online = self.twin_trainer.online
 
     self.init_time += time.time() - start_time

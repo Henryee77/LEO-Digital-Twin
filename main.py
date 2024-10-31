@@ -78,8 +78,8 @@ def main(args):
                               real_agents=realworld_agent_dict,
                               digital_agents=digitalworld_agent_dict,
                               agent_names=sat_name_list)
-  print(f'real env name: {real_env.name}')
-  print(f'digital env name: {digital_env.name}')
+  print(f'real env name: {real_env.unwrapped.name}')
+  print(f'digital env name: {digital_env.unwrapped.name}')
 
   # Start training
   trainer_dict = {'TD3': 'Off-Policy',
@@ -98,43 +98,41 @@ def main(args):
                                             tb_writer=tb_writer,
                                             env=digital_env,
                                             leo_agent_dict=digitalworld_agent_dict)
-    realworld_trainer.set_twin_trainer(digitalworld_trainer)
-    digitalworld_trainer.set_twin_trainer(realworld_trainer)
+    realworld_trainer.twin_trainer = digitalworld_trainer
+    digitalworld_trainer.twin_trainer = realworld_trainer
 
     if args.running_mode == 'training':
-      # Turn off the real world trainer, only digital twins are doing pretraining
-      realworld_trainer.online = False
-
-      while digitalworld_trainer.total_eps < args.ep_max_timesteps:
-        training_process(args, realworld_trainer, digitalworld_trainer)
-        if digitalworld_trainer.total_eps == args.pretraining_eps:
-          realworld_trainer.copy_NN_from_twin()
+      for ep_cnt in range(1, args.max_ep_num + 1):
+        if max(digitalworld_trainer.total_eps, realworld_trainer.total_eps) == args.dt_online_ep:
+          digitalworld_trainer.online = True
+        if max(digitalworld_trainer.total_eps, realworld_trainer.total_eps) == args.realLEO_online_ep:
           realworld_trainer.online = True
-          realworld_trainer.total_eps = digitalworld_trainer.total_eps
 
-          # evaluate performance every certain steps
-        if digitalworld_trainer.total_eps % args.eval_period == 0:
+        training_process(args, realworld_trainer, digitalworld_trainer)
+
+        # evaluate performance every certain steps
+        if ep_cnt % args.eval_period == 0:
           eval_process(args, realworld_trainer, digitalworld_trainer)
           tb_writer.flush()
 
       digitalworld_trainer.print_time()
 
-      for agent_name, agent in realworld_agent_dict.items():
+      for _, agent in realworld_agent_dict.items():
         agent.policy.save(
-          filename=f'{filename}_real_world_{agent_name}', directory=saving_directory)
-      for agent_name, agent in digitalworld_agent_dict.items():
+          filename=f'{filename}_{agent.name}', directory=saving_directory)
+      for _, agent in digitalworld_agent_dict.items():
         agent.policy.save(
-            filename=f'{filename}_digital_world_{agent_name}', directory=saving_directory)
+            filename=f'{filename}_{agent.name}', directory=saving_directory)
       misc.save_config(args=args)
 
     elif args.running_mode == 'testing':
       print(f'Testing {filename}......')
-      for agent_name, agent in realworld_agent_dict.items():
+      for _, agent in realworld_agent_dict.items():
         agent.policy.load(
-          filename=f'{filename}_real_world_{agent_name}', directory=loading_directory)
-      for agent_name, agent in digitalworld_agent_dict.items():
+          filename=f'{filename}_{agent.name}', directory=loading_directory)
+      for _, agent in digitalworld_agent_dict.items():
         agent.policy.load(
-          filename=f'{filename}_digital_world_{agent_name}', directory=loading_directory)
+          filename=f'{filename}_{agent.name}', directory=loading_directory)
 
       eval_process(args, realworld_trainer, digitalworld_trainer, running_mode=args.running_mode)
     else:
@@ -224,13 +222,13 @@ if __name__ == '__main__':
       '--actor-lr', default=1e-5, type=float,
       help='Learning rate for actor')
   parser.add_argument(
-      '--critic-lr', default=5e-5, type=float,
+      '--critic-lr', default=4e-5, type=float,
       help='Learning rate for critic')
   parser.add_argument(
-      '--lr-reduce-factor', default=0.999, type=float,
+      '--lr-reduce-factor', default=0.99, type=float,
       help='Reduce factor of learning rate')
   parser.add_argument(
-      '--lr-reduce-patience', default=500, type=int,
+      '--lr-reduce-patience', default=200, type=int,
       help='Patience of reducing learning rate')
   parser.add_argument(
       '--lambda-l2', default=1e-9, type=float,
@@ -242,13 +240,13 @@ if __name__ == '__main__':
       '--actor-n-hidden', default=4200, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--critic-n-hidden', default=8400, type=int,
+      '--critic-n-hidden', default=8000, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
       '--iter-num', default=4, type=int,
       help='Number of base training iteration')
   parser.add_argument(
-      '--replay-buffer-size', default=10000, type=int,
+      '--replay-buffer-size', default=5000, type=int,
       help='The printing number of the network weight (for debug)')
 
   # --------------- TD3 -----------------------
@@ -316,7 +314,7 @@ if __name__ == '__main__':
       '--digital-env-name', type=str, default='DigitalWorld-v0',
       help='OpenAI gym environment name. Correspond to the digital twins')
   parser.add_argument(
-      '--ep-max-timesteps', type=int, required=True,
+      '--max-ep-num', type=int, required=True,
       help='Total number of episodes')
   parser.add_argument(
       '--max-step-per-ep', default=50, type=int,
@@ -325,8 +323,14 @@ if __name__ == '__main__':
       '--eval-period', default=10, type=int,
       help='The evaluation frequency')
   parser.add_argument(
-      '--pretraining-eps', default=5000, type=int,
-      help='The number of episodes for pretraining digital twins')
+      '--dt_online_ep', type=int,
+      help='The episode to turn on digital twins')
+  parser.add_argument(
+      '--realLEO_online_ep', type=int,
+      help='The episode to turn on real LEOs')
+  parser.add_argument(
+      '--ue-num', type=int,
+      help='The number of ues')
 
   # ------------------ Misc -------------------------
   parser.add_argument(

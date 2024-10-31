@@ -83,7 +83,7 @@ class Agent(object):
         self.name, self.action_dim))
 
   def set_policy(self, policy_name):
-    denom = [1, 2, 4, 8, 16, 32]
+    denom = [1, 2, 4, 8, 16]
     self.actor_hidden_nodes = [round(self.args.actor_n_hidden / x) for x in denom]
     self.critic_hidden_nodes = [round(self.args.critic_n_hidden / x) for x in denom]
     if policy_name == 'TD3':
@@ -265,11 +265,11 @@ class Agent(object):
     self.log[self.args.log_name].info("[{}] Saved weight".format(self.name))
     self.policy.save(filename, directory)
 
-  def load_weight(self, filename, directory="./pytorch_models"):
+  def load_weight(self, filename: str, directory="./pytorch_models"):
     """Load state dict from file.
 
     Args:
-        filename (_type_): filename
+        filename (str): filename
         directory (str, optional): directory of the file. Defaults to "./pytorch_models".
     """
     self.log[self.args.log_name].info("[{}] Loaded weight".format(self.name))

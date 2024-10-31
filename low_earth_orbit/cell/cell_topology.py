@@ -121,7 +121,7 @@ class CellTopology(object):
   def non_training_beam(self):
     return self.__non_training_beam
 
-  @training_beam.setter
+  @non_training_beam.setter
   def non_training_beam(self, beam_set):
     self.__non_training_beam = beam_set
 
@@ -148,7 +148,7 @@ class CellTopology(object):
 
   @property
   def training_beam_num(self) -> float:
-    return len(self.__training_beam)
+    return len(self.training_beam)
 
   def clear_training_beam(self):
     self.__training_beam.clear()
@@ -391,7 +391,7 @@ class CellTopology(object):
     if cell_plot_mode == "active_only":
       return None
 
-    if cell_i in self.__training_beam:
+    if cell_i in self.training_beam:
       return color_dict.get("scan_cell", constant.DEFAULT_CELL_SCAN_COLOR)
     if cell_plot_mode == "active_and_training":
       return None

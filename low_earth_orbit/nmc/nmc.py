@@ -64,9 +64,10 @@ class NMC(object):
     sinr_dict = self.constellation.cal_transmission_sinr(ues=self.ues)
     for ue in self.ues:
       satbeam = ue.last_serving
-      beampos = self.constellation.all_sat[satbeam[0]].cell_topo.beam_list[satbeam[-1]].center_point
-      serv_sinr = sinr_dict[ue.name]
-      ue.serving_history[-1] = (satbeam, beampos, serv_sinr)
+      if satbeam:
+        beampos = self.constellation.all_sat[satbeam[0]].cell_topo.beam_list[satbeam[-1]].center_point
+        serv_sinr = sinr_dict[ue.name]
+        ue.serving_history[-1] = (satbeam, beampos, serv_sinr)
 
   def equally_allocate_power(self, handing_sat: Set[str]):
     """Allocate the power of the satellite

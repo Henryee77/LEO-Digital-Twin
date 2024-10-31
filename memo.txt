@@ -16,3 +16,6 @@ TODO:
 hobs
 weather
 ray tracing more ue number
+
+recode 
+1. ALL: 18 + 31 + 14 = 63

@@ -42,6 +42,9 @@ class LEOSatEnv(gym.Env):
     self.prev_cell_sinr = {}
     self.prev_beam_power = {}
     self.reward = {}
+    self.ue_pos_data = {}
+    self.load_ues_data()
+
     self._leo_agents = agent_dict
     self.real_agents = real_agents
     self.digital_agents = digital_agents
@@ -229,35 +232,7 @@ class LEOSatEnv(gym.Env):
                                     (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6)
 
   def _cal_overhead(self, agent: Agent) -> float:
-    leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
-
-    realworld_header = agent.sat.beam_training_latency
-    digitalworld_header = (util.rt_delay(len(self.leo_agents) * len(self.ues))
-                           + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
-                           + util.propagation_delay(leo2dt_distance))
-
-    feedback_overhead = (agent.sat.trans_latency(len(self.ues) * constant.FLOAT_SIZE, self.dt_server)
-                         + util.propagation_delay(leo2dt_distance))
-
-    overhead = (max(realworld_header, digitalworld_header)
-                + agent.computation_latency + feedback_overhead)
-
-    self.tb_writer.add_scalars(f'{self.name} Env Param/overhead',
-                               {agent.name: overhead},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/realworld_header overhead',
-                               {agent.name: realworld_header},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/digitalworld_header overhead',
-                               {agent.name: digitalworld_header},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/comp header',
-                               {agent.name: agent.computation_latency},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/feedback_overhead',
-                               {agent.name: feedback_overhead},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
-    return overhead
+    pass
 
   def get_position_state(self, sat_name) -> npt.NDArray[np.float32]:
     return self.leo_agents[sat_name].get_scaled_pos(plot_range=self.plot_range)
@@ -379,21 +354,27 @@ class LEOSatEnv(gym.Env):
     constel.update_sat_position(-20 * constant.TIMESLOT)
     return constel
 
+  def load_ues_data(self):
+    with open(f'low_earth_orbit/util/ue_position/ue_position_{self.args.ue_num}.csv', mode='r', newline='') as f:
+      reader = csv.DictReader(f)
+      for row in reader:
+        ue_idx = int(row.pop('ue_idx'))
+        self.ue_pos_data[ue_idx] = row
+
   def make_ues(self) -> List[User]:
     """Make a list of users
 
     Returns:
         List[User]: The user list
     """
-    with open(f'low_earth_orbit/util/ue_position/ue_position_{self.args.ue_num}.csv', mode='r', newline='') as f:
-      reader = csv.DictReader(f)
-      self.ues = []
-      for row in reader:
-        ue_idx = row.pop('ue_idx')
-        self.ues = User(name=f'ue{ue_idx}',
-                        position=Position(geodetic=Geodetic(longitude=float(row['longitude']),
-                                                            latitude=float(row['latitude']),
-                                                            height=float(row['height']))))
+    ues = [0] * self.args.ue_num
+    for ue_idx in self.ue_pos_data:
+      ues[ue_idx] = User(name=f'ue{ue_idx}',
+                         position=Position(geodetic=Geodetic(longitude=float(self.ue_pos_data[ue_idx]['longitude']),
+                                                             latitude=float(self.ue_pos_data[ue_idx]['latitude']),
+                                                             height=float(self.ue_pos_data[ue_idx]['height']))))
+
+    return ues
 
   def make_nmc(self, constel: Constellation, ues: List[User]) -> NMC:
     return NMC(constellation=constel, ues=ues)
