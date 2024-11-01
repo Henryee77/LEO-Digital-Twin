@@ -45,6 +45,8 @@ class LEOSatEnv(gym.Env):
     self.ue_pos_data = {}
     self.load_ues_data()
 
+    self.online = False
+    self.twin_online = False
     self._leo_agents = agent_dict
     self.real_agents = real_agents
     self.digital_agents = digital_agents
@@ -107,7 +109,9 @@ class LEOSatEnv(gym.Env):
       raise ValueError('Digital agents cannot be None type')
     self._digital_agents = agent_dict
 
-  # def step_constellation_movement(self):
+  def set_online(self, self_online, twin_online):
+    self.online = self_online
+    self.twin_online = twin_online
 
   def step(self, action_n: Dict[str, npt.NDArray]) -> Tuple[Dict[str, npt.NDArray[np.float32]], Dict[str, float], bool, bool, Any]:
     # moving satellites

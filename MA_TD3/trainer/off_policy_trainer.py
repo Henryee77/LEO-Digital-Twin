@@ -356,11 +356,10 @@ class OffPolicyTrainer(object):
       return
     start_time = time.time()
 
+    self.env.set_online(self_online=self.online, twin_online=self.twin_trainer.online)
     self.ep_reward = {}
     for agent_name in self.leo_agent_dict:
       self.ep_reward[agent_name] = 0.0
     self.cur_states, _ = self.env.reset()
-
-    self.env.twin_online = self.twin_trainer.online
 
     self.init_time += time.time() - start_time

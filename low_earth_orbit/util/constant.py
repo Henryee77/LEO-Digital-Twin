@@ -36,6 +36,7 @@ A3_RESET = 0
 A3_ONE_TIMESLOT = 1
 TIME_TO_TRIGGER = 2  # 2 timeslot
 OFFLINE_TIME_TO_TRIGGER = 0  # 0 timeslot
+POS_ERR_MARGIN = 0.03  # longitude, latitude
 
 # Ground User
 DEFAULT_RX_GAIN = 40  # (dB)

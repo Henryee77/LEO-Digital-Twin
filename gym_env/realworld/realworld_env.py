@@ -30,7 +30,6 @@ class RealWorldEnv(LEOSatEnv):
                      digital_agents=digital_agents,
                      agent_names=agent_names)
     self.name = 'Real World'
-    self.twin_online = False
 
     self.max_sinr = 20
     self.min_sinr = -self.max_sinr

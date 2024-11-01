@@ -4,6 +4,7 @@ from low_earth_orbit.util import constant
 from low_earth_orbit.channel.channel import Channel
 from low_earth_orbit.constellation.constellation import Constellation, ConstellationData
 
+
 shell_num = 4
 plane_num = [1, 1, 1, 1, 1]
 sat_per_plane = [22, 22, 20, 58, 43]
@@ -35,9 +36,11 @@ serv_hist = collections.deque(a)
 print([serv_data[0][1] for serv_data in serv_hist])
 
 succ_index = 0
+last_beam_pos = None
 for i, serv_data in reversed(list(enumerate(serv_hist))):
   if serv_data[-1] >= constant.SINR_THRESHOLD:
     succ_index = i
+    last_beam_pos = serv_data[1]
     break
 
 print(f'succ index: {succ_index}')
@@ -52,6 +55,5 @@ print(f'long diff list: {long_diff_list}')
 s = (constant.DEFAULT_TRAINING_WINDOW_SIZE - succ_index)
 epsilon_long = s * max([abs(x) for x in long_diff_list])
 epsilon_lati = s * max([abs(x) for x in lati_diff_list])
-
 
 print(f's: {s}, epsilon_long: {epsilon_long}')

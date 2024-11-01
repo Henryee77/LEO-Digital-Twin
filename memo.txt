@@ -12,10 +12,9 @@ python main.py --env-name "LEOSat-v0" --model "TD3" --ep-max-timesteps 20000 --p
 
 tensorboard --logdir=""
 
+FOR /F %k in (requirements.txt) DO pip install %k
+
 TODO:
 hobs
 weather
 ray tracing more ue number
-
-recode 
-1. ALL: 18 + 31 + 14 = 63

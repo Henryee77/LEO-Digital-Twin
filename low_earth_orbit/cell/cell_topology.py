@@ -554,6 +554,10 @@ class CellTopology(object):
 
   def hobs(self, ue: User):
     serv_hist = ue.serving_history
+    # EBS
+    if len(serv_hist) < ue.training_window_size:
+      return self.non_training_beam
+
     succ_index = 0
     last_beam_pos = None
     for i, serv_data in reversed(list(enumerate(serv_hist))):
@@ -563,7 +567,8 @@ class CellTopology(object):
         break
 
     if last_beam_pos is None:
-      return set(i for i in range(self.cell_number))
+      print('EBS')
+      return self.non_training_beam
 
     long_diff_list = [serv_hist[i][1].geodetic.longitude - serv_hist[i - 1][1].geodetic.longitude
                       for i in range(1, len(serv_hist))]
@@ -571,11 +576,32 @@ class CellTopology(object):
                       for i in range(1, len(serv_hist))]
 
     s = (constant.DEFAULT_TRAINING_WINDOW_SIZE - succ_index)
-    epsilon_long = s * max([abs(x) for x in long_diff_list])
-    epsilon_lati = s * max([abs(x) for x in lati_diff_list])
 
-    res = self._get_training_area()
+    long_start, long_end = self._get_training_range(
+      s, long_diff_list, last_beam_pos.geodetic.longitude, util.d_longitude(last_beam_pos.geodetic.latitude, self.cell_distance))
+    lati_start, lati_end = self._get_training_range(
+      s, lati_diff_list, last_beam_pos.geodetic.latitude, util.d_latitude(self.cell_distance))
+
+    res = self._get_training_area(long_start, long_end, lati_start, lati_end)
     return res
+
+  def _get_training_range(self, s: int, diff_list, last_pos: float, d_l: float):
+    epsilon = s * max([abs(x) for x in diff_list])
+
+    max_l = max(diff_list)
+    min_l = min(diff_list)
+
+    if s == 1 and max_l <= 0:
+      head = last_pos - constant.POS_ERR_MARGIN - d_l - epsilon
+      tail = last_pos + constant.POS_ERR_MARGIN + d_l
+    elif s == 1 and min_l >= 0:
+      head = last_pos - constant.POS_ERR_MARGIN - d_l
+      tail = last_pos + constant.POS_ERR_MARGIN + d_l + epsilon
+    else:
+      head = last_pos - constant.POS_ERR_MARGIN - d_l - epsilon
+      tail = last_pos + constant.POS_ERR_MARGIN + d_l + epsilon
+
+    return head, tail
 
   def _get_training_area(self, long_start, long_end, lati_start, lati_end):
     res = set()
@@ -584,7 +610,7 @@ class CellTopology(object):
       beam_lati = self.beam_list[beam_idx].center_point.geodetic.latitude
       if (beam_long >= long_start and beam_long <= long_end
               and beam_lati >= lati_start and beam_lati <= lati_end):
-        res.update(beam_idx)
+        res.add(beam_idx)
 
     return res
 

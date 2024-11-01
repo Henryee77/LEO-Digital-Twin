@@ -116,6 +116,7 @@ def main(args):
           tb_writer.flush()
 
       digitalworld_trainer.print_time()
+      realworld_trainer.print_time()
 
       for _, agent in realworld_agent_dict.items():
         agent.policy.save(

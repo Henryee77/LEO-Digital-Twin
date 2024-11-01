@@ -150,7 +150,7 @@ class Constellation(object):
               fontdict={
                   'fontsize': 24,
                   'fontweight': 'medium'
-              })
+    })
     plt.pause(0.1)
 
   def scan_ues(self, ues: List[User], sat_name_list: List[str] = None) -> Dict[str, Dict[str, List[float]]]:
@@ -209,6 +209,7 @@ class Constellation(object):
         sat = self.all_sat[sat_name]
         beam_pos = sat.cell_topo.beam_list[beam_id].center_point
         i_power += util.tolinear(sat.cal_rsrp_one_beam(beam_pos=beam_pos,
+                                                       beam_index=beam_id,
                                                        ue=ue))
 
       best_record = ue.last_serving

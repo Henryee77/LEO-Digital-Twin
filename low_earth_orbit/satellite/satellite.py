@@ -307,11 +307,15 @@ class Satellite(object):
     Args:
         ues (List[User]): The users this satellite is serving
     """
+
     self.servable = list(filter(self.filter_ue, ues))
     self.cell_topo.clear_training_beam()
+    temp = set()
     for ue in self.servable:
-      new_training_beam = self.cell_topo.find_nearby(ue)
-      self.cell_topo.add_training_beam(new_training_beam)
+      if ue.last_serving not in temp:
+        temp.add(ue.last_serving)
+        new_training_beam = self.cell_topo.hobs(ue)
+        self.cell_topo.add_training_beam(new_training_beam)
 
     if self.cell_topo.training_beam:
       ues_sinr = self.scan_beams()

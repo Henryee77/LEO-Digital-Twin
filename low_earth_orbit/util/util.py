@@ -148,3 +148,11 @@ def propagation_delay(distance) -> float:
 
 def rt_delay(unit_num) -> float:
   return unit_num * constant.RT_DELAY_PER_UNIT
+
+
+def d_longitude(origin_latitude: float, distance: float) -> float:
+  return (distance / constant.R_EARTH) / constant.PI_IN_RAD / math.cos(origin_latitude * constant.PI_IN_RAD)
+
+
+def d_latitude(distance: float) -> float:
+  return (distance / constant.R_EARTH) / constant.PI_IN_RAD
