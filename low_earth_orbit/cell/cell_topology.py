@@ -567,7 +567,7 @@ class CellTopology(object):
         break
 
     if last_beam_pos is None:
-      print('EBS')
+      # print('EBS')
       return self.non_training_beam
 
     long_diff_list = [serv_hist[i][1].geodetic.longitude - serv_hist[i - 1][1].geodetic.longitude

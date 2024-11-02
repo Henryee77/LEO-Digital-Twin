@@ -18,11 +18,12 @@ if __name__ == '__main__':
   ue_num_list = [3]
   max_ep = 5_000
 
-  d_start_ep, r_start_ep = system_arch('DT FULL', max_ep)
+  d_start_ep, r_start_ep = system_arch('Real Only', max_ep)
 
   for ue_num in ue_num_list:
     error_code = os.system(
-      f'python main.py --model "TD3" --max-ep-num {max_ep} --dt_online_ep {d_start_ep} --realLEO_online_ep {r_start_ep} --ue-num {ue_num} --prefix "DT 5k eps"'
+      f'python main.py --model "TD3" --max-ep-num {max_ep} --dt_online_ep {d_start_ep} '
+      f'--realLEO_online_ep {r_start_ep} --ue-num {ue_num} --prefix "baseline {max_ep} eps"'
     )
     if error_code > 0:
       print('--------------------------------------------------------------------------------------------------')

@@ -43,7 +43,6 @@ class Agent(object):
                          angle_speed=0,
                          position=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
                          cell_topo=CellTopology(center_point=Position(geodetic=Geodetic(0, 0, constant.R_EARTH))),
-                         antenna=Antenna(),
                          channel=None)
 
     self._init_dim()
