@@ -157,9 +157,9 @@ class OffPolicyTrainer(object):
         c_upload_dict = OrderedDict()
         for c_idx in c_rand_idx:
           for qi in range(agent.q_network_num):
-            key = f'q{qi+1}_network.fc_{c_idx}.weight'
+            key = f'q{qi + 1}_network.fc_{c_idx}.weight'
             c_upload_dict[key] = copy.deepcopy(cur_critic_state_dict[key])
-            key = f'q{qi+1}_network.fc_{c_idx}.bias'
+            key = f'q{qi + 1}_network.fc_{c_idx}.bias'
             c_upload_dict[key] = copy.deepcopy(cur_critic_state_dict[key])
 
         self.parameter_db[agent_name]['critic'].update(c_upload_dict)
@@ -241,22 +241,24 @@ class OffPolicyTrainer(object):
       self.federated_download()
 
   def print_time(self):
+    if self.total_training_time == 0:
+      return
     print('------------------------------')
     print(f'{self.env.name}:')
     self.total_training_time = (self.sat_sim_time + self.nn_train_time +
                                 self.param_sharing_time + self.nn_action_time + self.init_time + self.tb_time)
     print(
-      f'Satellite simulation time ratio: {self.sat_sim_time / self.total_training_time * 100 :.2f} %')
+      f'Satellite simulation time ratio: {self.sat_sim_time / self.total_training_time * 100:.2f} %')
     print(
-      f'NN training time ratio: {self.nn_train_time / self.total_training_time * 100 :.2f} %')
+      f'NN training time ratio: {self.nn_train_time / self.total_training_time * 100:.2f} %')
     print(
-      f'Parameter sharing time ratio: {self.param_sharing_time / self.total_training_time * 100 :.2f} %')
+      f'Parameter sharing time ratio: {self.param_sharing_time / self.total_training_time * 100:.2f} %')
     print(
-      f'Initialize Env time ratio: {self.init_time / self.total_training_time * 100 :.2f} %')
+      f'Initialize Env time ratio: {self.init_time / self.total_training_time * 100:.2f} %')
     print(
-      f'Action computation time ratio: {self.nn_action_time / self.total_training_time * 100 :.2f} %')
+      f'Action computation time ratio: {self.nn_action_time / self.total_training_time * 100:.2f} %')
     print(
-      f'Tensorboard saving time ratio: {self.tb_time / self.total_training_time * 100 :.2f} %')
+      f'Tensorboard saving time ratio: {self.tb_time / self.total_training_time * 100:.2f} %')
     print(f'total running time: {self.total_training_time / 3600: .2f} hr')
     print('------------------------------')
 
