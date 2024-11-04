@@ -20,6 +20,7 @@ THERMAL_NOISE_POWER = -174
 STAND_GRAVIT_PARA = 3.986004418e14
 KELVIN_TO_CELCIUS = -273.15
 DAY_IN_MONTH = [np.nan, 31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+MONTH_NUM = 12
 
 # Simulation Configuration
 TIMESLOT = 2  # training period (sec)

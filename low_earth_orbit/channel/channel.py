@@ -1,6 +1,6 @@
 """The channel model."""
 
-from typing import overload
+from typing import overload, Tuple, List
 import csv
 import functools
 import math
@@ -11,7 +11,7 @@ from scipy.interpolate import RegularGridInterpolator
 from itur.models import itu676
 
 from ..util import constant
-from ..util.distribution import Rayleigh, Nakagami
+from ..util.distribution import Rayleigh, Nakagami, Rainfall_rv
 from .. import util
 
 
@@ -22,6 +22,7 @@ class Channel():
     self.rayleigh = Rayleigh()
     self.nakagami = Nakagami()
 
+    self.month = month
     mean_surface_temp = []
     mean_total_rainfall = []
     rain_rate_exceed_001 = []
@@ -53,8 +54,8 @@ class Channel():
         rain_rate_exceed_001.append([float(data) for data in line.split(' ')])
     rain_rate_exceed_001 = list(map(list, zip(*rain_rate_exceed_001)))
 
-    print(len(R001_lon_list), len(R001_lat_list))
-    print(len(rain_rate_exceed_001), len(rain_rate_exceed_001[0]))
+    # print(len(R001_lon_list), len(R001_lat_list))
+    # print(len(rain_rate_exceed_001), len(rain_rate_exceed_001[0]))
 
     self.mean_temp_grid = RegularGridInterpolator((T_lon_list, T_lat_list), mean_surface_temp)
     self.mean_rainfall_grid = RegularGridInterpolator((MT_lon_list, MT_lat_list), mean_total_rainfall)
@@ -240,8 +241,37 @@ class Channel():
     """
     return self.rician_fading(k_db=constant.MIN_NEG_FLOAT)
 
-  def rain_fall_prob(self, lon: float, lat: float):
-    pass
+  def _rain_fall_prob_param(self, lon: float, lat: float) -> Tuple[float, float]:
+    temp = self.mean_temp_grid((lon, lat))
+    if temp >= 0:
+      r = 0.5874 * np.exp(0.0883 * temp)
+    else:
+      r = 0.5874
+
+    p_0 = self.mean_rainfall_grid((lon, lat)) / (24 * constant.DAY_IN_MONTH[self.month] * r)
+    if p_0 > 0.7:
+      p_0 = 0.7
+      r = 1 / 0.7 * (self.mean_rainfall_grid((lon, lat)) / (24 * constant.DAY_IN_MONTH[self.month]))
+
+    return r, p_0
+
+  def generate_rainfall(self, lon: float, lat: float) -> List[float]:
+    """WARNING: This method is just a rough estimation using data from ITU.\n
+    Generate the rainfall of the given area.
+
+    Args:
+        lon (float): longitude
+        lat (float): latitude
+
+    Returns:
+        List[float]: rainfall (mm/hr)
+    """
+
+    r, p_0 = self._rain_fall_prob_param(lon=lon, lat=lat)
+    rainfall_rv = Rainfall_rv(r=r, p_0=p_0)
+    rainfall = rainfall_rv.rvs(size=1)
+
+    return [data if data > 1 else 0 for data in rainfall]
 
   def modified_rain_attenuation(self, rain_rate: float, L_s: float, height_diff: float, freq: float, elevation_angle: float, polarization_angle: float = 0) -> float:
     # reference paper: Rain Attenuation Prediction Model for Satellite Communications in Tropical Regions

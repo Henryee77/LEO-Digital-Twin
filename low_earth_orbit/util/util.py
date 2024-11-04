@@ -1,5 +1,5 @@
 """The basic util module."""
-
+from scipy import special as sp
 import os
 from typing import Tuple, Set, overload
 
@@ -11,6 +11,10 @@ import matplotlib.pyplot as plt
 from . import constant
 
 DIRPATH = os.path.dirname(__file__)
+
+
+def qfunc(x):
+  return 0.5 - 0.5 * sp.erf(x / math.sqrt(2))
 
 
 @overload
