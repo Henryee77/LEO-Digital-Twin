@@ -18,21 +18,47 @@ from .. import util
 class Channel():
   """The class of wireless channel"""
 
-  def __init__(self):
+  def __init__(self, month: int):
     self.rayleigh = Rayleigh()
     self.nakagami = Nakagami()
 
     mean_surface_temp = []
+    mean_total_rainfall = []
+    rain_rate_exceed_001 = []
 
-    with open(f'low_earth_orbit/util/rainfall_data/lat_list.txt', mode='r', newline='') as f:
-      lat_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/lon_list.txt', mode='r', newline='') as f:
-      lon_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/T_Annual.txt', mode='r', newline='') as f:
+    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/LAT_T_LIST.TXT', mode='r', newline='') as f:
+      T_lat_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/LON_T_LIST.TXT', mode='r', newline='') as f:
+      T_lon_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/T_Month{month:0>2}.TXT', mode='r', newline='') as f:
       for line in f.read().splitlines():
-        mean_surface_temp.append([float(data) for data in line.split(' ')])
-        
-    
+        mean_surface_temp.append([float(data) + constant.KELVIN_TO_CELCIUS for data in line.split(' ')])
+    mean_surface_temp = list(map(list, zip(*mean_surface_temp)))
+
+    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/LAT_MT_LIST.TXT', mode='r', newline='') as f:
+      MT_lat_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/LON_MT_LIST.TXT', mode='r', newline='') as f:
+      MT_lon_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/MT_Month{month:0>2}.TXT', mode='r', newline='') as f:
+      for line in f.read().splitlines():
+        mean_total_rainfall.append([float(data) for data in line.split(' ')])
+    mean_total_rainfall = list(map(list, zip(*mean_total_rainfall)))
+
+    with open(f'low_earth_orbit/util/rainfall_data/rainfall rate exceeded 0.01 percent/LAT_R001_LIST.TXT', mode='r', newline='') as f:
+      R001_lat_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/rainfall rate exceeded 0.01 percent/LON_R001_LIST.TXT', mode='r', newline='') as f:
+      R001_lon_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/rainfall rate exceeded 0.01 percent/R001.TXT', mode='r', newline='') as f:
+      for line in f.read().splitlines():
+        rain_rate_exceed_001.append([float(data) for data in line.split(' ')])
+    rain_rate_exceed_001 = list(map(list, zip(*rain_rate_exceed_001)))
+
+    print(len(R001_lon_list), len(R001_lat_list))
+    print(len(rain_rate_exceed_001), len(rain_rate_exceed_001[0]))
+
+    self.mean_temp_grid = RegularGridInterpolator((T_lon_list, T_lat_list), mean_surface_temp)
+    self.mean_rainfall_grid = RegularGridInterpolator((MT_lon_list, MT_lat_list), mean_total_rainfall)
+    self.rain_rate_001_grid = RegularGridInterpolator((R001_lon_list, R001_lat_list), rain_rate_exceed_001)
 
   def free_space(self, distance: float, freq: float) -> float:
     """The free space path loss model.
