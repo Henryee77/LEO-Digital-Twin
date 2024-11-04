@@ -53,6 +53,7 @@ class LEOSatEnv(gym.Env):
     self.agent_num = len(agent_names)
     self.agent_names = agent_names
     self.cell_num = 0
+    self.wireless_channel = Channel()
     if self.leo_agents is not None:
       self._init_env()
 
@@ -277,7 +278,6 @@ class LEOSatEnv(gym.Env):
 
   def _init_env(self):
     self.step_num = 0
-    self.wireless_channel = Channel()
     self.constel = self.make_constellation(channel=self.wireless_channel)
     self.ues = self.make_ues()
     self.dt_server = User('DT server', position=Position(geodetic=Geodetic(longitude=constant.ORIGIN_LONG,

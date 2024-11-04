@@ -15,6 +15,4 @@ tensorboard --logdir=""
 FOR /F %k in (requirements.txt) DO pip install %k
 
 TODO:
-hobs
 weather
-ray tracing more ue number

@@ -241,12 +241,12 @@ class OffPolicyTrainer(object):
       self.federated_download()
 
   def print_time(self):
+    self.total_training_time = (self.sat_sim_time + self.nn_train_time +
+                                self.param_sharing_time + self.nn_action_time + self.init_time + self.tb_time)
     if self.total_training_time == 0:
       return
     print('------------------------------')
     print(f'{self.env.name}:')
-    self.total_training_time = (self.sat_sim_time + self.nn_train_time +
-                                self.param_sharing_time + self.nn_action_time + self.init_time + self.tb_time)
     print(
       f'Satellite simulation time ratio: {self.sat_sim_time / self.total_training_time * 100:.2f} %')
     print(

@@ -359,4 +359,4 @@ if __name__ == '__main__':
 
   main(args=args)
 
-  print(f'Total time from main: {(time.time()-start_time) / 3600: .2f} hr')
+  print(f'Total time from main: {(time.time() - start_time) / 3600: .2f} hr')

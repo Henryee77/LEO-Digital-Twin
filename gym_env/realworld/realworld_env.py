@@ -85,12 +85,13 @@ class RealWorldEnv(LEOSatEnv):
   def _cal_overhead(self, agent: Agent) -> float:
     leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
 
-    realworld_header = agent.sat.beam_training_latency
     if self.twin_online:
+      realworld_header = agent.sat.ues_feedback_latency
       digitalworld_header = (util.rt_delay(len(self.leo_agents) * len(self.ues))
                              + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
                              + util.propagation_delay(leo2dt_distance))
     else:
+      realworld_header = agent.sat.beam_training_latency
       digitalworld_header = 0
 
     feedback_overhead = (agent.sat.trans_latency(len(self.ues) * constant.FLOAT_SIZE, self.dt_server)

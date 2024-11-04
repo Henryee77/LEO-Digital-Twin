@@ -1,12 +1,13 @@
 """The channel model."""
 
 from typing import overload
-
+import csv
 import functools
 import math
 import numpy as np
 import numpy.typing as npt
 from scipy.stats import uniform, norm
+from scipy.interpolate import RegularGridInterpolator
 from itur.models import itu676
 
 from ..util import constant
@@ -20,6 +21,18 @@ class Channel():
   def __init__(self):
     self.rayleigh = Rayleigh()
     self.nakagami = Nakagami()
+
+    mean_surface_temp = []
+
+    with open(f'low_earth_orbit/util/rainfall_data/lat_list.txt', mode='r', newline='') as f:
+      lat_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/lon_list.txt', mode='r', newline='') as f:
+      lon_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/T_Annual.txt', mode='r', newline='') as f:
+      for line in f.read().splitlines():
+        mean_surface_temp.append([float(data) for data in line.split(' ')])
+        
+    
 
   def free_space(self, distance: float, freq: float) -> float:
     """The free space path loss model.
@@ -53,11 +66,11 @@ class Channel():
     R = A * np.exp(1j * alpha) + Z
     return abs(R)
 
-  @overload
+  @ overload
   def scintillation_loss(self, elevation_angle: float) -> float:
     ...
 
-  @overload
+  @ overload
   def scintillation_loss(self, elevation_angle: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     ...
 
@@ -77,11 +90,11 @@ class Channel():
     scint_loss = constant.SCINTILLATION_TABLE[epsilon_index]
     return scint_loss
 
-  @overload
+  @ overload
   def gas_attenuation(self, fc: float, elevation_angle: float) -> float:
     ...
 
-  @overload
+  @ overload
   def gas_attenuation(self, fc: float, elevation_angle: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     ...
 
@@ -120,7 +133,7 @@ class Channel():
 
     return float(zenith_att.value)
 
-  @functools.cache
+  @ functools.cache
   def cal_deterministic_loss(self, distance: float, freq: float, elevation_angle: float) -> float:
     """Calculate the deterministic part of the loss.
 
@@ -135,7 +148,12 @@ class Channel():
     fspl = self.free_space(distance=distance, freq=freq)
     scpl = self.scintillation_loss(elevation_angle)
     gpl = self.gas_attenuation(freq, elevation_angle)
-    return fspl + scpl + gpl
+    '''rl = self.itu_rain_attenuation(rain_rate=rain_rate,
+                                   L_s=distance / constant.KM,
+                                   freq=freq,
+                                   elevation_angle=elevation_angle)'''
+
+    return fspl + scpl + gpl  # + rl
 
   def cal_stochastic_loss(self) -> float:
     """Calculate the stochastic part of the loss.
@@ -196,6 +214,9 @@ class Channel():
     """
     return self.rician_fading(k_db=constant.MIN_NEG_FLOAT)
 
+  def rain_fall_prob(self, lon: float, lat: float):
+    pass
+
   def modified_rain_attenuation(self, rain_rate: float, L_s: float, height_diff: float, freq: float, elevation_angle: float, polarization_angle: float = 0) -> float:
     # reference paper: Rain Attenuation Prediction Model for Satellite Communications in Tropical Regions
     k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[int(freq / 1e9)]
@@ -221,6 +242,8 @@ class Channel():
     Returns:
         float: rain attenuation (dB)
     """
+    if rain_rate == 0:
+      return 0
     k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[int(freq / 1e9)]
     k = (k_h + k_v + (k_h - k_v) * (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / 2
     alpha = (k_h * alpha_h + k_v * alpha_v + (k_h * alpha_h - k_v * alpha_v) *
