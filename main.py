@@ -7,6 +7,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorboardX import SummaryWriter
+from low_earth_orbit.util import constant
 from MA_TD3.misc import misc
 from MA_TD3.agent import Agent
 from MA_TD3.trainer import OffPolicyTrainer
@@ -157,56 +158,64 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
 
 
 def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer, running_mode='training'):
-  step_count = 0
+  time_count = 0
   digital_done = real_done = False
   digitalworld_trainer.reset_env()
   realworld_trainer.reset_env()
 
-  while step_count < args.max_step_per_ep and not (digital_done or real_done):
-    digital_actions = digitalworld_trainer.deterministic_actions()
-    real_actions = realworld_trainer.deterministic_actions()
+  while time_count < args.max_time_per_ep and not (digital_done or real_done):
+    if time_count % args.action_timeslot == 0:
+      digital_actions = digitalworld_trainer.deterministic_actions()
+      real_actions = realworld_trainer.deterministic_actions()
 
-    _, _, _, digital_done = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
-    _, _, _, real_done = realworld_trainer.take_action(real_actions, running_mode=running_mode)
+      _, _, _, digital_done = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
+      _, _, _, real_done = realworld_trainer.take_action(real_actions, running_mode=running_mode)
 
-    step_count += 1
+      time_count += 1
+    else:
+      _, digital_done = digitalworld_trainer.no_action_step()
+      _, real_done = realworld_trainer.no_action_step()
 
-  digitalworld_trainer.save_eval_result(step_count)
-  realworld_trainer.save_eval_result(step_count)
+  digitalworld_trainer.save_eval_result(time_count)
+  realworld_trainer.save_eval_result(time_count)
 
 
 def run_one_eps(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
-  step_count = 0
+  time_count = 0
   digital_done = real_done = False
   digitalworld_trainer.reset_env()
   realworld_trainer.reset_env()
 
-  while step_count < args.max_step_per_ep and not (digital_done or real_done):
-    digital_actions = digitalworld_trainer.stochastic_actions()
-    real_actions = realworld_trainer.stochastic_actions()
+  while time_count < args.max_time_per_ep and not (digital_done or real_done):
+    if time_count % args.action_timeslot == 0:
+      digital_actions = digitalworld_trainer.stochastic_actions()
+      real_actions = realworld_trainer.stochastic_actions()
 
-    (digital_prev_state_dict,
-     digital_action_dict,
-     digital_step_total_reward,
-     digital_done) = digitalworld_trainer.take_action(digital_actions)
-    (real_prev_state_dict,
-     real_action_dict,
-     real_step_total_reward,
-     real_done) = realworld_trainer.take_action(real_actions)
+      (digital_prev_state_dict,
+       digital_action_dict,
+       digital_step_total_reward,
+       digital_done) = digitalworld_trainer.take_action(digital_actions)
+      (real_prev_state_dict,
+       real_action_dict,
+       real_step_total_reward,
+       real_done) = realworld_trainer.take_action(real_actions)
 
-    digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
-                                              action_dict=digital_action_dict,
-                                              total_reward=digital_step_total_reward,
-                                              done=digital_done)
-    realworld_trainer.save_to_replaybuffer(prev_state_dict=real_prev_state_dict,
-                                           action_dict=real_action_dict,
-                                           total_reward=real_step_total_reward,
-                                           done=real_done)
+      digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
+                                                action_dict=digital_action_dict,
+                                                total_reward=digital_step_total_reward,
+                                                done=digital_done)
+      realworld_trainer.save_to_replaybuffer(prev_state_dict=real_prev_state_dict,
+                                             action_dict=real_action_dict,
+                                             total_reward=real_step_total_reward,
+                                             done=real_done)
+    else:
+      _, digital_done = digitalworld_trainer.no_action_step()
+      _, real_done = realworld_trainer.no_action_step()
 
-    step_count += 1
+    time_count += 1
 
-  digitalworld_trainer.save_training_result(step_count)
-  realworld_trainer.save_training_result(step_count)
+  digitalworld_trainer.save_training_result(time_count)
+  realworld_trainer.save_training_result(time_count)
 
 
 if __name__ == '__main__':
@@ -238,10 +247,10 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--actor-n-hidden', default=4200, type=int,
+      '--actor-n-hidden', default=3200, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--critic-n-hidden', default=8000, type=int,
+      '--critic-n-hidden', default=6400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
       '--iter-num', default=4, type=int,
@@ -318,7 +327,10 @@ if __name__ == '__main__':
       '--max-ep-num', type=int, required=True,
       help='Total number of episodes')
   parser.add_argument(
-      '--max-step-per-ep', default=50, type=int,
+      '--max-time-per-ep', default=100, type=int,
+      help='Total number of steps in one episode')
+  parser.add_argument(
+      '--action_timeslot', default=constant.MOVING_TIMESLOT, type=int,
       help='Total number of steps in one episode')
   parser.add_argument(
       '--eval-period', default=10, type=int,

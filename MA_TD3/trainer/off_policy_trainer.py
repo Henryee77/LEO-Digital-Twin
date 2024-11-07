@@ -315,6 +315,27 @@ class OffPolicyTrainer(object):
 
     return prev_state_dict, action_dict, sum(env_reward.values()), done
 
+  def no_action_step(self, running_mode='training'):
+    if not self.online:
+      return None, None, None, False
+    # Take action in env
+    sim_start_time = time.time()
+
+    new_env_observation, env_reward, done, _, _ = self.env.no_action_step()
+
+    if running_mode == "testing":
+      self.env.render()
+
+    # For next timesteps
+    self.cur_states = new_env_observation
+    self.total_timesteps += 1
+    for agent_name in env_reward:
+      self.ep_reward[agent_name] += env_reward[agent_name]
+
+    self.sat_sim_time += time.time() - sim_start_time
+
+    return sum(env_reward.values()), done
+
   def save_to_replaybuffer(self, prev_state_dict, action_dict, total_reward, done):
     if prev_state_dict is None or action_dict is None:
       return
@@ -356,6 +377,8 @@ class OffPolicyTrainer(object):
   def reset_env(self):
     if not self.online:
       return
+    if self. total_eps + self.args.eval_period >= self.args.max_ep_num:
+      self.env.unwrapped.last_epsiode = True
     start_time = time.time()
 
     self.env.set_online(self_online=self.online, twin_online=self.twin_trainer.online)

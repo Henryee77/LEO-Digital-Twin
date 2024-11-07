@@ -23,10 +23,10 @@ DAY_IN_MONTH = [np.nan, 31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 MONTH_NUM = 12
 
 # Simulation Configuration
-TIMESLOT = 2  # training period (sec)
+MOVING_TIMESLOT = 1  # movement period (sec)
 
 # Beam-Training Parameteres
-SINR_THRESHOLD = 10  # (dB)
+SINR_THRESHOLD = 25  # (dB)
 DEFAULT_TRAINING_WINDOW_SIZE = 4
 BEAM_TRAINING_ACCURACY_THRESHOLD = 0.75
 T_BEAM = 0.015  # (s)

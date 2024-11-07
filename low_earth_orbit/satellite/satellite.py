@@ -158,7 +158,7 @@ class Satellite(object):
     for i in range(self.cell_topo.cell_number):
       self.cell_topo.set_beamwidth(i, constant.DEFAULT_BEAMWIDTH_3DB)
 
-  def update_pos(self, time: float = constant.TIMESLOT):
+  def update_pos(self, time: float):
     """Update the position by the given time
 
     Args:

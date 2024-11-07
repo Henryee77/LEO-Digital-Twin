@@ -18,7 +18,7 @@ from .. import util
 class Channel():
   """The class of wireless channel"""
 
-  def __init__(self, month: int):
+  def __init__(self, month: int = 1):
     self.rayleigh = Rayleigh()
     self.nakagami = Nakagami()
 

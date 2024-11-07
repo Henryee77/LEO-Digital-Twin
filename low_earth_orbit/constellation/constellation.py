@@ -115,7 +115,7 @@ class Constellation(object):
 
     self.all_sat[sat_obj.name] = sat_obj
 
-  def update_sat_position(self, time=constant.TIMESLOT):
+  def update_sat_position(self, time=constant.MOVING_TIMESLOT):
     """Update the position of all satellite after one timeslot."""
     for sat in self.all_sat.values():
       sat.update_pos(time=time)

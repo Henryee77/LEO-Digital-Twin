@@ -33,6 +33,7 @@ class RealWorldEnv(LEOSatEnv):
 
     self.max_sinr = 20
     self.min_sinr = -self.max_sinr
+    self.prev_bt_state = []
 
   def get_sinr_diff_state(self, cell_sinr, beam_power, sat_name) -> npt.NDArray[np.float32]:
     sinr_diff = cell_sinr[sat_name] - self.prev_cell_sinr[sat_name]
@@ -71,16 +72,35 @@ class RealWorldEnv(LEOSatEnv):
 
     return state_dict
 
-  def get_state_info(self, init=False) -> Dict[str, List[float]]:
+  def get_state_info(self, beam_training=True) -> Dict[str, List[float]]:
     state_dict = {}
 
-    bt_state_dict = self.get_beam_training_state()
+    if beam_training:
+      bt_state_dict = self.get_beam_training_state()
+      self.prev_bt_state = bt_state_dict
+    else:
+      bt_state_dict = self.prev_bt_state
 
     for sat_name in self.leo_agents:
       state_dict[sat_name] = np.float32(np.concatenate((self.get_position_state(sat_name),
                                                         bt_state_dict[sat_name])))
 
     return state_dict
+
+  def no_action_step(self):
+    self.constel.update_sat_position()
+    self.step_num += 1
+    ue_sinr = self.constel.cal_transmission_sinr(ues=self.ues,
+                                                 interference_beams=self.additional_beam_set)
+    ue_throughput = self.constel.cal_throughput(ues=self.ues,
+                                                sinr=ue_sinr,
+                                                interference_beams=self.additional_beam_set)
+    self._cal_reward(ue_throughput=ue_throughput)
+
+    done = (self.step_num >= self.max_step)
+    truncated = (self.step_num >= self.max_step)
+    obs = self.get_state_info(beam_training=False)
+    return (obs, self.reward, done, truncated, {})
 
   def _cal_overhead(self, agent: Agent) -> float:
     leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
@@ -100,19 +120,20 @@ class RealWorldEnv(LEOSatEnv):
     overhead = (max(realworld_header, digitalworld_header)
                 + agent.computation_latency + feedback_overhead)
 
-    self.tb_writer.add_scalars(f'{self.name} Env Param/overhead',
-                               {agent.name: overhead},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/realworld_header overhead',
-                               {agent.name: realworld_header},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/digitalworld_header overhead',
-                               {agent.name: digitalworld_header},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/comp header',
-                               {agent.name: agent.computation_latency},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/feedback_overhead',
-                               {agent.name: feedback_overhead},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+    if self.last_episode:
+      self.tb_writer.add_scalars(f'{self.name} Env Param/overhead',
+                                 {agent.name: overhead},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
+      self.tb_writer.add_scalars(f'{self.name} Env Param/realworld_header overhead',
+                                 {agent.name: realworld_header},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
+      self.tb_writer.add_scalars(f'{self.name} Env Param/digitalworld_header overhead',
+                                 {agent.name: digitalworld_header},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
+      self.tb_writer.add_scalars(f'{self.name} Env Param/comp header',
+                                 {agent.name: agent.computation_latency},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
+      self.tb_writer.add_scalars(f'{self.name} Env Param/feedback_overhead',
+                                 {agent.name: feedback_overhead},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
     return overhead

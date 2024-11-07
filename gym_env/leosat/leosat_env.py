@@ -60,6 +60,7 @@ class LEOSatEnv(gym.Env):
     self.step_num = 0
     self.reset_count = 0
     self.max_step = args.max_step_per_ep
+    self.last_epsiode = False
     self.plot_range = 2.5  # the plotting range
 
     self.action_space = spaces.Box(np.array([-1]), np.array([1]))  # dummy for gym template
@@ -355,7 +356,7 @@ class LEOSatEnv(gym.Env):
         channel=channel)
 
     # move the constellation to the desired simulated scenario
-    constel.update_sat_position(-20 * constant.TIMESLOT)
+    constel.update_sat_position(-20 * constant.MOVING_TIMESLOT)
     return constel
 
   def load_ues_data(self):
