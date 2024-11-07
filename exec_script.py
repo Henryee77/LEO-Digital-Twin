@@ -15,11 +15,13 @@ if __name__ == '__main__':
   else:
     raise ValueError(f'No such {mode} system architecture.')
 
+  prefix = f'{mode} {max_ep} eps'
+
   for ue_num in ue_num_list:
     error_code = os.system(
       f'python main.py --model "TD3" --max-ep-num {max_ep} '
       f'--dt_online_ep {d_start_ep} '
-      f'--realLEO_online_ep {r_start_ep} --ue-num {ue_num} --prefix "{mode} {max_ep} eps"'
+      f'--realLEO_online_ep {r_start_ep} --ue-num {ue_num} --prefix "{prefix}"'
     )
     if error_code > 0:
       print('--------------------------------------------------------------------------------------------------')

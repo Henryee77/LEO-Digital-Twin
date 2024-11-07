@@ -69,7 +69,7 @@ class OffPolicyTrainer(object):
     if not self.__twin_trainer:
       self.__twin_trainer = trainer
     else:
-      raise ValueError(f'{self.twin_trainer.env.name} is gonna replace by {trainer.env.name}')
+      raise ValueError(f'{self.twin_trainer.env.unwrapped.name} is gonna replace by {trainer.env.unwrapped.name}')
 
   @property
   def cur_states(self):
@@ -96,7 +96,7 @@ class OffPolicyTrainer(object):
 
   def combined_state(self, sat_name) -> npt.NDArray[np.float32]:
     if not self.online:
-      raise ValueError(f'{self.env.name} is offline.')
+      raise ValueError(f'{self.env.unwrapped.name} is offline.')
     return np.concatenate((self.cur_states[sat_name], self.twin_trainer.cur_states[sat_name]))
 
   def copy_NN_from_twin(self):
@@ -104,7 +104,7 @@ class OffPolicyTrainer(object):
       raise ValueError('You cannot copy the NN to the online agents.')
 
     if not self.twin_trainer.online:
-      print(f'{self.twin_trainer.env.name} is not online. No NN is copied to {self.env.name}')
+      print(f'{self.twin_trainer.env.unwrapped.name} is not online. No NN is copied to {self.env.unwrapped.name}')
     else:
       for sat_name in self.leo_agent_dict:
         pretrained_actor, pretrained_critic = self.twin_trainer.leo_agent_dict[sat_name].model_state_dict
@@ -222,7 +222,7 @@ class OffPolicyTrainer(object):
     2. Parameter sharing.
     """
     if not self.online:
-      print(f'{self.env.name} is offline')
+      print(f'{self.env.unwrapped.name} is offline')
       return
     nn_start_time = time.time()
 
@@ -246,7 +246,7 @@ class OffPolicyTrainer(object):
     if self.total_training_time == 0:
       return
     print('------------------------------')
-    print(f'{self.env.name}:')
+    print(f'{self.env.unwrapped.name}:')
     print(
       f'Satellite simulation time ratio: {self.sat_sim_time / self.total_training_time * 100:.2f} %')
     print(
@@ -272,9 +272,9 @@ class OffPolicyTrainer(object):
       self.log[self.args.log_name].info(
           f'Agent {agent.name}: Evaluation Reward {self.ep_reward[agent_name]:.6f} at episode {self.total_eps}')
       self.tb_writer.add_scalars(
-        'Eval_reward', {f'{self.env.name} {agent_name} reward': self.ep_reward[agent_name]}, self.total_eps)
+        'Eval_reward', {f'{self.env.unwrapped.name} {agent_name} reward': self.ep_reward[agent_name]}, self.total_eps)
     self.tb_writer.add_scalars(
-      'Eval_reward', {f'{self.env.name} total reward': sum(self.ep_reward.values())}, self.total_eps)
+      'Eval_reward', {f'{self.env.unwrapped.name} total reward': sum(self.ep_reward.values())}, self.total_eps)
     self.tb_time += time.time() - start_time
 
   def save_training_result(self, step_count: int):
@@ -381,7 +381,7 @@ class OffPolicyTrainer(object):
       self.env.unwrapped.last_epsiode = True
     start_time = time.time()
 
-    self.env.set_online(self_online=self.online, twin_online=self.twin_trainer.online)
+    self.env.unwrapped.set_online(self_online=self.online, twin_online=self.twin_trainer.online)
     self.ep_reward = {}
     for agent_name in self.leo_agent_dict:
       self.ep_reward[agent_name] = 0.0

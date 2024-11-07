@@ -59,8 +59,8 @@ class LEOSatEnv(gym.Env):
 
     self.step_num = 0
     self.reset_count = 0
-    self.max_step = args.max_step_per_ep
-    self.last_epsiode = False
+    self.max_step = args.max_time_per_ep
+    self.last_episode = False
     self.plot_range = 2.5  # the plotting range
 
     self.action_space = spaces.Box(np.array([-1]), np.array([1]))  # dummy for gym template
@@ -232,7 +232,7 @@ class LEOSatEnv(gym.Env):
         if len(agent.sat.cell_topo.serving) > 0:
           if sat_name not in sat_tran_ratio:
             overhead = self._cal_overhead(agent)
-            sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.TIMESLOT)
+            sat_tran_ratio[sat_name] = max(0, 1 - overhead / self.args.action_timeslot)
 
           self.reward[sat_name] += (sat_tran_ratio[sat_name] * throughput /
                                     (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6)
@@ -243,7 +243,7 @@ class LEOSatEnv(gym.Env):
   def get_position_state(self, sat_name) -> npt.NDArray[np.float32]:
     return self.leo_agents[sat_name].get_scaled_pos(plot_range=self.plot_range)
 
-  def get_state_info(self, init=False) -> Dict[str, List[float]]:
+  def get_state_info(self) -> Dict[str, List[float]]:
     pass
 
   def add_random_interference(self):
@@ -268,7 +268,7 @@ class LEOSatEnv(gym.Env):
     super().reset(seed=seed)
 
     self._init_env()
-    state = self.get_state_info(init=True)
+    state = self.get_state_info()
     self.reset_count += 1
 
     if seed:

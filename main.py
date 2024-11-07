@@ -363,8 +363,7 @@ if __name__ == '__main__':
 
   # Set log name
 
-  now = datetime.now()
-  time_string = now.strftime('%Y_%m_%d_%H_%M_%S')
+  time_string = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
   args.log_name = f'{args.prefix}_log_{time_string}'
 
   start_time = time.time()
