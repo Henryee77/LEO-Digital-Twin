@@ -36,7 +36,7 @@ def todb(linear):
   Returns:
       In db scale.
   """
-  return 10 * np.log10(linear)
+  return np.clip(10 * np.log10(linear), constant.MIN_DB, constant.MAX_DB)
 
 
 @overload

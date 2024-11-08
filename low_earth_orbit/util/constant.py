@@ -87,11 +87,14 @@ DEFAULT_APERTURE_SIZE = 0.15  # (m)
 DEFAULT_ANTENNA_EFFICIENCY = 0.8
 ANT_GAIN_COEFF = 2.07123
 
+# Limit
 # because one of a denominator in the antenna gain fomula is raised to the power 3
 MIN_POSITIVE_FLOAT = float(sys.float_info.min**(1. / 4))
 MIN_NEG_FLOAT = -1 * sys.float_info.max
 INT_SIZE = 4  # bytes
 FLOAT_SIZE = 4
+MAX_DB = np.log10(sys.float_info.max)  # 308 dB
+MIN_DB = -MAX_DB
 
 # Sat
 MIN_POWER = 40

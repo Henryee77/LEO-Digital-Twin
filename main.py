@@ -290,14 +290,14 @@ if __name__ == '__main__':
 
   # -----------Parameter Sharing ---------------
   parser.add_argument(
-      '--federated-update-rate', default=5e-3, type=float,
+      '--federated-update-rate', default=1e-1, type=float,
       help='Network exchanging rate of federated agents')
   parser.add_argument(
       '--federated-upload-period', default=50, type=int,
-      help='Frequency of federated uploading per learning iteration')
+      help='Period of federated uploading')
   parser.add_argument(
       '--federated-download-period', default=50, type=int,
-      help='Frequency of federated downloading per learning iteration')
+      help='Period of federated downloading')
   parser.add_argument(
       '--historical-smoothing-coef', default=0.9, type=float,
       help='The smoothing coefficient of the historical average reward')

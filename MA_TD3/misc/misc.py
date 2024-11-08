@@ -1,6 +1,7 @@
 """utils.py for NN training"""
 import csv
 import copy
+import math
 import logging
 from logging import Logger
 from datetime import datetime
@@ -142,13 +143,15 @@ def load_rt_file(filename: str) -> Dict[str, Dict[int, Dict[str, float]]]:
     - phase (radians)
     - path loss (dB)
     - path gain (dB)
+    - h_r
+    - h_i
   ### Example:
     ray_tracing_data = misc.load_rt_file()
     target_ue_path_loss = [data['path loss (dB)'] for data in ray_tracing_data[t][sat_name][beam_index] if data['ue'] == target_ue]
   """
 
   rt_result = {}
-  with open(f'MA_TD3/misc/{filename}.csv', mode='r', newline='') as f:
+  with open(f'MA_TD3/misc/rt_result/{filename}.csv', mode='r', newline='') as f:
     reader = csv.DictReader(f)
     for row in reader:
       sat_name = row.pop('sat_name')
@@ -166,7 +169,9 @@ def load_rt_file(filename: str) -> Dict[str, Dict[int, Dict[str, float]]]:
           row[key] = int(row[key]) - 1
         else:
           row[key] = float(row[key])
-      # print(row)
+      if math.isinf(row['path loss (dB)']):
+        row['path loss (dB)'] = constant.MAX_DB
+        row['path gain (dB)'] = constant.MIN_DB
       rt_result[t][sat_name][b_i].append(row)
 
   return rt_result
