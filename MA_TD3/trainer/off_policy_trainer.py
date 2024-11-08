@@ -234,7 +234,7 @@ class OffPolicyTrainer(object):
       return
     nn_start_time = time.time()
 
-    for _ in range(self.args.iter_num):
+    if self.total_timesteps % self.args.training_period:
       self.total_train_iter += 1
       for _, agent in self.leo_agent_dict.items():
         # Update policy (iteration of training is args.iter_num)
@@ -242,10 +242,10 @@ class OffPolicyTrainer(object):
 
     self.nn_train_time += time.time() - nn_start_time
 
-    if self.total_eps % self.args.federated_upload_freq == 0:
+    if self.total_timesteps % self.args.federated_upload_period == 0:
       self.federated_upload()
 
-    if self.total_eps % self.args.federated_download_freq == 0:
+    if self.total_timesteps % self.args.federated_download_period == 0:
       self.federated_download()
 
   def print_time(self):
@@ -307,7 +307,9 @@ class OffPolicyTrainer(object):
 
     new_env_observation, env_reward, done, _, _ = self.env.step(action_dict)
 
-    if running_mode == "testing":
+    if running_mode == "training":
+      self.train()
+    else:
       self.env.render()
 
     # For next timesteps

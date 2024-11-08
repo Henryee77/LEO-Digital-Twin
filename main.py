@@ -253,8 +253,8 @@ if __name__ == '__main__':
       '--critic-n-hidden', default=6400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--iter-num', default=4, type=int,
-      help='Number of base training iteration')
+      '--training-period', default=25, type=int,
+      help='Peiord (number of timeslot) of NN training.')
   parser.add_argument(
       '--replay-buffer-size', default=5000, type=int,
       help='The printing number of the network weight (for debug)')
@@ -267,7 +267,7 @@ if __name__ == '__main__':
       '--policy-freq', default=2, type=int,
       help='Frequency of delayed policy updates')
   parser.add_argument(
-      '--min-epsilon', default=0.35, type=float,
+      '--min-epsilon', default=0.25, type=float,
       help='The minimum of epsilon')
   parser.add_argument(
       '--expl-noise', default=0.2, type=float,
@@ -293,10 +293,10 @@ if __name__ == '__main__':
       '--federated-update-rate', default=5e-3, type=float,
       help='Network exchanging rate of federated agents')
   parser.add_argument(
-      '--federated-upload-freq', default=5, type=int,
+      '--federated-upload-period', default=50, type=int,
       help='Frequency of federated uploading per learning iteration')
   parser.add_argument(
-      '--federated-download-freq', default=15, type=int,
+      '--federated-download-period', default=50, type=int,
       help='Frequency of federated downloading per learning iteration')
   parser.add_argument(
       '--historical-smoothing-coef', default=0.9, type=float,

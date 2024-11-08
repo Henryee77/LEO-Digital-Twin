@@ -3,7 +3,7 @@ import os
 
 if __name__ == '__main__':
   ue_num_list = [3]
-  max_ep = 3_000
+  max_ep = 2_000
   mode = 'DT FULL'
 
   if mode == 'DT FULL':
