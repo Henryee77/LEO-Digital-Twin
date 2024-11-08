@@ -24,6 +24,7 @@ MONTH_NUM = 12
 
 # Simulation Configuration
 MOVING_TIMESLOT = 1  # movement period (sec)
+STARTING_TIMESLOT = -40 * MOVING_TIMESLOT
 
 # Beam-Training Parameteres
 SINR_THRESHOLD = 25  # (dB)

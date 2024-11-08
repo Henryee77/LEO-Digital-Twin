@@ -256,7 +256,7 @@ if __name__ == '__main__':
       '--training-period', default=25, type=int,
       help='Peiord (number of timeslot) of NN training.')
   parser.add_argument(
-      '--replay-buffer-size', default=5000, type=int,
+      '--replay-buffer-size', default=2000, type=int,
       help='The printing number of the network weight (for debug)')
 
   # --------------- TD3 -----------------------

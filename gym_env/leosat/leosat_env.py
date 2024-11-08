@@ -143,6 +143,7 @@ class LEOSatEnv(gym.Env):
       turned_on_beams = self.action_to_beam_list(action=action[agent.beam_slice])
       satbeam_list = satbeam_list + [(sat_name, beam_idx) for beam_idx in turned_on_beams]
     for ue in self.ues:
+      # print(ue.servable, satbeam_list)
       ue.filter_servable(satbeam_list)
       # print(self.name, self.step_num, ue.servable)
 
@@ -356,7 +357,7 @@ class LEOSatEnv(gym.Env):
         channel=channel)
 
     # move the constellation to the desired simulated scenario
-    constel.update_sat_position(-20 * constant.MOVING_TIMESLOT)
+    constel.update_sat_position(constant.STARTING_TIMESLOT)
     return constel
 
   def load_ues_data(self):

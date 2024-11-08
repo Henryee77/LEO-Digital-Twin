@@ -98,10 +98,10 @@ class OffPolicyTrainer(object):
     if not self.online:
       raise ValueError(f'{self.env.unwrapped.name} is offline.')
     if not self.twin_trainer.online:
-      twin_state_len = self.twin_trainer.leo_agent_dict[sat_name].state_dim
-      self_state_len = self.leo_agent_dict[sat_name].state_dim
-      if twin_state_len > self_state_len:
-        return np.concatenate((self.cur_states[sat_name], self.cur_states[sat_name], np.zeros((twin_state_len - self_state_len,))))
+      twin_state_len = self.twin_trainer.leo_agent_dict[sat_name].self_state_dim
+      state_len = self.leo_agent_dict[sat_name].self_state_dim
+      if twin_state_len > state_len:
+        return np.concatenate((self.cur_states[sat_name], self.cur_states[sat_name], np.zeros((twin_state_len - state_len,))))
       else:
         return np.concatenate((self.cur_states[sat_name], self.cur_states[sat_name][:twin_state_len]))
     else:

@@ -34,7 +34,7 @@ LEO_constellation = Constellation(
     channel=Channel()
 )
 
-simulation_time = 50
+simulation_time = 100
 
 fig = plt.figure(figsize=(16, 9), dpi=80)
 fig.set_tight_layout(True)
@@ -60,22 +60,17 @@ user_list = [
 ]
 
 obj_nmc = NMC(constellation=LEO_constellation, ues=user_list)
-sat_name_list = ['3_0_24']  # ['3_0_24', '2_0_1', '1_0_9']
+sat_name_list = ['2_0_1']  # ['3_0_24', '2_0_1', '1_0_9']
 r = 5
 
-f = misc.load_rt_file(f'rt_result_ue{len(user_list)}')
+f = misc.load_rt_file(f'ue{len(user_list)}_rt_result')
 
-path_loss_array = np.asarray([data['path loss (dB)']
-                              for t in f
-                              for sat_name in f[t]
-                              for b_i in f[t][sat_name]
-                              for data in f[t][sat_name][b_i]])
-print(len(path_loss_array))
 
 long = constant.ORIGIN_LONG
 lati = constant.ORIGIN_LATI
-LEO_constellation.update_sat_position(time=-20 * constant.TIMESLOT)
+LEO_constellation.update_sat_position(time=constant.STARTING_TIMESLOT)
 for t in range(simulation_time + 1):
+  print(f"t: {t}")
   # _time = time.time()
 
   ax.clear()
@@ -119,18 +114,20 @@ for t in range(simulation_time + 1):
   plt.ylim((lati - r, lati + r))
   plt.show()
   if t < 13:
-    plt.pause(0.2)
+    plt.pause(0.5)
   else:
     plt.pause(0.8)
 
   LEO_constellation.scan_ues(user_list)
   # print(f'---{time.time() - _time}')
   # print(obj.servable)
-  LEO_constellation.update_sat_position(time=constant.TIMESLOT)
   obj_nmc.a3_event_check()
+  obj_nmc.update_ues_serving_history()
   throughput = LEO_constellation.cal_throughput(ues=user_list)
   for key, value in throughput.items():
     print(f"{key}: {value:.1e}", end="  ")
+
+  # print(LEO_constellation.all_sat[sat_name_list[0]].position.geodetic)
   print("\n")
-  print(f"t: {t}")
+  LEO_constellation.update_sat_position(time=constant.MOVING_TIMESLOT)
   # print(time.time() - _time)

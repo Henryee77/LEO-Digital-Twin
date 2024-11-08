@@ -30,14 +30,14 @@ class DigitalWorldEnv(LEOSatEnv):
                      digital_agents=digital_agents,
                      agent_names=agent_names)
     self.name = 'Digital World'
-    self.rt_data = misc.load_rt_file(f'rt_result_ue{len(self.ues)}')
+    self.rt_data = misc.load_rt_file(f'ue{len(self.ues)}_rt_result')
 
     def mean_stdv_of_db(rt_data, key):
-      data_array = np.asarray([data['path gain (dB)']
-                               for t in self.rt_data
-                               for sat_name in self.rt_data[t]
-                               for b_i in self.rt_data[t][sat_name]
-                               for data in self.rt_data[t][sat_name][b_i]])
+      data_array = np.asarray([data[key]
+                               for t in rt_data
+                               for sat_name in rt_data[t]
+                               for b_i in rt_data[t][sat_name]
+                               for data in rt_data[t][sat_name][b_i]])
       return np.mean(data_array), np.std(data_array)
 
     self.path_gain_mean, self.path_gain_stdv = mean_stdv_of_db(self.rt_data, 'path gain (dB)')
@@ -50,8 +50,6 @@ class DigitalWorldEnv(LEOSatEnv):
     path_gain_res = np.zeros((self.cell_num, ))
     h_r_res = np.zeros((self.cell_num, ))
     h_i_res = np.zeros((self.cell_num, ))
-    for ue in self.ues:
-      ue.servable_clear()
 
     for b_i in range(self.cell_num):
       for data in rt_info[b_i]:
@@ -71,6 +69,8 @@ class DigitalWorldEnv(LEOSatEnv):
 
   def get_state_info(self, ray_tracing=True) -> Dict[str, List[float]]:
     state_dict = {}
+    for ue in self.ues:  # Don't move this!!! I fall for this two times QAQ
+      ue.servable_clear()
 
     for sat_name in self.leo_agents:
       if ray_tracing:

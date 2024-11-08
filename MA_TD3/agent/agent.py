@@ -74,8 +74,10 @@ class Agent(object):
     self.min_actions = self.action_space.low
     self.max_actions = self.action_space.high
 
-    self.state_dim = self.observation_space.shape[0]
-    self.action_dim = self.action_space.shape[0]
+    self.__self_state_dim = (len(self.observation_space.low[self.pos_slice]) +
+                             len(self.observation_space.low[self.beam_info_slice]))
+    self.__state_dim = self.observation_space.shape[0]
+    self.__action_dim = self.action_space.shape[0]
 
     self.log[self.args.log_name].info('[{}] State dim: {}'.format(
         self.name, self.state_dim))
@@ -134,21 +136,13 @@ class Agent(object):
   def action_dim(self):
     return self.__action_dim
 
-  @action_dim.setter
-  def action_dim(self, dim):
-    if not isinstance(dim, int):
-      raise TypeError('Action dimension must be int')
-    self.__action_dim = dim
-
   @property
   def state_dim(self):
     return self.__state_dim
 
-  @state_dim.setter
-  def state_dim(self, dim):
-    if not isinstance(dim, int):
-      raise TypeError('State dimension must be int')
-    self.__state_dim = dim
+  @property
+  def self_state_dim(self):
+    return self.__self_state_dim
 
   @property
   def pos_low(self):
@@ -326,7 +320,7 @@ class Agent(object):
                                {self.name: self.sharing_weight}, total_train_iter)
 
   def update_policy(self, total_train_iter):
-    if len(self.memory) > self.args.batch_size * self.args.iter_num * 2:
+    if len(self.memory) > self.args.batch_size * 2:
       debug = self.policy.train(
           replay_buffer=self.memory,
           total_train_iter=total_train_iter)
