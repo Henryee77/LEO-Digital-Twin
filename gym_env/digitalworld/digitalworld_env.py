@@ -32,18 +32,24 @@ class DigitalWorldEnv(LEOSatEnv):
     self.name = 'Digital World'
     self.rt_data = misc.load_rt_file(f'rt_result_ue{len(self.ues)}')
 
-    path_loss_array = np.asarray([data['path loss (dB)']
-                                  for t in self.rt_data
-                                  for sat_name in self.rt_data[t]
-                                  for b_i in self.rt_data[t][sat_name]
-                                  for data in self.rt_data[t][sat_name][b_i]])
+    def mean_stdv_of_db(rt_data, key):
+      data_array = np.asarray([data['path gain (dB)']
+                               for t in self.rt_data
+                               for sat_name in self.rt_data[t]
+                               for b_i in self.rt_data[t][sat_name]
+                               for data in self.rt_data[t][sat_name][b_i]])
+      return np.mean(data_array), np.std(data_array)
 
-    self.path_loss_mean = np.mean(path_loss_array)
-    self.path_loss_stdv = np.std(path_loss_array)
+    self.path_gain_mean, self.path_gain_stdv = mean_stdv_of_db(self.rt_data, 'path gain (dB)')
+    self.hr_mean, self.hr_stdv = mean_stdv_of_db(self.rt_data, 'h_r')
+    self.hi_mean, self.hi_stdv = mean_stdv_of_db(self.rt_data, 'h_i')
+    self.prev_rt_state = {}
 
   def get_rt_state(self, sat_name):
     rt_info = self.rt_data[self.step_num][sat_name]
-    res = np.zeros((self.cell_num, ))
+    path_gain_res = np.zeros((self.cell_num, ))
+    h_r_res = np.zeros((self.cell_num, ))
+    h_i_res = np.zeros((self.cell_num, ))
     for ue in self.ues:
       ue.servable_clear()
 
@@ -53,9 +59,15 @@ class DigitalWorldEnv(LEOSatEnv):
         self.ue_dict[f'ue{ue_idx}'].servable_add(
           sat_name, b_i, util.todb(data['received power (W)'] * constant.MILLIWATT))
 
-      res[b_i] = min([data['path loss (dB)'] for data in rt_info[b_i]])
+      path_gain_res[b_i] = max([data['path gain (dB)'] for data in rt_info[b_i]])
+      h_r_res[b_i] = max([abs(data['h_r']) for data in rt_info[b_i]])
+      h_i_res[b_i] = max([abs(data['h_r']) for data in rt_info[b_i]])
 
-    return util.standardize(res, self.path_loss_mean, self.path_loss_stdv)
+    norm_pg = util.standardize(path_gain_res, self.path_gain_mean, self.path_gain_stdv)
+    norm_hr = util.standardize(h_r_res, self.hr_mean, self.hr_stdv)
+    norm_hi = util.standardize(h_i_res, self.hi_mean, self.hi_stdv)
+
+    return np.concatenate((norm_pg, norm_hr, norm_hi))
 
   def get_state_info(self, ray_tracing=True) -> Dict[str, List[float]]:
     state_dict = {}
@@ -63,9 +75,9 @@ class DigitalWorldEnv(LEOSatEnv):
     for sat_name in self.leo_agents:
       if ray_tracing:
         rt_state = self.get_rt_state(sat_name)
-        self.prev_rt_state = rt_state
+        self.prev_rt_state[sat_name] = rt_state
       else:
-        rt_state = self.prev_rt_state
+        rt_state = self.prev_rt_state[sat_name]
 
       state_dict[sat_name] = np.float32(np.concatenate((self.get_position_state(sat_name),
                                                         rt_state)))

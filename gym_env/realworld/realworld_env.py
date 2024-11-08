@@ -33,7 +33,7 @@ class RealWorldEnv(LEOSatEnv):
 
     self.max_sinr = 20
     self.min_sinr = -self.max_sinr
-    self.prev_bt_state = []
+    self.prev_bt_state = {}
 
   def get_sinr_diff_state(self, cell_sinr, beam_power, sat_name) -> npt.NDArray[np.float32]:
     sinr_diff = cell_sinr[sat_name] - self.prev_cell_sinr[sat_name]

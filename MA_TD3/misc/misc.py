@@ -216,21 +216,31 @@ def generate_action_space(cell_num: int):
   return action_space, beam_slice, power_slice, beamwidth_slice
 
 
-def generate_state_space(cell_num: int, pos_dim: int = 2):
+def generate_state_space(agent_type: str, cell_num: int, pos_dim: int = 2):
   pos_low = np.array([-1] * pos_dim)
   pos_high = np.array([1] * pos_dim)
   pos_slice = slice(0, pos_dim)
 
-  beam_info_low = np.array([-1] * cell_num)
-  beam_info_high = np.array([1] * cell_num)
-  beam_info_slice = slice(pos_dim, pos_dim + cell_num)
+  r_beam_info_low = np.array([-1] * cell_num)
+  r_beam_info_high = np.array([1] * cell_num)
+  r_obs_low = np.concatenate((pos_low, r_beam_info_low))
+  r_obs_high = np.concatenate((pos_high, r_beam_info_high))
 
-  obs_low = np.concatenate((pos_low, beam_info_low))
-  obs_high = np.concatenate((pos_high, beam_info_high))
+  d_beam_info_low = np.array([-1] * (cell_num * 3))
+  d_beam_info_high = np.array([1] * (cell_num * 3))
+  d_obs_low = np.concatenate((pos_low, d_beam_info_low))
+  d_obs_high = np.concatenate((pos_high, d_beam_info_high))
 
-  # repeat for DT state (real + digital)
-  obs_low = np.tile(obs_low, 2)
-  obs_high = np.tile(obs_high, 2)
+  if agent_type == 'real_LEO':
+    obs_low = np.concatenate((r_obs_low, d_obs_low))
+    obs_high = np.concatenate((r_obs_high, d_obs_high))
+    beam_info_slice = slice(pos_dim, pos_dim + cell_num)
+  elif agent_type == 'digital_LEO':
+    obs_low = np.concatenate((d_obs_low, r_obs_low))
+    obs_high = np.concatenate((d_obs_high, r_obs_high))
+    beam_info_slice = slice(pos_dim, pos_dim + (cell_num * 3))
+  else:
+    raise ValueError('No such agent type')
 
   observation_space = spaces.Box(low=np.float32(obs_low),
                                  high=np.float32(obs_high),
