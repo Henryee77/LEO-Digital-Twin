@@ -7,7 +7,7 @@ import gymnasium as gym
 import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from gymnasium import spaces
 from low_earth_orbit.ground_user import User
 from low_earth_orbit.constellation import Constellation
@@ -129,12 +129,25 @@ class LEOSatEnv(gym.Env):
                                                 interference_beams=self.additional_beam_set)
 
     self._cal_reward(ue_throughput=ue_throughput)
+    self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
 
     obs = self.get_state_info()
+
     return (obs, self.reward, done, truncated, {})
+
+  def record_sinr_thpt(self, ue_sinr, ue_throughput):
+    if self.last_episode:
+      for ue_name, sinr in ue_sinr.items():
+        self.tb_writer.add_scalars(f'{self.name} Env Param/sinr',
+                                   {ue_name: sinr},
+                                   self.step_num + (self.reset_count - 1) * self.max_step)
+      for ue_name, throughput in ue_throughput.items():
+        self.tb_writer.add_scalars(f'{self.name} Env Param/throughput',
+                                   {ue_name: throughput},
+                                   self.step_num + (self.reset_count - 1) * self.max_step)
 
   def _take_action(self, action_n: Dict[str, List[float]]):
     satbeam_list = []

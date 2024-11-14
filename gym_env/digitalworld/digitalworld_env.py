@@ -41,6 +41,7 @@ class DigitalWorldEnv(LEOSatEnv):
       return np.mean(data_array), np.std(data_array)
 
     self.path_gain_mean, self.path_gain_stdv = mean_stdv_of_db(self.rt_data, 'path gain (dB)')
+    self.path_loss_mean, self.path_loss_stdv = mean_stdv_of_db(self.rt_data, 'path loss (dB)')
     self.hr_mean, self.hr_stdv = mean_stdv_of_db(self.rt_data, 'h_r')
     self.hi_mean, self.hi_stdv = mean_stdv_of_db(self.rt_data, 'h_i')
     self.prev_rt_state = {}
@@ -48,6 +49,7 @@ class DigitalWorldEnv(LEOSatEnv):
   def get_rt_state(self, sat_name):
     rt_info = self.rt_data[self.step_num][sat_name]
     path_gain_res = np.zeros((self.cell_num, ))
+    # path_loss_res = np.zeros((self.cell_num, ))
     h_r_res = np.zeros((self.cell_num, ))
     h_i_res = np.zeros((self.cell_num, ))
 
@@ -58,10 +60,12 @@ class DigitalWorldEnv(LEOSatEnv):
           sat_name, b_i, util.todb(data['received power (W)'] * constant.MILLIWATT))
 
       path_gain_res[b_i] = max([data['path gain (dB)'] for data in rt_info[b_i]])
+      # path_loss_res[b_i] = min([data['path loss (dB)'] for data in rt_info[b_i]])
       h_r_res[b_i] = max([abs(data['h_r']) for data in rt_info[b_i]])
       h_i_res[b_i] = max([abs(data['h_r']) for data in rt_info[b_i]])
 
     norm_pg = util.standardize(path_gain_res, self.path_gain_mean, self.path_gain_stdv)
+    # norm_pl = util.standardize(path_loss_res, self.path_loss_mean, self.path_loss_stdv)
     norm_hr = util.standardize(h_r_res, self.hr_mean, self.hr_stdv)
     norm_hi = util.standardize(h_i_res, self.hi_mean, self.hi_stdv)
 
@@ -92,6 +96,7 @@ class DigitalWorldEnv(LEOSatEnv):
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
     self._cal_reward(ue_throughput=ue_throughput)
+    self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
@@ -102,7 +107,7 @@ class DigitalWorldEnv(LEOSatEnv):
     leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
 
     realworld_header = agent.sat.beam_training_latency
-    digitalworld_header = (util.rt_delay(len(self.ues))
+    digitalworld_header = (util.rt_delay(len(self.leo_agents) * len(self.ues))
                            + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
                            + util.propagation_delay(leo2dt_distance))
 

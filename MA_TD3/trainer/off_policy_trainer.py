@@ -7,7 +7,7 @@ import copy
 import time
 import random
 from argparse import Namespace
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 import torch
 import numpy as np
 import numpy.typing as npt
@@ -90,7 +90,7 @@ class OffPolicyTrainer(object):
     if type(online) is not bool:
       raise TypeError('online can only be bool.')
     if online is True:
-      self.copy_NN_from_twin()
+      # self.copy_NN_from_twin()
       self.total_eps = self.twin_trainer.total_eps
     self.__online = online
 
@@ -234,7 +234,7 @@ class OffPolicyTrainer(object):
       return
     nn_start_time = time.time()
 
-    if self.total_timesteps % self.args.training_period:
+    if self.total_timesteps % self.args.training_period == 0:
       self.total_train_iter += 1
       for _, agent in self.leo_agent_dict.items():
         # Update policy (iteration of training is args.iter_num)
@@ -299,13 +299,14 @@ class OffPolicyTrainer(object):
         f'{agent.name}/training_reward', {'training_reward': self.ep_reward[agent_name]}, self.total_eps)
     self.tb_time += time.time() - start_time
 
-  def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], Dict[str, npt.NDArray[np.float32]], float, bool]:
+  def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], float, bool]:
     if not self.online:
       return None, None, None, False
     # Take action in env
     sim_start_time = time.time()
 
     new_env_observation, env_reward, done, _, _ = self.env.step(action_dict)
+    self.total_timesteps += 1
 
     if running_mode == "training":
       self.train()
@@ -317,13 +318,12 @@ class OffPolicyTrainer(object):
     for agent_name in self.leo_agent_dict:
       prev_state_dict[agent_name] = self.combined_state(agent_name)
     self.cur_states = new_env_observation
-    self.total_timesteps += 1
     for agent_name in env_reward:
       self.ep_reward[agent_name] += env_reward[agent_name]
 
     self.sat_sim_time += time.time() - sim_start_time
 
-    return prev_state_dict, action_dict, sum(env_reward.values()), done
+    return prev_state_dict, sum(env_reward.values()), done
 
   def no_action_step(self, running_mode='training'):
     if not self.online:
@@ -384,11 +384,13 @@ class OffPolicyTrainer(object):
     self.nn_action_time += time.time() - start_time
     return action_dict
 
-  def reset_env(self):
+  def reset_env(self, eval=False):
     if not self.online:
       return
-    if self. total_eps + self.args.eval_period >= self.args.max_ep_num:
-      self.env.unwrapped.last_epsiode = True
+    if self.total_eps > self.args.max_ep_num - 1 and eval:
+      self.env.unwrapped.last_episode = True
+    else:
+      self.env.unwrapped.last_episode = False
     start_time = time.time()
 
     self.env.unwrapped.set_online(self_online=self.online, twin_online=self.twin_trainer.online)

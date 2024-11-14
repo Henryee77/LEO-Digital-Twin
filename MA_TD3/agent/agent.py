@@ -4,7 +4,7 @@ from typing import Literal, Dict
 from logging import Logger
 from gymnasium import spaces
 from torch import device
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from argparse import Namespace
 import numpy as np
 import numpy.typing as npt
@@ -28,7 +28,7 @@ class Agent(object):
                sat_name: str,
                agent_type: str,
                device: device,
-               comp_freq: float = constant.DEFAULT_CPU_CYCLE):
+               comp_freq: float):
 
     self.log = log
     self.tb_writer = tb_writer
@@ -226,6 +226,7 @@ class Agent(object):
   def sharing_weight(self, w):
     if w < 0:
       self.log[self.args.log_name].info(f'Invalid weight of agent {self.name} (w = {w})')
+      # print(self.historical_avg_reward)
       w = constant.MIN_POSITIVE_FLOAT
     self._sharing_weight = w
 

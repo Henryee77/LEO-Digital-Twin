@@ -6,7 +6,7 @@ from datetime import datetime
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from low_earth_orbit.util import constant
 from MA_TD3.misc import misc
 from MA_TD3.agent import Agent
@@ -17,15 +17,16 @@ def main(args):
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   print(device)
   # Create directories
-  if not os.path.exists('./log'):
-    os.makedirs('./log')
+  tb_log_path = f'./log/{args.dir_name}'
+  if not os.path.exists(tb_log_path):
+    os.makedirs(tb_log_path)
   if not os.path.exists('./pytorch_models'):
     os.makedirs('./pytorch_models')
   if not os.path.exists('./config'):
     os.makedirs('./config')
 
   # Set logs
-  tb_writer = SummaryWriter(logdir=f'./log/tb_{args.log_name}', flush_secs=60)
+  tb_writer = SummaryWriter(logdir=f'{tb_log_path}/tb_{args.log_name}')
   log = misc.set_log(args)
   saving_directory = 'pytorch_models'
   loading_directory = 'pytorch_models'
@@ -53,14 +54,16 @@ def main(args):
                                            sat_name=sat_name,
                                            agent_type='real_LEO',
                                            args=args,
-                                           device=device)
+                                           device=device,
+                                           comp_freq=constant.DEFAULT_LEO_CPU_CYCLE)
     digitalworld_agent_dict[sat_name] = Agent(policy_name=args.model,
                                               tb_writer=tb_writer,
                                               log=log,
                                               sat_name=sat_name,
                                               agent_type='digital_LEO',
                                               args=args,
-                                              device=device)
+                                              device=device,
+                                              comp_freq=constant.DEFAULT_DT_CPU_CYCLE)
 
   # Create env
   real_env = misc.make_env(args.real_env_name,
@@ -146,30 +149,19 @@ def main(args):
   tb_writer.close()
 
 
-def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
-  # run one episode with epsilon greedy
-  run_one_eps(args=args,
-              realworld_trainer=realworld_trainer,
-              digitalworld_trainer=digitalworld_trainer)
-
-  # train the neural network
-  digitalworld_trainer.train()
-  realworld_trainer.train()
-
-
 def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer, running_mode='training'):
   time_count = 0
   digital_done = real_done = False
-  digitalworld_trainer.reset_env()
-  realworld_trainer.reset_env()
+  digitalworld_trainer.reset_env(eval=True)
+  realworld_trainer.reset_env(eval=True)
 
   while time_count < args.max_time_per_ep and not (digital_done or real_done):
     if time_count % args.action_timeslot == 0:
       digital_actions = digitalworld_trainer.deterministic_actions()
       real_actions = realworld_trainer.deterministic_actions()
 
-      _, _, _, digital_done = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
-      _, _, _, real_done = realworld_trainer.take_action(real_actions, running_mode=running_mode)
+      _, _, digital_done = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
+      _, _, real_done = realworld_trainer.take_action(real_actions, running_mode=running_mode)
 
       time_count += 1
     else:
@@ -180,7 +172,7 @@ def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer
   realworld_trainer.save_eval_result(time_count)
 
 
-def run_one_eps(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
   time_count = 0
   digital_done = real_done = False
   digitalworld_trainer.reset_env()
@@ -192,20 +184,18 @@ def run_one_eps(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer:
       real_actions = realworld_trainer.stochastic_actions()
 
       (digital_prev_state_dict,
-       digital_action_dict,
        digital_step_total_reward,
        digital_done) = digitalworld_trainer.take_action(digital_actions)
       (real_prev_state_dict,
-       real_action_dict,
        real_step_total_reward,
        real_done) = realworld_trainer.take_action(real_actions)
 
       digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
-                                                action_dict=digital_action_dict,
+                                                action_dict=digital_actions,
                                                 total_reward=digital_step_total_reward,
                                                 done=digital_done)
       realworld_trainer.save_to_replaybuffer(prev_state_dict=real_prev_state_dict,
-                                             action_dict=real_action_dict,
+                                             action_dict=real_actions,
                                              total_reward=real_step_total_reward,
                                              done=real_done)
     else:
@@ -229,16 +219,16 @@ if __name__ == '__main__':
     '--batch-size', default=16, type=int,
     help='Batch size for both actor and critic')
   parser.add_argument(
-      '--actor-lr', default=1e-5, type=float,
+      '--actor-lr', default=5e-5, type=float,
       help='Learning rate for actor')
   parser.add_argument(
-      '--critic-lr', default=4e-5, type=float,
+      '--critic-lr', default=1e-4, type=float,
       help='Learning rate for critic')
   parser.add_argument(
-      '--lr-reduce-factor', default=0.99, type=float,
+      '--lr-reduce-factor', default=0.9, type=float,
       help='Reduce factor of learning rate')
   parser.add_argument(
-      '--lr-reduce-patience', default=200, type=int,
+      '--lr-reduce-patience', default=100, type=int,
       help='Patience of reducing learning rate')
   parser.add_argument(
       '--lambda-l2', default=1e-9, type=float,
@@ -279,7 +269,7 @@ if __name__ == '__main__':
       '--noise-clip', default=0.1, type=float,
       help='The clip range of policy noise')
   parser.add_argument(
-      '--epsilon-decay-rate', default=0.99999, type=float,
+      '--epsilon-decay-rate', default=0.999, type=float,
       help='The rate of epsilon decay')
   parser.add_argument(
       '--discount', default=1e-2, type=float,
@@ -293,10 +283,10 @@ if __name__ == '__main__':
       '--federated-update-rate', default=1e-1, type=float,
       help='Network exchanging rate of federated agents')
   parser.add_argument(
-      '--federated-upload-period', default=50, type=int,
+      '--federated-upload-period', default=80, type=int,
       help='Period of federated uploading')
   parser.add_argument(
-      '--federated-download-period', default=50, type=int,
+      '--federated-download-period', default=80, type=int,
       help='Period of federated downloading')
   parser.add_argument(
       '--historical-smoothing-coef', default=0.9, type=float,
@@ -353,6 +343,9 @@ if __name__ == '__main__':
       '--prefix', default='', type=str,
       help='Prefix for tb_writer and logging')
   parser.add_argument(
+      '--dir-name', default='', type=str,
+      help='Name of the tb directory')
+  parser.add_argument(
       '--seed', default=456789, type=int,
       help='Sets Gym, PyTorch and Numpy seeds')
   parser.add_argument(
@@ -362,7 +355,6 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   # Set log name
-
   time_string = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
   args.log_name = f'{args.prefix}_log_{time_string}'
 

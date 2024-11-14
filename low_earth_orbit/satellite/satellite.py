@@ -227,7 +227,7 @@ class Satellite(object):
                     serving_ue: List[User],
                     i_power: List[float],
                     mode: str = 'run') -> List[float]:
-    """Get the SINR of its serving users
+    """Get the SINR of the given users.
 
     Args:
         serving_ue (list[User]): The users this satellite is serving
@@ -236,7 +236,7 @@ class Satellite(object):
                     (run or debug)
 
     Returns:
-        list[float]: The SINR of each ue
+        list[float]: The SINR of given ues.
     """
     tx_gain, channel_loss = [], []
     for ue in serving_ue:

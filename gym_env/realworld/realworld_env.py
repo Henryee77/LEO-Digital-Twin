@@ -96,6 +96,7 @@ class RealWorldEnv(LEOSatEnv):
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
     self._cal_reward(ue_throughput=ue_throughput)
+    self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)

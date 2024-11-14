@@ -320,9 +320,8 @@ class Constellation(object):
 
         if mode == 'debug':
           print(
-              f'Training latency: {sat.training_latency}, '
               f'Bandwidth: {bandwidth}, '
-              f'SINR: {sinr[ue.name]}, '
+              f'SINR: {sinr[ue.name]} dB, '
               f'Capacity term: {math.log2(1 + util.tolinear(sinr[ue.name]))}, '
               f'channel num: {served_ue_num}, ')
 
