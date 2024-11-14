@@ -47,7 +47,7 @@ class LEOSatEnv(gym.Env):
 
     self.online = False
     self.twin_online = False
-    self._leo_agents = agent_dict
+    self.leo_agents = agent_dict
     self.real_agents = real_agents
     self.digital_agents = digital_agents
     self.agent_num = len(agent_names)
@@ -74,6 +74,9 @@ class LEOSatEnv(gym.Env):
     self.interfer_power_low = 20
     self.interfer_power_high = util.truncate(
       self.max_power - util.todb(self.random_interfer_beam_num))
+    self.overflowed_overhead = {}
+    for sat_name in self.agent_names:
+      self.overflowed_overhead[sat_name] = 0
 
   @ property
   def name(self):
@@ -85,11 +88,11 @@ class LEOSatEnv(gym.Env):
 
   @ property
   def leo_agents(self) -> Dict[str, Agent]:
-    return self._leo_agents
+    return self.__leo_agents
 
   @ leo_agents.setter
   def leo_agents(self, agent_dict: Dict[str, Agent]):
-    self._leo_agents = agent_dict
+    self.__leo_agents = agent_dict
 
   @ property
   def real_agents(self) -> Dict[str, Agent]:
@@ -231,12 +234,16 @@ class LEOSatEnv(gym.Env):
 
     return res
 
-  def _cal_reward(self, ue_throughput):
+  def _cal_reward(self, ue_throughput, no_action=False):
     for key in self.reward:
       self.reward[key] = 0.0
-    # print(f'dB: {sat_power}')
-    # print(util.tolinear(sat_power))
     sat_tran_ratio = {}
+    if no_action:
+      for sat_name in self.leo_agents:
+        overhead = self.overflowed_overhead[sat_name]
+        self.overflowed_overhead[sat_name] -= constant.MOVING_TIMESLOT
+        sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
+
     for ue_name, throughput in ue_throughput.items():
       last_satbeam = self.ue_dict[ue_name].last_serving
       # print(self.ue_dict[ue_name].servable)
@@ -245,8 +252,11 @@ class LEOSatEnv(gym.Env):
         agent = self.leo_agents[sat_name]
         if len(agent.sat.cell_topo.serving) > 0:
           if sat_name not in sat_tran_ratio:
-            overhead = self._cal_overhead(agent)
-            sat_tran_ratio[sat_name] = max(0, 1 - overhead / self.args.action_timeslot)
+            cur_overhead = self._cal_overhead(agent)
+            overhead = cur_overhead + self.overflowed_overhead[sat_name]
+            self.overflowed_overhead[sat_name] += (overhead - constant.MOVING_TIMESLOT)
+            self.overflowed_overhead[sat_name] = max(0, self.overflowed_overhead[sat_name])
+            sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
 
           self.reward[sat_name] += (sat_tran_ratio[sat_name] * throughput /
                                     (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6)

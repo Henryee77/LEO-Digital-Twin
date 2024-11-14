@@ -43,6 +43,7 @@ class Satellite(object):
     self.__min_power = min_power
     self.total_bandwidth = total_bandwidth
     self.beam_alg = beam_alg
+    self.__bt_latency = self.intrinsic_beam_training_latency
 
   @property
   def shell_index(self):
@@ -128,9 +129,17 @@ class Satellite(object):
     distance_to_ues = [self.position.calculate_distance(ue.position) for ue in self.serving_ues]
     return sum(distance_to_ues) / len(distance_to_ues) / constant.LIGHT_SPEED
 
-  @ property
-  def beam_training_latency(self) -> float:
+  @property
+  def intrinsic_beam_training_latency(self) -> float:
     return self.beam_sweeping_latency + self.ues_feedback_latency + self.ack_latency + 2 * self.avg_ue_prop_latency
+
+  @property
+  def beam_training_latency(self) -> float:
+    return self.__bt_latency
+
+  @beam_training_latency.setter
+  def beam_training_latency(self, bt_latency):
+    self.__bt_latency = bt_latency
 
   def trans_latency(self, data_size: int, target) -> float:
     """Transmission latency
@@ -316,15 +325,6 @@ class Satellite(object):
         temp.add(ue.last_serving)
         new_training_beam = self.cell_topo.hobs(ue)
         self.cell_topo.add_training_beam(new_training_beam)
-
-    if self.cell_topo.training_beam:
-      ues_sinr = self.scan_beams()
-    else:
-      ues_sinr = {}
-      for ue in ues:
-        ues_sinr[ue.name] = [constant.MIN_NEG_FLOAT] * self.cell_topo.cell_number
-
-    return ues_sinr
 
   def get_ue_data(
           self, ues: List[User]) -> Dict[str, collections.deque[Tuple[str, int]]]:
