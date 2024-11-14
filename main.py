@@ -26,7 +26,7 @@ def main(args):
     os.makedirs('./config')
 
   # Set logs
-  tb_writer = SummaryWriter(logdir=f'{tb_log_path}/tb_{args.log_name}')
+  tb_writer = SummaryWriter(log_dir=f'{tb_log_path}/tb_{args.log_name}')
   log = misc.set_log(args)
   saving_directory = 'pytorch_models'
   loading_directory = 'pytorch_models'
