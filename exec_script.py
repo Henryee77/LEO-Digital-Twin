@@ -4,7 +4,7 @@ import os
 if __name__ == '__main__':
   ue_num_list = [3]
   max_ep = 1_000
-  mode_list = ['DT FULL', 'Real Only']
+  mode_list = ['Real Only']
 
   def mode_2_start_ep(mode):
     if mode == 'DT FULL':

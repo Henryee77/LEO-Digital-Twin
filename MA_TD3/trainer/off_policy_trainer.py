@@ -301,7 +301,7 @@ class OffPolicyTrainer(object):
 
   def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], float, bool]:
     if not self.online:
-      return None, None, None, False
+      return None, None, False
     # Take action in env
     sim_start_time = time.time()
 

@@ -6,11 +6,11 @@ import time
 from random import sample
 
 start_time = time.time()
-A = [1, 2, 3]
-count = {}
-for _ in range(1_000_000):
-  for a in A:
-    count[a] = 2
-    count[a] = min(a, count[a] - 10)
+
+lst = [('1', 10), ('1', 3)]
+a = set(x for x in lst)
+print(a)
+tup = ('1', 10)
+print(a.difference(tup))
 
 print(time.time() - start_time)

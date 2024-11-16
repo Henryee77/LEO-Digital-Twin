@@ -16,3 +16,4 @@ FOR /F %k in (requirements.txt) DO pip install %k
 
 TODO:
 weather
+efficiently maintain sat.servable

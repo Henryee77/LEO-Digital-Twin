@@ -152,14 +152,18 @@ class Beam(object):
     noise_power = constant.THERMAL_NOISE_POWER + util.todb(self.bandwidth)
     n_and_i = util.todb(
         util.tolinear(interference_power) + util.tolinear(noise_power))
+
+    sinr = self.tx_power + tx_gain + ue.rx_gain - channel_loss - n_and_i
     if mode == 'debug':
       print(f'Tx Power: {self.tx_power} dBm, '
             f'Tx Gain: {tx_gain}, '
             f'UE Rx Gain: {ue.rx_gain}, '
             f'Channel Loss: {channel_loss} dB, '
             f'Interference Power: {interference_power} dBm, '
-            f'Interference and Noise: {n_and_i} dBm')
-    return self.tx_power + tx_gain + ue.rx_gain - channel_loss - n_and_i
+            f'Noise power: {noise_power} dBm,'
+            f'Interference and Noise: {n_and_i} dBm,'
+            f'SINR: {sinr}')
+    return sinr
 
   def has_interference(self, other_beam: Beam) -> bool:
     """Decide if there is interference between two beams.

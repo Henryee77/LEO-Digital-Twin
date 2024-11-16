@@ -480,38 +480,6 @@ class CellTopology(object):
 
     self.plot_cell(ax, cell_plot_mode, color_dict)
 
-  def sinr_of_users(
-      self,
-      serving_ue: List[User],
-      tx_gain: List[float],
-      channel_loss: List[float],
-      i_power: List[float],
-      mode: str = "run",
-  ) -> List[float]:
-    """Get the sinr of a list of user
-
-    Args:
-        ue (User): the user
-        tx_gain (float): transmitting antenna gain
-        channel_loss (float): the channel loss from the ue to sat
-        i_power (float): The total interference power each ue gets
-        mode (str): the mode this function is running
-                    (run or debug)
-
-    Returns:
-        float: the SINR
-    """
-    return [
-        self.beam_list[self.serving[ue.name]].calc_sinr(
-            ue=ue,
-            tx_gain=tx_gain[i],
-            channel_loss=channel_loss[i],
-            interference_power=i_power[i],
-            mode=mode,
-        )
-        for i, ue in enumerate(serving_ue)
-    ]
-
   def serving_beam_of_ue(self, ue: User) -> Beam:
     """Return the beam which is serving the ue.
 
@@ -565,9 +533,10 @@ class CellTopology(object):
         succ_index = i
         last_beam_pos = serv_data[1]
         break
+    # print(f'{ue.name} suc_idx: {succ_index}')
 
     if last_beam_pos is None:
-      # print('EBS')
+      # print(serv_hist)
       return self.non_training_beam
 
     long_diff_list = [serv_hist[i][1].geodetic.longitude - serv_hist[i - 1][1].geodetic.longitude

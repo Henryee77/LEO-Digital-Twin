@@ -6,7 +6,7 @@ import collections
 import math
 
 from ..antenna import Antenna
-from ..cell import CellTopology
+from ..cell import CellTopology, Beam
 from ..channel import Channel
 from ..util import Position
 from ..util import constant
@@ -43,7 +43,7 @@ class Satellite(object):
     self.__min_power = min_power
     self.total_bandwidth = total_bandwidth
     self.beam_alg = beam_alg
-    self.__bt_latency = self.intrinsic_beam_training_latency
+    self.__bs_latency = 0
 
   @property
   def shell_index(self):
@@ -110,11 +110,19 @@ class Satellite(object):
 
   @property
   def serving_ues(self) -> List[User]:
-    return [ue for ue in self.servable if ue.name in self.cell_topo.serving.keys()]
+    return self.cell_topo.serving.keys()
+
+  @property
+  def intrinsic_beam_sweeping_latency(self) -> float:
+    return self.cell_topo.training_beam_num * constant.T_BEAM
 
   @property
   def beam_sweeping_latency(self) -> float:
-    return self.cell_topo.training_beam_num * constant.T_BEAM
+    return self.__bs_latency
+
+  @beam_sweeping_latency.setter
+  def beam_sweeping_latency(self, bs_latency):
+    self.__bs_latency = bs_latency
 
   @property
   def ues_feedback_latency(self) -> float:
@@ -130,16 +138,8 @@ class Satellite(object):
     return sum(distance_to_ues) / len(distance_to_ues) / constant.LIGHT_SPEED
 
   @property
-  def intrinsic_beam_training_latency(self) -> float:
-    return self.beam_sweeping_latency + self.ues_feedback_latency + self.ack_latency + 2 * self.avg_ue_prop_latency
-
-  @property
   def beam_training_latency(self) -> float:
-    return self.__bt_latency
-
-  @beam_training_latency.setter
-  def beam_training_latency(self, bt_latency):
-    self.__bt_latency = bt_latency
+    return self.beam_sweeping_latency + self.ues_feedback_latency + self.ack_latency + 2 * self.avg_ue_prop_latency
 
   def trans_latency(self, data_size: int, target) -> float:
     """Transmission latency
@@ -200,74 +200,59 @@ class Satellite(object):
     if training_beams is None:
       training_beams = self.cell_topo.training_beam
 
+    self.clear_power()
     for beam_index in training_beams:
-      rsrp = self.cal_rsrp_one_beam(
-          self.cell_topo.beam_list[beam_index].center_point, beam_index, ue)
+      self.set_beam_power(beam_index, self.max_power)
+      rsrp = self.sinr_of_user(ue, beam_index)
+      self.set_beam_power(beam_index, constant.MIN_NEG_FLOAT)
+
       if save_servable:
         ue.servable_add(self.name, beam_index, rsrp)
       rsrp_list[beam_index] = rsrp
     return rsrp_list
 
-  def cal_rsrp_one_beam(self, beam_pos: Position, beam_index: int, ue: User) -> float:
-    """Calculate the rsrp with one beam.
+  def sinr_of_user(self,
+                   ue: User,
+                   serving_beam_index: int = None,
+                   i_power: float = 0,
+                   mode: str = 'run') -> float:
+    """Get the SINR of the given users.
 
     Args:
-        beam_pos (Position): The beam center position
-        beam_index (int): The index of beam
-        ue (User): The target ue that in in servable range
+        ue (User): The user this satellite is serving.
+        serving_beam (int): The target beam to calculate SINR. 
+        i_power (float): The total interference power ue gets.
+        mode (str): The mode this function is running.
+                    (run or debug)
+
     Returns:
-        (float): The rx power in dBm
+        float: The SINR of the ue under the serving beam.
     """
+
+    if serving_beam_index is None:
+      serving_beam = self.cell_topo.serving_beam_of_ue(ue)
+    else:
+      serving_beam = self.cell_topo.beam_list[serving_beam_index]
+
+    beam_pos = serving_beam.center_point
+    beam_index = serving_beam.index
     epsilon = self.position.cal_elevation_angle(beam_pos)
     dis_sat_ue = self.position.calculate_distance(ue.position)
     theta = self.position.angle_between_targets(beam_pos, ue.position)
 
-    antenna_gain = float(self.antenna_list[beam_index].calc_antenna_gain(theta))
-
+    tx_gain = float(self.antenna_list[beam_index].calc_antenna_gain(theta))
     path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
                                                      freq=self.antenna_list[beam_index].central_frequency,
                                                      elevation_angle=epsilon)
+    channel_loss = path_loss
 
-    rx_power = constant.MAX_POWER - path_loss + antenna_gain + ue.rx_gain
-
-    return rx_power
-
-  def sinr_of_users(self,
-                    serving_ue: List[User],
-                    i_power: List[float],
-                    mode: str = 'run') -> List[float]:
-    """Get the SINR of the given users.
-
-    Args:
-        serving_ue (list[User]): The users this satellite is serving
-        i_power (float): The total interference power each ue gets
-        mode (str): the mode this function is running
-                    (run or debug)
-
-    Returns:
-        list[float]: The SINR of given ues.
-    """
-    tx_gain, channel_loss = [], []
-    for ue in serving_ue:
-      serving_beam = self.cell_topo.serving_beam_of_ue(ue)
-      beam_pos = serving_beam.center_point
-      beam_index = serving_beam.index
-      epsilon = self.position.cal_elevation_angle(beam_pos)
-      dis_sat_ue = self.position.calculate_distance(ue.position)
-      theta = self.position.angle_between_targets(beam_pos, ue.position)
-
-      tx_gain.append(float(self.antenna_list[beam_index].calc_antenna_gain(theta)))
-
-      path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
-                                                       freq=self.antenna_list[beam_index].central_frequency,
-                                                       elevation_angle=epsilon)
-      channel_loss.append(path_loss)
-
-    return self.cell_topo.sinr_of_users(serving_ue=serving_ue,
-                                        tx_gain=tx_gain,
-                                        channel_loss=channel_loss,
-                                        i_power=i_power,
-                                        mode=mode)
+    return serving_beam.calc_sinr(
+        ue=ue,
+        tx_gain=tx_gain,
+        channel_loss=channel_loss,
+        interference_power=i_power,
+        mode=mode,
+    )
 
   def add_cell_topo_info(self, ue_name: str, beam_idx: int):
     """Update the information of which beam is serving the ue"""
@@ -319,12 +304,10 @@ class Satellite(object):
 
     self.servable = list(filter(self.filter_ue, ues))
     self.cell_topo.clear_training_beam()
-    temp = set()
+
     for ue in self.servable:
-      if ue.last_serving not in temp:
-        temp.add(ue.last_serving)
-        new_training_beam = self.cell_topo.hobs(ue)
-        self.cell_topo.add_training_beam(new_training_beam)
+      new_training_beam = self.cell_topo.hobs(ue)
+      self.cell_topo.add_training_beam(new_training_beam)
 
   def get_ue_data(
           self, ues: List[User]) -> Dict[str, collections.deque[Tuple[str, int]]]:
