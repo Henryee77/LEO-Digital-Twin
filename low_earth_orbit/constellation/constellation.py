@@ -200,7 +200,7 @@ class Constellation(object):
                                                   sat=sat,
                                                   interfere_satbeam_set=set(interf_ue.last_serving
                                                                             for interf_ue in sat.servable
-                                                                            if (interf_ue.last_serving is not None and interf_ue is not ue)
+                                                                            if (interf_ue.last_serving is not None)
                                                                             ))
           total_sweeping_time += sat.intrinsic_beam_sweeping_latency
         else:
@@ -232,9 +232,9 @@ class Constellation(object):
 
     training_sinr = [constant.MIN_NEG_FLOAT] * sat.cell_topo.cell_number
     training_beam_set = sat.cell_topo.training_beam
-    interference_power = self.cal_transmission_interference(ue, interfere_satbeam_set)
 
     for beam_idx in training_beam_set:
+      interference_power = self.cal_transmission_interference(ue, interfere_satbeam_set, (sat.name, beam_idx))
       training_sinr[beam_idx] = sat.sinr_of_user(
           ue=ue,
           serving_beam_index=beam_idx,
