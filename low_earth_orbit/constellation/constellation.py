@@ -1,6 +1,7 @@
 """constellation.py"""
 
 import math
+import random
 from dataclasses import dataclass
 from typing import Dict, List, Set
 from typing import Optional
@@ -174,57 +175,126 @@ class Constellation(object):
     # Beam sweeping schemes
     total_sweeping_time = 0
     if scan_mode == 'SCBS':
-      # Beam sweeping
-      for sat_name in sat_name_list:
-        sat = self.all_sat[sat_name]
-        if sat.cell_topo.training_beam:
-          ues_sinr = sat.scan_beams()
-          total_sweeping_time += sat.intrinsic_beam_sweeping_latency
-        else:
-          ues_sinr = self._no_training_result(ues=ues, sat=sat)
-        sat_ues_sinr[sat_name] = ues_sinr
-
-      # Calculate beam sweeping latency
-      for sat_name in sat_name_list:
-        self.all_sat[sat_name].beam_sweeping_latency = total_sweeping_time
-
+      sat_ues_sinr = self.SCBS()
+    elif scan_mode == 'SSBS':
+      sat_ues_sinr = self.SSBS()
     elif scan_mode == 'ABS':
-
-      # Beam sweeping
-      for sat_name in sat_name_list:
-        sat = self.all_sat[sat_name]
-        ues_sinr = {}
-        if sat.cell_topo.training_beam:
-          for ue in sat.servable:
-            ues_sinr[ue.name] = self.cal_ABS_sinr(ue=ue,
-                                                  sat=sat,
-                                                  interfere_satbeam_set=set(interf_ue.last_serving
-                                                                            for interf_ue in sat.servable
-                                                                            if (interf_ue.last_serving is not None)
-                                                                            ))
-          total_sweeping_time += sat.intrinsic_beam_sweeping_latency
-        else:
-          ues_sinr = self._no_training_result(ues=ues, sat=sat)
-        sat_ues_sinr[sat_name] = ues_sinr
-      # Calculate beam sweeping latency
-      for sat_name in sat_name_list:
-        self.all_sat[sat_name].beam_sweeping_latency = total_sweeping_time / len(sat_name_list)
+      sat_ues_sinr = self.ABS()
     else:
       raise ValueError(f'No {scan_mode} beam sweeping mode.')
 
     return sat_ues_sinr
 
-  def cal_ABS_sinr(self,
-                   ue: User,
-                   sat: Satellite,
-                   interfere_satbeam_set: set[SatBeamID],
-                   ) -> List[float]:
+  def SCBS(self, ues: List[User], sat_name_list: List[str]) -> Dict[str, Dict[str, List[float]]]:
+    total_sweeping_time = 0
+    sat_ues_sinr = {}
+    # Beam sweeping
+    for sat_name in sat_name_list:
+      sat = self.all_sat[sat_name]
+      if sat.cell_topo.training_beam:
+        ues_sinr = sat.scan_beams()
+        total_sweeping_time += sat.intrinsic_beam_sweeping_latency
+      else:
+        ues_sinr = self._no_training_result(ues=ues, sat=sat)
+      sat_ues_sinr[sat_name] = ues_sinr
+
+    # Calculate beam sweeping latency
+    for sat_name in sat_name_list:
+      self.all_sat[sat_name].beam_sweeping_latency = total_sweeping_time
+
+    return sat_ues_sinr
+
+  def SSBS(self, ues: List[User], sat_name_list: List[str]) -> Dict[str, Dict[str, List[float]]]:
+    # Beam sweeping
+    training_beams = {}
+    max_training_num = 0
+    for sat_name in sat_name_list:
+      sat = self.all_sat[sat_name]
+      training_beams[sat_name] = list(sat.cell_topo.training_beam)
+      random.shuffle(training_beams[sat_name])
+      max_training_num = max(max_training_num, len(training_beams[sat_name]))
+      total_sweeping_time = max(sat.intrinsic_beam_sweeping_latency, total_sweeping_time)
+
+    sat_ues_sinr = self._cal_SSBS_sinr(ues=ues,
+                                       training_beams=training_beams,
+                                       max_training_num=max_training_num)
+
+    # Calculate beam sweeping latency
+    for sat_name in sat_name_list:
+      self.all_sat[sat_name].beam_sweeping_latency = total_sweeping_time
+
+    return sat_ues_sinr
+
+  def ABS(self, ues: List[User], sat_name_list: List[str]) -> Dict[str, Dict[str, List[float]]]:
+    total_sweeping_time = 0
+    sat_ues_sinr = {}
+    # Beam sweeping
+    for sat_name in sat_name_list:
+      sat = self.all_sat[sat_name]
+      ues_sinr = {}
+      if sat.cell_topo.training_beam:
+        for ue in sat.servable:
+          ues_sinr[ue.name] = self._cal_ABS_sinr(ue=ue,
+                                                 sat=sat,
+                                                 online_beam_set=set(ue.last_serving
+                                                                     for ue in sat.servable
+                                                                     if ue.last_serving is not None)
+                                                 )
+        total_sweeping_time += sat.intrinsic_beam_sweeping_latency
+      else:
+        ues_sinr = self._no_training_result(ues=ues, sat=sat)
+      sat_ues_sinr[sat_name] = ues_sinr
+      # Calculate beam sweeping latency
+    for sat_name in sat_name_list:
+      self.all_sat[sat_name].beam_sweeping_latency = total_sweeping_time / len(sat_name_list)
+
+    return sat_ues_sinr
+
+  def _cal_SSBS_sinr(self,
+                     ues: List[User],
+                     training_beams: Dict[str, List[int]],
+                     max_training_num: int
+                     ) -> Dict[str, float]:
+    sat_ues_sinr = {}
+    for sat_name in training_beams:
+      self.all_sat[sat_name].clear_power()
+      sat_ues_sinr[sat_name] = self._no_training_result(ues, self.all_sat[sat_name])
+
+    for i in range(max_training_num):
+      cur_training_set = set((sat_name, training_beams[sat_name][i])
+                             for sat_name in training_beams
+                             if len(training_beams[sat_name]) > i)
+
+      for satbeam in cur_training_set:
+        for ue in ues:
+          sat_name, beam_idx = satbeam
+          sat = self.all_sat[sat_name]
+          sat.set_beam_power(beam_idx, sat.max_power)
+
+          interference_power = self.cal_transmission_interference(ue, cur_training_set, satbeam)
+          training_sinr = self.all_sat[sat_name].sinr_of_user(ue=ue,
+                                                              serving_beam_index=beam_idx,
+                                                              i_power=interference_power)
+          sat_ues_sinr[sat_name][ue.name][beam_idx] = training_sinr
+          ue.servable_add(name_sat=sat_name,
+                          beam_num=beam_idx,
+                          rsrp=training_sinr)
+
+          sat.set_beam_power(beam_idx, constant.MIN_NEG_FLOAT)
+
+    return sat_ues_sinr
+
+  def _cal_ABS_sinr(self,
+                    ue: User,
+                    sat: Satellite,
+                    online_beam_set: set[SatBeamID],
+                    ) -> List[float]:
     """Asynchronous Beam Sweeping
 
     Args:
         ue (User): ue
         sat (Satellite): training satellite
-        interfere_satbeam_set (set[SatBeamID]): interference sources
+        online_beam_set (set[SatBeamID]): interference sources
 
     Returns:
         List[float]: training sinr of each training beam in sat
@@ -233,21 +303,23 @@ class Constellation(object):
     training_sinr = [constant.MIN_NEG_FLOAT] * sat.cell_topo.cell_number
     training_beam_set = sat.cell_topo.training_beam
 
+    sat.clear_power()
+
     for beam_idx in training_beam_set:
-      interference_power = self.cal_transmission_interference(ue, interfere_satbeam_set, (sat.name, beam_idx))
+      sat.set_beam_power(beam_idx, sat.max_power)
+
+      interference_power = self.cal_transmission_interference(ue, online_beam_set, (sat.name, beam_idx))
       training_sinr[beam_idx] = sat.sinr_of_user(
           ue=ue,
           serving_beam_index=beam_idx,
           i_power=interference_power,
       )
+      ue.servable_add(name_sat=sat.name,
+                      beam_num=beam_idx,
+                      rsrp=training_sinr[beam_idx])
 
+      sat.set_beam_power(beam_idx, constant.MIN_NEG_FLOAT)
     return training_sinr
-
-  def _no_training_result(self, ues: List[User], sat: Satellite):
-    ues_sinr = {}
-    for ue in ues:
-      ues_sinr[ue.name] = [constant.MIN_NEG_FLOAT] * sat.cell_topo.cell_number
-    return
 
   def cal_transmission_sinr(self,
                             ues: List[User],
@@ -291,19 +363,20 @@ class Constellation(object):
 
     return sinr
 
-  def cal_transmission_interference(self, ue: User, interference_beam_set: Set[SatBeamID], serving_satbeam: SatBeamID | None = None) -> float:
+  def cal_transmission_interference(self, ue: User, online_beam_set: Set[SatBeamID], serving_satbeam: SatBeamID | None = None) -> float:
     """Calculate the interference during the transmission phase of the ue.
 
     Args:
         ue (User): ue
-        interference_beam_set (Set[SatBeamID]): Set of interference beam index
+        online_beam_set (Set[SatBeamID]): Set of the beam index which the beam is turned on
+        serving_satbeam (SatBeamID | None): serving beam
 
     Returns:
         float: interference power (dBm) the ue is suffering
     """
     i_power = constant.MIN_POSITIVE_FLOAT  # in linear
-    # print(interference_beam_set)
-    for sat_beam in interference_beam_set:
+    # print(online_beam_set)
+    for sat_beam in online_beam_set:
       if serving_satbeam == sat_beam:
         continue
       sat_name, beam_idx = sat_beam
@@ -420,3 +493,18 @@ class Constellation(object):
                                served_ue_num)
 
     return throughput
+
+  def _no_training_result(self, ues: List[User], sat: Satellite) -> Dict[str, List[float]]:
+    """When the satellite has no training beam, all the training sinr is 0 (-inf dB). 
+
+    Args:
+        ues (List[User]): ue under the satellite
+        sat (Satellite): the satellite with no training beam.
+
+    Returns:
+        Dict[str, List[float]]: A Dict contains a -inf list of each user.
+    """
+    ues_sinr = {}
+    for ue in ues:
+      ues_sinr[ue.name] = [constant.MIN_NEG_FLOAT] * sat.cell_topo.cell_number
+    return ues_sinr

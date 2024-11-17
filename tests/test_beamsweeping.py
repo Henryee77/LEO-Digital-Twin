@@ -103,7 +103,9 @@ for t in range(simulation_time + 1):
   plt.show()
   plt.pause(0.5)
 
-  LEO_constellation.scan_ues(user_list, sat_name_list=sat_name_list, scan_mode='SCBS')
+  LEO_constellation.scan_ues(user_list, sat_name_list=sat_name_list, scan_mode='ABS')
+  '''for ue in user_list:
+    print(f'{ue.name}:, {ue.servable}')'''
   # print(f'---{time.time() - _time}')
   # print(obj.servable)
 
