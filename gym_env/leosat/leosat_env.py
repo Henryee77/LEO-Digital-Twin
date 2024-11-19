@@ -43,6 +43,7 @@ class LEOSatEnv(gym.Env):
     self.prev_beam_power = {}
     self.ee = {}
     self.data_rate = {}
+    self.throughput = {}
     self.overhead = {}
     self.ue_pos_data = {}
     self.load_ues_data()
@@ -158,13 +159,16 @@ class LEOSatEnv(gym.Env):
 
   def save_episode_result(self):
     self.tb_writer.add_scalars(f'{self.name} Env Param/average overhead',
-                               util.avg_nested_2d_dict(self.overhead),
+                               {self.args.prefix: util.avg_nested_2d_dict(self.overhead)},
                                self.step_num + (self.reset_count - 1) * self.max_step)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average data rate',
-                               util.avg_nested_2d_dict(self.data_rate),
+                               {self.args.prefix: util.avg_nested_2d_dict(self.data_rate)},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average throughput',
+                               {self.args.prefix: util.avg_nested_2d_dict(self.throughput)},
                                self.step_num + (self.reset_count - 1) * self.max_step)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average EE',
-                               util.avg_nested_2d_dict(self.ee),
+                               {self.args.prefix: util.avg_nested_2d_dict(self.ee)},
                                self.step_num + (self.reset_count - 1) * self.max_step)
 
   def _take_action(self, action_n: Dict[str, List[float]]):
@@ -272,6 +276,7 @@ class LEOSatEnv(gym.Env):
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
 
           self.data_rate[self.step_num][sat_name] += sat_tran_ratio[sat_name] * throughput
+          self.throughput[self.step_num][sat_name] += throughput
           self.ee[self.step_num][sat_name] += (sat_tran_ratio[sat_name] * throughput /
                                                (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6)
 
@@ -332,10 +337,12 @@ class LEOSatEnv(gym.Env):
       self.ee[t] = {}
       self.data_rate[t] = {}
       self.overhead[t] = {}
+      self.throughput[t] = {}
       for sat_name in self.agent_names:
         self.ee[t][sat_name] = 0
         self.data_rate[t][sat_name] = 0
         self.overhead[t][sat_name] = 0
+        self.throughput[t][sat_name] = 0
 
     for sat_name in self.agent_names:
       self.leo_agents[sat_name].sat = self.constel.all_sat[sat_name]

@@ -17,7 +17,7 @@ def main(args):
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   print(device)
   # Create directories
-  tb_log_path = f'./log/{args.dir_name}'
+  tb_log_path = f'./tb_result/{args.dir_name}'
   if not os.path.exists(tb_log_path):
     os.makedirs(tb_log_path)
   if not os.path.exists('./pytorch_models'):

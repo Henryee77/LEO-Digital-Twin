@@ -205,6 +205,7 @@ class Constellation(object):
 
   def SSBS(self, ues: List[User], sat_name_list: List[str]) -> Dict[str, Dict[str, List[float]]]:
     # Beam sweeping
+    total_sweeping_time = 0
     training_beams = {}
     max_training_num = 0
     for sat_name in sat_name_list:
@@ -239,13 +240,12 @@ class Constellation(object):
                                                                      for ue in sat.servable
                                                                      if ue.last_serving is not None)
                                                  )
-        total_sweeping_time += sat.intrinsic_beam_sweeping_latency
       else:
         ues_sinr = self._no_training_result(ues=ues, sat=sat)
       sat_ues_sinr[sat_name] = ues_sinr
       # Calculate beam sweeping latency
     for sat_name in sat_name_list:
-      self.all_sat[sat_name].beam_sweeping_latency = total_sweeping_time / len(sat_name_list)
+      self.all_sat[sat_name].beam_sweeping_latency = self.all_sat[sat_name].intrinsic_beam_sweeping_latency
 
     return sat_ues_sinr
 
