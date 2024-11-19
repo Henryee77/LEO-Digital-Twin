@@ -1,7 +1,7 @@
 """The basic util module."""
 from scipy import special as sp
 import os
-from typing import Tuple, Set, overload
+from typing import overload, Tuple, Set, Dict, Any
 
 import math
 import numpy as np
@@ -160,3 +160,12 @@ def d_longitude(origin_latitude: float, distance: float) -> float:
 
 def d_latitude(distance: float) -> float:
   return (distance / constant.R_EARTH) / constant.PI_IN_RAD
+
+
+def avg_nested_2d_dict(dict_2d: Dict[Any, Dict[Any, int | float]]) -> float:
+  cnt = 0
+  total_value = 0
+  for dict in dict_2d.values():
+    cnt += len(dict)
+    total_value += sum(dict.values())
+  return total_value / cnt

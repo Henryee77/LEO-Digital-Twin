@@ -110,7 +110,7 @@ class Satellite(object):
 
   @property
   def serving_ues(self) -> List[User]:
-    return self.cell_topo.serving.keys()
+    return [ue for ue in self.servable if ue.name in self.cell_topo.serving.keys()]
 
   @property
   def intrinsic_beam_sweeping_latency(self) -> float:
@@ -135,13 +135,15 @@ class Satellite(object):
   @property
   def avg_ue_prop_latency(self) -> float:
     distance_to_ues = [self.position.calculate_distance(ue.position) for ue in self.serving_ues]
+    if len(distance_to_ues) == 0:
+      return 0
     return sum(distance_to_ues) / len(distance_to_ues) / constant.LIGHT_SPEED
 
   @property
   def beam_training_latency(self) -> float:
     return self.beam_sweeping_latency + self.ues_feedback_latency + self.ack_latency + 2 * self.avg_ue_prop_latency
 
-  def trans_latency(self, data_size: int, target) -> float:
+  def trans_latency(self, data_size: int, target: User) -> float:
     """Transmission latency
 
     Args:
@@ -200,6 +202,7 @@ class Satellite(object):
     if training_beams is None:
       training_beams = self.cell_topo.training_beam
 
+    power_dict = self.export_power_dict()
     self.clear_power()
     for beam_index in training_beams:
       self.set_beam_power(beam_index, self.max_power)
@@ -209,6 +212,8 @@ class Satellite(object):
       if save_servable:
         ue.servable_add(self.name, beam_index, rsrp)
       rsrp_list[beam_index] = rsrp
+
+    self.import_power_dict(power_dict)
     return rsrp_list
 
   def sinr_of_user(self,
@@ -349,3 +354,19 @@ class Satellite(object):
         Tuple[float, float, float, int]: tx_power, central_frequency, bandwidth, served ue number
     """
     return self.cell_topo.get_beam_info(beam_idx)
+
+  def export_power_dict(self) -> Dict[int, float]:
+    """Export the tx power of every beam into a dictionary.
+
+    Returns:
+        Dict[int, float]: {beam_index: tx_power}
+    """
+    return self.cell_topo.export_power_dict()
+
+  def import_power_dict(self, power_dict: Dict[int, float]):
+    """Import the tx power data from a dictionary.
+
+    Args:
+        power_dict (Dict[int, float]): {beam_index: tx_power}
+    """
+    self.cell_topo.import_power_dict(power_dict)

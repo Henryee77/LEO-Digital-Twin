@@ -273,7 +273,9 @@ class OffPolicyTrainer(object):
   def save_eval_result(self, step_count: int) -> Dict[str, float]:
     if not self.online:
       return
+
     start_time = time.time()
+    self.env.save_episode_result()
     for agent_name in self.ep_reward:
       self.ep_reward[agent_name] /= step_count
     for agent_name, agent in self.leo_agent_dict.items():

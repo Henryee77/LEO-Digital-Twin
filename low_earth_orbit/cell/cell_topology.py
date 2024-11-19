@@ -639,6 +639,27 @@ class CellTopology(object):
     power_mw = sum(util.tolinear(beam.tx_power) for beam in self.beam_list)
     return util.todb(power_mw)
 
+  def export_power_dict(self) -> Dict[int, float]:
+    """Export the tx power of every beam into a dictionary.
+
+    Returns:
+        Dict[int, float]: {beam_index: tx_power}
+    """
+    res = {}
+    for b_idx in range(self.cell_number):
+      res[b_idx] = self.beam_list[b_idx].tx_power
+
+    return res
+
+  def import_power_dict(self, power_dict: Dict[int, float]):
+    """Import the tx power data from a dictionary.
+
+    Args:
+        power_dict (Dict[int, float]): {beam_index: tx_power}
+    """
+    for beam_idx, power in power_dict.items():
+      self.beam_list[beam_idx].tx_power = power
+
   def print_all_beams(self):
     for i, beam in enumerate(self.beam_list):
       print(f"beam: {i}, {beam}")

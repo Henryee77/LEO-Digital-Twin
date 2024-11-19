@@ -95,13 +95,13 @@ class RealWorldEnv(LEOSatEnv):
     ue_throughput = self.constel.cal_throughput(ues=self.ues,
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
-    self._cal_reward(ue_throughput=ue_throughput, no_action=True)
+    reward = self._cal_reward(ue_throughput=ue_throughput, no_action=True)
     self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
     obs = self.get_state_info(beam_training=False)
-    return (obs, self.reward, done, truncated, {})
+    return (obs, reward, done, truncated, {})
 
   def _cal_overhead(self, agent: Agent) -> float:
     leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)

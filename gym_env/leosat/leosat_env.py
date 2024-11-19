@@ -41,7 +41,9 @@ class LEOSatEnv(gym.Env):
     self.ue_dict = {}
     self.prev_cell_sinr = {}
     self.prev_beam_power = {}
-    self.reward = {}
+    self.ee = {}
+    self.data_rate = {}
+    self.overhead = {}
     self.ue_pos_data = {}
     self.load_ues_data()
 
@@ -54,8 +56,6 @@ class LEOSatEnv(gym.Env):
     self.agent_names = agent_names
     self.cell_num = 0
     self.wireless_channel = Channel()
-    if self.leo_agents is not None:
-      self._init_env()
 
     self.step_num = 0
     self.reset_count = 0
@@ -77,6 +77,9 @@ class LEOSatEnv(gym.Env):
     self.overflowed_overhead = {}
     for sat_name in self.agent_names:
       self.overflowed_overhead[sat_name] = 0
+
+    if self.leo_agents is not None:
+      self._init_env()
 
   @ property
   def name(self):
@@ -131,7 +134,8 @@ class LEOSatEnv(gym.Env):
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
 
-    self._cal_reward(ue_throughput=ue_throughput)
+    reward = self._cal_reward(ue_throughput=ue_throughput)
+    # print(self.ee[self.step_num], self.data_rate[self.step_num], self.overhead[self.step_num])
     self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     done = (self.step_num >= self.max_step)
@@ -139,18 +143,29 @@ class LEOSatEnv(gym.Env):
 
     obs = self.get_state_info()
 
-    return (obs, self.reward, done, truncated, {})
+    return (obs, reward, done, truncated, {})
 
   def record_sinr_thpt(self, ue_sinr, ue_throughput):
     if self.last_episode:
       for ue_name, sinr in ue_sinr.items():
-        self.tb_writer.add_scalars(f'{self.name} Env Param/sinr',
+        self.tb_writer.add_scalars(f'{self.name} Env Param/ue sinr',
                                    {ue_name: sinr},
                                    self.step_num + (self.reset_count - 1) * self.max_step)
       for ue_name, throughput in ue_throughput.items():
-        self.tb_writer.add_scalars(f'{self.name} Env Param/throughput',
+        self.tb_writer.add_scalars(f'{self.name} Env Param/ue throughput',
                                    {ue_name: throughput},
                                    self.step_num + (self.reset_count - 1) * self.max_step)
+
+  def save_episode_result(self):
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average overhead',
+                               util.avg_nested_2d_dict(self.overhead),
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average data rate',
+                               util.avg_nested_2d_dict(self.data_rate),
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average EE',
+                               util.avg_nested_2d_dict(self.ee),
+                               self.step_num + (self.reset_count - 1) * self.max_step)
 
   def _take_action(self, action_n: Dict[str, List[float]]):
     satbeam_list = []
@@ -234,9 +249,7 @@ class LEOSatEnv(gym.Env):
 
     return res
 
-  def _cal_reward(self, ue_throughput, no_action=False):
-    for key in self.reward:
-      self.reward[key] = 0.0
+  def _cal_reward(self, ue_throughput: Dict[str, float], no_action=False) -> Dict[str, float]:
     sat_tran_ratio = {}
     if no_action:
       for sat_name in self.leo_agents:
@@ -252,14 +265,17 @@ class LEOSatEnv(gym.Env):
         agent = self.leo_agents[sat_name]
         if len(agent.sat.cell_topo.serving) > 0:
           if sat_name not in sat_tran_ratio:
-            cur_overhead = self._cal_overhead(agent)
-            overhead = cur_overhead + self.overflowed_overhead[sat_name]
+            self.overhead[self.step_num][sat_name] = self._cal_overhead(agent)
+            overhead = self.overhead[self.step_num][sat_name] + self.overflowed_overhead[sat_name]
             self.overflowed_overhead[sat_name] += (overhead - constant.MOVING_TIMESLOT)
             self.overflowed_overhead[sat_name] = max(0, self.overflowed_overhead[sat_name])
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
 
-          self.reward[sat_name] += (sat_tran_ratio[sat_name] * throughput /
-                                    (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6)
+          self.data_rate[self.step_num][sat_name] += sat_tran_ratio[sat_name] * throughput
+          self.ee[self.step_num][sat_name] += (sat_tran_ratio[sat_name] * throughput /
+                                               (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6)
+
+    return self.ee[self.step_num]
 
   def _cal_overhead(self, agent: Agent) -> float:
     pass
@@ -312,13 +328,21 @@ class LEOSatEnv(gym.Env):
       self.ue_dict[ue.name] = ue
     self.nmc = self.make_nmc(constel=self.constel, ues=self.ues)
 
+    for t in range(self.max_step + 1):
+      self.ee[t] = {}
+      self.data_rate[t] = {}
+      self.overhead[t] = {}
+      for sat_name in self.agent_names:
+        self.ee[t][sat_name] = 0
+        self.data_rate[t][sat_name] = 0
+        self.overhead[t][sat_name] = 0
+
     for sat_name in self.agent_names:
       self.leo_agents[sat_name].sat = self.constel.all_sat[sat_name]
       self.leo_agents[sat_name].sat.servable = self.ues
       cell_num = self.leo_agents[sat_name].sat.cell_topo.cell_number
       self.prev_cell_sinr[sat_name] = np.zeros((cell_num, ))
       self.prev_beam_power[sat_name] = np.zeros((cell_num, ))
-      self.reward[sat_name] = 0.0
 
     # TODO would not be feasible if cell_num is dynamic or is non-identical
     self.cell_num = self.leo_agents[self.agent_names[0]].sat.cell_topo.cell_number
@@ -352,7 +376,7 @@ class LEOSatEnv(gym.Env):
     plt.ylim((constant.ORIGIN_LATI - self.plot_range,
              constant.ORIGIN_LATI + self.plot_range))
     self.ax.set_title(f'{self.name}    t: {self.step_num},\n'
-                      f'reward: {self.reward[sat_name]:7.2f}, '
+                      f'ee: {self.ee[self.step_num][sat_name]:7.2f}, '
                       f'power: {self.leo_agents[sat_name].sat.all_power:3.2f} dBm', {'fontsize': 28})
     # self.leo_agents[sat_name].sat.cell_topo.print_all_beams()
     plt.show()

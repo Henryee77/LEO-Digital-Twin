@@ -173,13 +173,12 @@ class Constellation(object):
       self.all_sat[sat_name].select_train_by_topo(ues)
 
     # Beam sweeping schemes
-    total_sweeping_time = 0
     if scan_mode == 'SCBS':
-      sat_ues_sinr = self.SCBS()
+      sat_ues_sinr = self.SCBS(ues, sat_name_list)
     elif scan_mode == 'SSBS':
-      sat_ues_sinr = self.SSBS()
+      sat_ues_sinr = self.SSBS(ues, sat_name_list)
     elif scan_mode == 'ABS':
-      sat_ues_sinr = self.ABS()
+      sat_ues_sinr = self.ABS(ues, sat_name_list)
     else:
       raise ValueError(f'No {scan_mode} beam sweeping mode.')
 
