@@ -17,16 +17,19 @@ def main(args):
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   print(device)
   # Create directories
-  tb_log_path = f'./tb_result/{args.dir_name}'
-  if not os.path.exists(tb_log_path):
-    os.makedirs(tb_log_path)
+  tb_path = f'./log/{args.dir_name}'
+  log_path = tb_path
+  if not os.path.exists(tb_path):
+    os.makedirs(tb_path)
+  if not os.path.exists(log_path):
+    os.makedirs(log_path)
   if not os.path.exists('./pytorch_models'):
     os.makedirs('./pytorch_models')
   if not os.path.exists('./config'):
     os.makedirs('./config')
 
   # Set logs
-  tb_writer = SummaryWriter(log_dir=f'{tb_log_path}/tb_{args.log_name}')
+  tb_writer = SummaryWriter(log_dir=f'{tb_path}/tb_{args.log_name}')
   log = misc.set_log(args)
   saving_directory = 'pytorch_models'
   loading_directory = 'pytorch_models'
@@ -287,6 +290,12 @@ if __name__ == '__main__':
       help='Period of federated uploading')
   parser.add_argument(
       '--federated-download-period', default=80, type=int,
+      help='Period of federated downloading')
+  parser.add_argument(
+      '--twin-sharing-upload-period', default=5, type=int,
+      help='Period of federated uploading')
+  parser.add_argument(
+      '--twin-sharing-download-period', default=5, type=int,
       help='Period of federated downloading')
   parser.add_argument(
       '--historical-smoothing-coef', default=0.9, type=float,

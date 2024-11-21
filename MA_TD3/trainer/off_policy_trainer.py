@@ -106,13 +106,12 @@ class OffPolicyTrainer(object):
         return np.concatenate((self.cur_states[sat_name], self.cur_states[sat_name][:twin_state_len]))
     else:
       return np.concatenate((self.cur_states[sat_name], self.twin_trainer.cur_states[sat_name]))
+    
 
-  def copy_NN_from_twin(self):
-    if self.online:
-      raise ValueError('You cannot copy the NN to the online agents.')
 
+  def twin_parameter_sharing(self):
     if not self.twin_trainer.online:
-      print(f'{self.twin_trainer.env.unwrapped.name} is not online. No NN is copied to {self.env.unwrapped.name}')
+      print(f'{self.twin_trainer.env.unwrapped.name} is not online. No NN is copied to {self.twin_trainer.env.unwrapped.name}')
     else:
       for sat_name in self.leo_agent_dict:
         pretrained_actor, pretrained_critic = self.twin_trainer.leo_agent_dict[sat_name].model_state_dict
@@ -275,7 +274,7 @@ class OffPolicyTrainer(object):
       return
 
     start_time = time.time()
-    self.env.save_episode_result()
+    self.env.unwrapped.save_episode_result()
     for agent_name in self.ep_reward:
       self.ep_reward[agent_name] /= step_count
     for agent_name, agent in self.leo_agent_dict.items():
