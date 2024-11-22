@@ -22,7 +22,7 @@ if __name__ == '__main__':
     return d_start_ep, r_start_ep, ps_period, twin_sharing_period
 
   # dir_name = f'Baseline Comparison {max_ep} eps'
-  dir_name = 'test'
+  dir_name = 'debug'
 
   for ue_num in ue_num_list:
     for mode in mode_list:

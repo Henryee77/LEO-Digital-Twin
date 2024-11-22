@@ -2,7 +2,7 @@
 TD3 Ref: https://github.com/sfujim/TD3
 """
 import copy
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from collections import OrderedDict
 import torch
 import torch.nn as nn
@@ -118,8 +118,13 @@ class TD3(PolicyBase):
     self.discount = args.discount
     self.tau = args.tau
     self.policy_freq = args.policy_freq
-    self._nn_param_num = (sum(p.numel() for p in self.actor.parameters() if p.requires_grad) +
-                          sum(p.numel() for p in self.critic.parameters() if p.requires_grad))
+
+    a_layer_num = iter([p.numel() for p in self.actor.parameters() if p.requires_grad])
+    c_layer_num = iter([p.numel() for p in self.critic.parameters() if p.requires_grad])
+    self.__actor_layer_param_num = [x + y for x, y in zip(a_layer_num, a_layer_num)]
+    self.__critic_layer_param_num = [x + y for x, y in zip(c_layer_num, c_layer_num)]
+    self.__nn_param_num = (sum(self.actor_layer_param_num) +
+                           sum(self.critic_layer_param_num))
 
   @ property
   def actor_layer_num(self):
@@ -134,8 +139,16 @@ class TD3(PolicyBase):
     return self.critic.q_network_num
 
   @property
+  def actor_layer_param_num(self) -> List[int]:
+    return self.__actor_layer_param_num
+
+  @property
+  def critic_layer_param_num(self) -> List[int]:
+    return self.__critic_layer_param_num
+
+  @property
   def nn_param_num(self) -> int:
-    return self._nn_param_num
+    return self.__nn_param_num
 
   def select_action(self, state):
     state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)

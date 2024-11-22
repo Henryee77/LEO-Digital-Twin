@@ -17,8 +17,8 @@ def main(args):
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   print(device)
   # Create directories
-  tb_path = f'./log/{args.dir_name}'
-  log_path = tb_path
+  tb_path = f'./tb_result/{args.dir_name}'
+  log_path = f'./log/{args.dir_name}'
   if not os.path.exists(tb_path):
     os.makedirs(tb_path)
   if not os.path.exists(log_path):
@@ -193,10 +193,9 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
        real_step_total_reward,
        real_done) = realworld_trainer.take_action(real_actions)
 
-      if time_count % args.twin_sharing_upload_period == 0:
+      if time_count % args.twin_sharing_period == 0:
         digitalworld_trainer.twin_parameter_query()
         realworld_trainer.twin_parameter_query()
-      if time_count % args.twin_sharing_download_period == 0:
         digitalworld_trainer.twin_parameter_update()
         realworld_trainer.twin_parameter_update()
 
@@ -302,11 +301,8 @@ if __name__ == '__main__':
       '--federated-layer-num-per-turn', default=2, type=int,
       help='number of layers per federated uploading')
   parser.add_argument(
-      '--twin-sharing-upload-period', default=5, type=int,
+      '--twin-sharing-period', default=5, type=int,
       help='Period of twin sharing uploading')
-  parser.add_argument(
-      '--twin-sharing-download-period', default=5, type=int,
-      help='Period of twin sharing downloading')
   parser.add_argument(
       '--twin-sharing-layer-num-per-turn', default=1, type=int,
       help='number of layers per twin sharing')

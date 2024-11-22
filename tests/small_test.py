@@ -1,4 +1,5 @@
 
+from MA_TD3.agent import Agent
 from MA_TD3.misc.replay_buffer import ReplayBuffer
 from low_earth_orbit.util import util
 import math
@@ -7,10 +8,8 @@ from random import sample
 
 start_time = time.time()
 
-lst = [('1', 10), ('1', 3)]
-a = set(x for x in lst)
-print(a)
-tup = ('1', 10)
-print(a.difference(tup))
+a = [i for i in range(6)]
+idx = [1, 2]
+print(a[idx])
 
 print(time.time() - start_time)

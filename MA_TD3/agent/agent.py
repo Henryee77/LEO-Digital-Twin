@@ -239,6 +239,18 @@ class Agent(object):
   def computation_latency(self) -> float:
     return constant.F_0 * self.nn_param_num / self.comp_freq
 
+  @property
+  def twin_sharing_param_num(self):
+    self.__twin_sharing_param_num
+
+  @twin_sharing_param_num.setter
+  def twin_sharing_param_num(self, num):
+    self.__twin_sharing_param_num = num
+
+  def set_twin_sharing_param_num(self, a_idx_list, c_idx_list):
+    self.twin_sharing_param_num = (sum([self.policy.actor_layer_param_num[a_idx] for a_idx in a_idx_list]) +
+                                   sum([self.policy.critic_layer_param_num[c_idx] for c_idx in c_idx_list]))
+
   def get_scaled_pos(self, plot_range: float) -> npt.NDArray[np.float32]:
     return np.array([util.rescale_value(self.sat.position.geodetic.longitude,
                                         constant.ORIGIN_LONG - plot_range,

@@ -125,10 +125,11 @@ class OffPolicyTrainer(object):
         agent = self.leo_agent_dict[agent_name]
         twin_agent = self.twin_trainer.leo_agent_dict[agent_name]
         twin_actor, twin_critic = twin_agent.model_state_dict
-        a_rand_idx, c_rand_idx = misc.agent_sharing_layer(self.args, agent, self.args.twin_sharing_layer_num_per_turn)
+        a_idx_list, c_idx_list = misc.agent_sharing_layer(self.args, agent, self.args.twin_sharing_layer_num_per_turn)
+        agent.set_twin_sharing_param_num(a_idx_list, c_idx_list)
 
-        agent.twin_sharing_actor = misc.copy_layers_from_actor(twin_actor, a_rand_idx)
-        agent.twin_sharing_critic = misc.copy_layers_from_critic(twin_critic, c_rand_idx, agent.q_network_num)
+        agent.twin_sharing_actor = misc.copy_layers_from_actor(twin_actor, a_idx_list)
+        agent.twin_sharing_critic = misc.copy_layers_from_critic(twin_critic, c_idx_list, agent.q_network_num)
 
     self.twin_sharing_time += time.time() - ps_start_time
 
@@ -151,16 +152,16 @@ class OffPolicyTrainer(object):
         self.parameter_db[agent_name]['critic'] = copy.deepcopy(
           agent.critic_state_dict)
       else:
-        a_rand_idx, c_rand_idx = misc.agent_sharing_layer(self.args, agent, self.args.federated_layer_num_per_turn)
+        a_idx_list, c_idx_list = misc.agent_sharing_layer(self.args, agent, self.args.federated_layer_num_per_turn)
 
         cur_actor_state_dict, cur_critic_state_dict = agent.model_state_dict
 
         # Upload a random layer of the actor network to the central server
-        a_upload_dict = misc.copy_layers_from_actor(cur_actor_state_dict, a_rand_idx)
+        a_upload_dict = misc.copy_layers_from_actor(cur_actor_state_dict, a_idx_list)
         self.parameter_db[agent_name]['actor'].update(a_upload_dict)
 
         # Upload a random layer of the critic network to the central server
-        c_upload_dict = misc.copy_layers_from_critic(cur_critic_state_dict, c_rand_idx, agent.q_network_num)
+        c_upload_dict = misc.copy_layers_from_critic(cur_critic_state_dict, c_idx_list, agent.q_network_num)
 
         self.parameter_db[agent_name]['critic'].update(c_upload_dict)
 

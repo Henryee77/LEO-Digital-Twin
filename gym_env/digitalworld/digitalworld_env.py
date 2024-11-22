@@ -112,11 +112,27 @@ class DigitalWorldEnv(LEOSatEnv):
                            + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
                            + util.propagation_delay(leo2dt_distance))
 
-    feedback_overhead = (agent.sat.trans_latency(len(self.ues) * constant.FLOAT_SIZE, self.dt_server)
-                         + util.propagation_delay(leo2dt_distance))
+    state_exchange_overhead = (agent.sat.trans_latency(agent.state_dim * constant.FLOAT_SIZE, self.dt_server)
+                               + self.dt_server.trans_latency(agent.state_dim * constant.FLOAT_SIZE)
+                               + 2 * util.propagation_delay(leo2dt_distance))
+
+    leo_feedback_size = ((len(self.ues) + self.real_agents[agent.sat_name].twin_sharing_param_num / self.args.twin_sharing_period)
+                         * constant.FLOAT_SIZE)
+    leo_feedback_latency = agent.sat.trans_latency(leo_feedback_size, self.dt_server)
+
+    dt_feedback_size = ((self.digital_agents[agent.sat_name].twin_sharing_param_num / self.args.twin_sharing_period)
+                        * constant.FLOAT_SIZE)
+
+    dt_feedback_latency = self.dt_server.trans_latency(dt_feedback_size)
+
+    feedback_overhead = (leo_feedback_latency
+                         + dt_feedback_latency
+                         + 2 * util.propagation_delay(leo2dt_distance))
 
     overhead = (max(realworld_header, digitalworld_header)
-                + agent.computation_latency + feedback_overhead)
+                + state_exchange_overhead
+                + agent.computation_latency
+                + feedback_overhead)
 
     if self.last_episode:
       self.tb_writer.add_scalars(f'{self.name} Env Param/overhead',
