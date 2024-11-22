@@ -22,6 +22,8 @@ from ..misc import misc
 class OffPolicyTrainer(object):
   """The trainer class"""
 
+  parameter_db: Dict[str, Dict[str, OrderedDict]]
+
   def __init__(self, args: Namespace, log: Dict[str, Logger], tb_writer: SummaryWriter, env: DigitalWorldEnv | RealWorldEnv, leo_agent_dict: Dict[str, Agent], online=False):
     self.args = args
     self.log = log
@@ -40,13 +42,16 @@ class OffPolicyTrainer(object):
       self.__cur_states[agent_name] = [0] * agent.state_dim
 
     self.parameter_db = {}
+    self.twin_nn = {}
     for agent_name in leo_agent_dict.keys():
       self.parameter_db[agent_name] = {}
+      self.twin_nn[agent_name] = {}
     self.weight_db = {}
 
     self.sat_sim_time = 0
     self.nn_train_time = 0
-    self.param_sharing_time = 0
+    self.federated_sharing_time = 0
+    self.twin_sharing_time = 0
     self.total_training_time = 0
     self.nn_action_time = 0
     self.tb_time = 0
@@ -66,10 +71,12 @@ class OffPolicyTrainer(object):
 
   @twin_trainer.setter
   def twin_trainer(self, trainer: OffPolicyTrainer):
-    if not self.__twin_trainer:
-      self.__twin_trainer = trainer
+    if self.__twin_trainer:
+      raise ValueError(f'{self.twin_trainer.env.unwrapped.name} is gonna replaced by {trainer.env.unwrapped.name}')
+    elif self is trainer:
+      raise ValueError(f'{self.env.unwrapped.name} is same as the assigned twin trainer {trainer.env.unwrapped.name}')
     else:
-      raise ValueError(f'{self.twin_trainer.env.unwrapped.name} is gonna replace by {trainer.env.unwrapped.name}')
+      self.__twin_trainer = trainer
 
   @property
   def cur_states(self):
@@ -106,17 +113,32 @@ class OffPolicyTrainer(object):
         return np.concatenate((self.cur_states[sat_name], self.cur_states[sat_name][:twin_state_len]))
     else:
       return np.concatenate((self.cur_states[sat_name], self.twin_trainer.cur_states[sat_name]))
-    
 
+  def twin_parameter_query(self):
+    ps_start_time = time.time()
 
-  def twin_parameter_sharing(self):
     if not self.twin_trainer.online:
-      print(f'{self.twin_trainer.env.unwrapped.name} is not online. No NN is copied to {self.twin_trainer.env.unwrapped.name}')
+      print(f'{self.twin_trainer.env.unwrapped.name} is not online.')
+      return
     else:
-      for sat_name in self.leo_agent_dict:
-        pretrained_actor, pretrained_critic = self.twin_trainer.leo_agent_dict[sat_name].model_state_dict
-        self.leo_agent_dict[sat_name].load_actor_state_dict(pretrained_actor)
-        self.leo_agent_dict[sat_name].load_critic_state_dict(pretrained_critic)
+      for agent_name in self.leo_agent_dict:
+        agent = self.leo_agent_dict[agent_name]
+        twin_agent = self.twin_trainer.leo_agent_dict[agent_name]
+        twin_actor, twin_critic = twin_agent.model_state_dict
+        a_rand_idx, c_rand_idx = misc.agent_sharing_layer(self.args, agent, self.args.twin_sharing_layer_num_per_turn)
+
+        agent.twin_sharing_actor = misc.copy_layers_from_actor(twin_actor, a_rand_idx)
+        agent.twin_sharing_critic = misc.copy_layers_from_critic(twin_critic, c_rand_idx, agent.q_network_num)
+
+    self.twin_sharing_time += time.time() - ps_start_time
+
+  def twin_parameter_update(self):
+    ps_start_time = time.time()
+
+    for agent in self.leo_agent_dict.values():
+      agent.update_nn_from_twin_sharing()
+
+    self.twin_sharing_time += time.time() - ps_start_time
 
   def federated_upload(self):
     """Federated uploading for the models of the given agents."""
@@ -129,51 +151,22 @@ class OffPolicyTrainer(object):
         self.parameter_db[agent_name]['critic'] = copy.deepcopy(
           agent.critic_state_dict)
       else:
-        if self.args.partial_upload_type == 'random':
-          a_rand_idx = random.sample(range(0, int(agent.actor_layer_num)),
-                                     self.args.uploaded_layer_num_per_turn)
-          c_rand_idx = random.sample(range(0, int(agent.critic_layer_num)),
-                                     self.args.uploaded_layer_num_per_turn)
-
-        elif self.args.partial_upload_type == 'by-turns':
-          # 0-index
-          a_rand_idx, agent.cur_actorlayer_idx = misc.circ_range(agent.cur_actorlayer_idx,
-                                                                 self.args.uploaded_layer_num_per_turn,
-                                                                 agent.actor_layer_num)
-          c_rand_idx, agent.cur_criticlayer_idx = misc.circ_range(agent.cur_criticlayer_idx,
-                                                                  self.args.uploaded_layer_num_per_turn,
-                                                                  agent.actor_layer_num)
-
-        else:
-          raise ValueError(
-            f'No \"{self.args.partial_upload_type}\" partial upload type.')
+        a_rand_idx, c_rand_idx = misc.agent_sharing_layer(self.args, agent, self.args.federated_layer_num_per_turn)
 
         cur_actor_state_dict, cur_critic_state_dict = agent.model_state_dict
 
         # Upload a random layer of the actor network to the central server
-        a_upload_dict = OrderedDict()
-        for a_idx in a_rand_idx:
-          key = f'network.fc_{a_idx}.weight'
-          a_upload_dict[key] = copy.deepcopy(cur_actor_state_dict[key])
-          key = f'network.fc_{a_idx}.bias'
-          a_upload_dict[key] = copy.deepcopy(cur_actor_state_dict[key])
-
+        a_upload_dict = misc.copy_layers_from_actor(cur_actor_state_dict, a_rand_idx)
         self.parameter_db[agent_name]['actor'].update(a_upload_dict)
 
         # Upload a random layer of the critic network to the central server
-        c_upload_dict = OrderedDict()
-        for c_idx in c_rand_idx:
-          for qi in range(agent.q_network_num):
-            key = f'q{qi + 1}_network.fc_{c_idx}.weight'
-            c_upload_dict[key] = copy.deepcopy(cur_critic_state_dict[key])
-            key = f'q{qi + 1}_network.fc_{c_idx}.bias'
-            c_upload_dict[key] = copy.deepcopy(cur_critic_state_dict[key])
+        c_upload_dict = misc.copy_layers_from_critic(cur_critic_state_dict, c_rand_idx, agent.q_network_num)
 
         self.parameter_db[agent_name]['critic'].update(c_upload_dict)
 
       self.weight_db[agent_name] = agent.sharing_weight
 
-    self.param_sharing_time += time.time() - ps_start_time
+    self.federated_sharing_time += time.time() - ps_start_time
 
   def federated_download(self):
     """Federated dowloading for the models of the given agents."""
@@ -221,7 +214,7 @@ class OffPolicyTrainer(object):
       agent.load_actor_state_dict(actor_sd)
       agent.load_critic_state_dict(critic_sd)
 
-    self.param_sharing_time += time.time() - ps_start_time
+    self.federated_sharing_time += time.time() - ps_start_time
 
   def train(self):
     """
@@ -241,15 +234,16 @@ class OffPolicyTrainer(object):
 
     self.nn_train_time += time.time() - nn_start_time
 
-    if self.total_timesteps % self.args.federated_upload_period == 0:
-      self.federated_upload()
-
-    if self.total_timesteps % self.args.federated_download_period == 0:
-      self.federated_download()
+    if self.env.unwrapped.name == self.args.digital_env_name:
+      if self.total_timesteps % self.args.federated_upload_period == 0:
+        self.federated_upload()
+      if self.total_timesteps % self.args.federated_download_period == 0:
+        self.federated_download()
 
   def print_time(self):
     self.total_training_time = (self.sat_sim_time + self.nn_train_time +
-                                self.param_sharing_time + self.nn_action_time + self.init_time + self.tb_time)
+                                self.federated_sharing_time + self.twin_sharing_time +
+                                self.nn_action_time + self.init_time + self.tb_time)
     if self.total_training_time == 0:
       return
     print('------------------------------')
@@ -259,7 +253,9 @@ class OffPolicyTrainer(object):
     print(
       f'NN training time ratio: {self.nn_train_time / self.total_training_time * 100:.2f} %')
     print(
-      f'Parameter sharing time ratio: {self.param_sharing_time / self.total_training_time * 100:.2f} %')
+      f'Federated sharing time ratio: {self.federated_sharing_time / self.total_training_time * 100:.2f} %')
+    print(
+      f'Twin sharing time ratio: {self.twin_sharing_time / self.total_training_time * 100:.2f} %')
     print(
       f'Initialize Env time ratio: {self.init_time / self.total_training_time * 100:.2f} %')
     print(

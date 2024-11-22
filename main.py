@@ -30,7 +30,7 @@ def main(args):
 
   # Set logs
   tb_writer = SummaryWriter(log_dir=f'{tb_path}/tb_{args.log_name}')
-  log = misc.set_log(args)
+  log = misc.set_log(args, log_path=log_path)
   saving_directory = 'pytorch_models'
   loading_directory = 'pytorch_models'
   filename = args.model
@@ -193,6 +193,13 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
        real_step_total_reward,
        real_done) = realworld_trainer.take_action(real_actions)
 
+      if time_count % args.twin_sharing_upload_period == 0:
+        digitalworld_trainer.twin_parameter_query()
+        realworld_trainer.twin_parameter_query()
+      if time_count % args.twin_sharing_download_period == 0:
+        digitalworld_trainer.twin_parameter_update()
+        realworld_trainer.twin_parameter_update()
+
       digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
                                                 action_dict=digital_actions,
                                                 total_reward=digital_step_total_reward,
@@ -247,7 +254,7 @@ if __name__ == '__main__':
       help='Number of hidden neuron')
   parser.add_argument(
       '--training-period', default=25, type=int,
-      help='Peiord (number of timeslot) of NN training.')
+      help='Peiord (number of radio frame) of NN training.')
   parser.add_argument(
       '--replay-buffer-size', default=2000, type=int,
       help='The printing number of the network weight (for debug)')
@@ -292,20 +299,23 @@ if __name__ == '__main__':
       '--federated-download-period', default=80, type=int,
       help='Period of federated downloading')
   parser.add_argument(
+      '--federated-layer-num-per-turn', default=2, type=int,
+      help='number of layers per federated uploading')
+  parser.add_argument(
       '--twin-sharing-upload-period', default=5, type=int,
-      help='Period of federated uploading')
+      help='Period of twin sharing uploading')
   parser.add_argument(
       '--twin-sharing-download-period', default=5, type=int,
-      help='Period of federated downloading')
+      help='Period of twin sharing downloading')
+  parser.add_argument(
+      '--twin-sharing-layer-num-per-turn', default=1, type=int,
+      help='number of layers per twin sharing')
   parser.add_argument(
       '--historical-smoothing-coef', default=0.9, type=float,
       help='The smoothing coefficient of the historical average reward')
   parser.add_argument(
       '--max-sharing-weight', default=2, type=float,
       help='Maximum weight of parameter sharing for each agent')
-  parser.add_argument(
-      '--uploaded-layer-num-per-turn', default=2, type=int,
-      help='number of layers per uploading')
   parser.add_argument(
       '--partial-upload-type', default='by-turns', type=str,
       help='"random" or "by-turns"')

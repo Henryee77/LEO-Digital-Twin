@@ -1,7 +1,10 @@
 """utils.py for NN training"""
+from __future__ import annotations
+from typing import TYPE_CHECKING
 import csv
 import copy
 import math
+import random
 import logging
 from logging import Logger
 from datetime import datetime
@@ -10,8 +13,6 @@ from typing import List, Tuple, Dict, OrderedDict
 
 import torch
 from torch import nn
-import torch.nn.functional as F
-from torch.autograd import Variable
 from tensorboardX import SummaryWriter
 import gymnasium as gym
 from gymnasium import spaces
@@ -19,11 +20,13 @@ import yaml
 import git
 import numpy as np
 import matplotlib.pyplot as plt
-from gym_env.leosat import LEOSatEnv
 import gym_env  # this line is neccessary, don't delete it.
 
-from MA_TD3.agent.agent import Agent
 from low_earth_orbit.util import constant
+if TYPE_CHECKING:
+  from gym_env.leosat import LEOSatEnv
+  from MA_TD3.agent.agent import Agent
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -71,7 +74,7 @@ def set_logger(logger_name, log_file, level=logging.INFO):
   log.addHandler(streamHandler)
 
 
-def set_log(args, path=".") -> Dict[str, Logger]:
+def set_log(args, log_path, repo_path=".") -> Dict[str, Logger]:
   """Loads and replaces default parameters with experiment specific parameters.
 
   Args:
@@ -87,13 +90,13 @@ def set_log(args, path=".") -> Dict[str, Logger]:
   log = {}
   set_logger(
       logger_name=args.log_name,
-      log_file=r'{0}{1}'.format('./log/', args.log_name))
+      log_file=f'{log_path}/{args.log_name}')
   log[args.log_name] = logging.getLogger(args.log_name)
 
   for arg, value in sorted(vars(args).items()):
     log[args.log_name].info("%s: %r", arg, value)
 
-  repo = git.Repo(path)
+  repo = git.Repo(repo_path)
   log[args.log_name].info('Branch: {}'.format(repo.active_branch))
   log[args.log_name].info('Commit: {}'.format(repo.head.commit))
 
@@ -117,13 +120,12 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
   """Return the circular space of modulo
 
   Args:
-      start (int): start value.
-      num (int): number of the list.
-      modulo (int): modulo.
+    start (int): start value.
+    num (int): number of the list.
+    modulo (int): modulo.
 
   Returns:
-      List[int]: [start, start + 1, ..., start + num] % modulo
-      int: The next index.
+    Tuple[List[int], int]: [start, start + 1, ..., start + num] % modulo, The next index.
   """
   result = []
   index = start
@@ -137,7 +139,7 @@ def load_rt_file(filename: str) -> Dict[str, Dict[int, Dict[str, float]]]:
   """Load the ray tracing simulation result file.
   ### Nested dictionary hierarchy:
     {t: {sat_name: {beam_index: [ray tracing data 1, ..., ray tracing data N]}}}
-  ### Key of ray tracing data: 
+  ### Key of ray tracing data:
     - ue
     - received power (W)
     - phase (radians)
@@ -147,7 +149,8 @@ def load_rt_file(filename: str) -> Dict[str, Dict[int, Dict[str, float]]]:
     - h_i
   ### Example:
     ray_tracing_data = misc.load_rt_file()
-    target_ue_path_loss = [data['path loss (dB)'] for data in ray_tracing_data[t][sat_name][beam_index] if data['ue'] == target_ue]
+    target_ue_path_loss = [data['path loss (dB)'] for data in ray_tracing_data[t]
+                                            [sat_name][beam_index] if data['ue'] == target_ue]
   """
 
   rt_result = {}
@@ -247,3 +250,57 @@ def generate_state_space(agent_type: str, cell_num: int, pos_dim: int = 2):
                                  dtype=np.float32)
 
   return observation_space, pos_slice, beam_info_slice
+
+
+def agent_sharing_layer(args, agent: Agent, layer_num: int) -> Tuple[List[int], List[int]]:
+  """Get the sharing layer index of the agent.
+
+  Args:
+      args (_type_): args
+      agent (Agent): Agent
+
+  Returns:
+      Tuple[List[int], List[int]]: sharing layer index of actor, sharing layer index of critic
+  """
+  if args.partial_upload_type == 'random':
+    a_rand_idx = random.sample(range(0, int(agent.actor_layer_num)),
+                               layer_num)
+    c_rand_idx = random.sample(range(0, int(agent.critic_layer_num)),
+                               layer_num)
+
+  elif args.partial_upload_type == 'by-turns':
+    # 0-index
+    a_rand_idx, agent.cur_actorlayer_idx = circ_range(agent.cur_actorlayer_idx,
+                                                      layer_num,
+                                                      agent.actor_layer_num)
+    c_rand_idx, agent.cur_criticlayer_idx = circ_range(agent.cur_criticlayer_idx,
+                                                       layer_num,
+                                                       agent.actor_layer_num)
+  else:
+    raise ValueError(
+      f'No \"{args.partial_upload_type}\" partial upload type.')
+
+  return a_rand_idx, c_rand_idx
+
+
+def copy_layers_from_actor(cur_actor_state_dict, a_rand_idx) -> OrderedDict:
+  a_upload_dict = OrderedDict()
+  for a_idx in a_rand_idx:
+    key = f'network.fc_{a_idx}.weight'
+    a_upload_dict[key] = copy.deepcopy(cur_actor_state_dict[key])
+    key = f'network.fc_{a_idx}.bias'
+    a_upload_dict[key] = copy.deepcopy(cur_actor_state_dict[key])
+
+  return a_upload_dict
+
+
+def copy_layers_from_critic(cur_critic_state_dict, c_rand_idx, qn_num) -> OrderedDict:
+  c_upload_dict = OrderedDict()
+  for c_idx in c_rand_idx:
+    for qi in range(qn_num):
+      key = f'q{qi + 1}_network.fc_{c_idx}.weight'
+      c_upload_dict[key] = copy.deepcopy(cur_critic_state_dict[key])
+      key = f'q{qi + 1}_network.fc_{c_idx}.bias'
+      c_upload_dict[key] = copy.deepcopy(cur_critic_state_dict[key])
+
+  return c_upload_dict

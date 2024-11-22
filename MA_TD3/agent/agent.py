@@ -6,6 +6,7 @@ from gymnasium import spaces
 from torch import device
 from torch.utils.tensorboard import SummaryWriter
 from argparse import Namespace
+import torch
 import numpy as np
 import numpy.typing as npt
 from ..misc.replay_buffer import ReplayBuffer
@@ -15,7 +16,6 @@ from low_earth_orbit.util.position import Position, Geodetic
 from low_earth_orbit.util import constant
 from low_earth_orbit.satellite.satellite import Satellite
 from low_earth_orbit.cell.cell_topology import CellTopology
-from low_earth_orbit.antenna.antenna import Antenna
 from low_earth_orbit.util import util
 
 
@@ -55,9 +55,10 @@ class Agent(object):
     self.beta_pow_n = self.beta
     self.historical_avg_reward = 0
 
-    self._federated_update_rate = args.federated_update_rate
     self.cur_actorlayer_idx = 1
     self.cur_criticlayer_idx = 1
+    self.twin_sharing_actor = None
+    self.twin_sharing_critic = None
 
   def _init_dim(self):
 
@@ -198,7 +199,7 @@ class Agent(object):
 
   @property
   def federated_update_rate(self):
-    return self._federated_update_rate
+    return self.args.federated_update_rate
 
   @property
   def cur_actorlayer_idx(self):
@@ -255,6 +256,16 @@ class Agent(object):
 
   def load_critic_state_dict(self, state_dict):
     self.policy.load_critic_state_dict(state_dict)
+
+  def update_nn_from_twin_sharing(self):
+    tau = self.federated_update_rate
+    for key in self.twin_sharing_actor:
+      self.actor_state_dict[key] = torch.add(torch.mul(self.actor_state_dict[key], 1 - tau),
+                                             torch.mul(self.twin_sharing_actor[key], tau))
+
+    for key in self.twin_sharing_critic:
+      self.critic_state_dict[key] = torch.add(torch.mul(self.critic_state_dict[key], 1 - tau),
+                                              torch.mul(self.twin_sharing_critic[key], tau))
 
   def save_weight(self, filename, directory):
     self.log[self.args.log_name].info("[{}] Saved weight".format(self.name))
