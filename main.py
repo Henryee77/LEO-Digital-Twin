@@ -332,13 +332,16 @@ if __name__ == '__main__':
       '--digital-env-name', type=str, default='DigitalWorld-v0',
       help='OpenAI gym environment name. Correspond to the digital twins')
   parser.add_argument(
+      '--beam-sweeping-mode', type=str, default='ABS',
+      help='Beam-sweeping mode')
+  parser.add_argument(
       '--max-ep-num', type=int, required=True,
       help='Total number of episodes')
   parser.add_argument(
       '--max-time-per-ep', default=100, type=int,
       help='Total number of steps in one episode')
   parser.add_argument(
-      '--action_timeslot', default=constant.MOVING_TIMESLOT, type=int,
+      '--action-timeslot', default=constant.DEFAULT_ACTION_TIMESLOT, type=int,
       help='Total number of steps in one episode')
   parser.add_argument(
       '--eval-period', default=10, type=int,

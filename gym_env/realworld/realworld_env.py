@@ -59,7 +59,9 @@ class RealWorldEnv(LEOSatEnv):
     state_dict = {}
 
     # Beam Training
-    ues_sinr = self.constel.scan_ues(ues=self.ues, sat_name_list=self.agent_names)
+    ues_sinr = self.constel.scan_ues(ues=self.ues,
+                                     sat_name_list=self.agent_names,
+                                     scan_mode=self.args.beam_sweeping_mode)
 
     for sat_name in self.agent_names:
       # Sinr feedback to state

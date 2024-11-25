@@ -24,6 +24,7 @@ MONTH_NUM = 12
 
 # Simulation Configuration
 MOVING_TIMESLOT = 1  # movement period (sec)
+DEFAULT_ACTION_TIMESLOT = MOVING_TIMESLOT * 2
 STARTING_TIMESLOT = -40
 
 # Beam-Training Parameteres

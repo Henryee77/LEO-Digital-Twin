@@ -154,7 +154,7 @@ class Constellation(object):
     })
     plt.pause(0.1)
 
-  def scan_ues(self, ues: List[User], sat_name_list: List[str] = None, scan_mode='ABS') -> Dict[str, Dict[str, List[float]]]:
+  def scan_ues(self, ues: List[User], sat_name_list: List[str] = None, scan_mode=None) -> Dict[str, Dict[str, List[float]]]:
     """Select the training beam and calculate the RSRP,
        and add the servable data to the user
 
@@ -180,7 +180,7 @@ class Constellation(object):
     elif scan_mode == 'ABS':
       sat_ues_sinr = self.ABS(ues, sat_name_list)
     else:
-      raise ValueError(f'No {scan_mode} beam sweeping mode.')
+      raise ValueError(f'No \'{scan_mode}\' beam sweeping mode.')
 
     return sat_ues_sinr
 

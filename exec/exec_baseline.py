@@ -4,11 +4,11 @@ import os
 if __name__ == '__main__':
   ue_num_list = [3]
   max_ep = 1_000
-  mode_list = ['DT + PS', 'DT', 'No DT']
+  mode_list = ['DT + TS', 'DT', 'No DT']
   step_num = 100
 
   def mode_2_start_ep(mode):
-    if mode == 'DT + PS':
+    if mode == 'DT + TS':
       d_start_ep = 0
       r_start_ep = 0
       ps_period = 80
