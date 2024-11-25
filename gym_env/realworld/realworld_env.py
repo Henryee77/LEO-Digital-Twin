@@ -74,10 +74,10 @@ class RealWorldEnv(LEOSatEnv):
 
     return state_dict
 
-  def get_state_info(self, beam_training=True) -> Dict[str, List[float]]:
+  def get_state_info(self, has_action=True) -> Dict[str, List[float]]:
     state_dict = {}
 
-    if beam_training:
+    if has_action:
       bt_state_dict = self.get_beam_training_state()
       self.prev_bt_state = bt_state_dict
     else:
@@ -90,20 +90,24 @@ class RealWorldEnv(LEOSatEnv):
     return state_dict
 
   def no_action_step(self):
-    self.constel.update_sat_position()
-    self.step_num += 1
+
     ue_sinr = self.constel.cal_transmission_sinr(ues=self.ues,
                                                  interference_beams=self.additional_beam_set)
     ue_throughput = self.constel.cal_throughput(ues=self.ues,
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
     reward = self._cal_reward(ue_throughput=ue_throughput, no_action=True)
+
     self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
-    obs = self.get_state_info(beam_training=False)
-    return (obs, reward, done, truncated, {})
+
+    self.step_num += 1
+    self.constel.update_sat_position()
+    has_action = (self.step_num % self.action_period == 0)
+    obs = self.get_state_info(has_action)
+    return (obs, reward, done, truncated, {'has_action': has_action})
 
   def _cal_overhead(self, agent: Agent) -> float:
     leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)

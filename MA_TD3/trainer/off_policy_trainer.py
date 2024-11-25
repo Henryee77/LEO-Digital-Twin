@@ -2,7 +2,7 @@
 from __future__ import annotations
 from logging import Logger
 from collections import OrderedDict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 import copy
 import time
 import random
@@ -301,14 +301,13 @@ class OffPolicyTrainer(object):
         f'{agent.name}/training_reward', {'training_reward': self.ep_reward[agent_name]}, self.total_eps)
     self.tb_time += time.time() - start_time
 
-  def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], float, bool]:
+  def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], float, bool, Dict[Any, Any]]:
     if not self.online:
       return None, None, False
     # Take action in env
     sim_start_time = time.time()
 
-    new_env_observation, env_reward, done, _, _ = self.env.step(action_dict)
-    self.total_timesteps += 1
+    new_env_observation, env_reward, done, _, info = self.env.step(action_dict)
 
     if running_mode == "training":
       self.train()
@@ -320,12 +319,13 @@ class OffPolicyTrainer(object):
     for agent_name in self.leo_agent_dict:
       prev_state_dict[agent_name] = self.combined_state(agent_name)
     self.cur_states = new_env_observation
+    self.total_timesteps += 1
     for agent_name in env_reward:
       self.ep_reward[agent_name] += env_reward[agent_name]
 
     self.sat_sim_time += time.time() - sim_start_time
 
-    return prev_state_dict, sum(env_reward.values()), done
+    return prev_state_dict, sum(env_reward.values()), done, info
 
   def no_action_step(self, running_mode='training'):
     if not self.online:
@@ -333,9 +333,11 @@ class OffPolicyTrainer(object):
     # Take action in env
     sim_start_time = time.time()
 
-    new_env_observation, env_reward, done, _, _ = self.env.no_action_step()
+    new_env_observation, env_reward, done, _, info = self.env.unwrapped.no_action_step()
 
-    if running_mode == "testing":
+    if running_mode == "training":
+      self.train()
+    else:
       self.env.render()
 
     # For next timesteps
@@ -346,7 +348,7 @@ class OffPolicyTrainer(object):
 
     self.sat_sim_time += time.time() - sim_start_time
 
-    return sum(env_reward.values()), done
+    return sum(env_reward.values()), done, info
 
   def save_to_replaybuffer(self, prev_state_dict, action_dict, total_reward, done):
     if prev_state_dict is None or action_dict is None:
@@ -386,7 +388,7 @@ class OffPolicyTrainer(object):
     self.nn_action_time += time.time() - start_time
     return action_dict
 
-  def reset_env(self, eval=False):
+  def reset_env(self, eval=False) -> Dict[Any, Any]:
     if not self.online:
       return
     if self.total_eps > self.args.max_ep_num - 1 and eval:
@@ -399,6 +401,8 @@ class OffPolicyTrainer(object):
     self.ep_reward = {}
     for agent_name in self.leo_agent_dict:
       self.ep_reward[agent_name] = 0.0
-    self.cur_states, _ = self.env.reset()
+    self.cur_states, info = self.env.reset()
 
     self.init_time += time.time() - start_time
+
+    return info

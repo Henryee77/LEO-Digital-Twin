@@ -59,6 +59,7 @@ class LEOSatEnv(gym.Env):
     self.wireless_channel = Channel()
 
     self.step_num = 0
+    self.action_period = args.action_timeslot / constant.MOVING_TIMESLOT
     self.reset_count = 0
     self.max_step = args.max_time_per_ep
     self.last_episode = False
@@ -123,10 +124,6 @@ class LEOSatEnv(gym.Env):
     self.twin_online = twin_online
 
   def step(self, action_n: Dict[str, npt.NDArray]) -> Tuple[Dict[str, npt.NDArray[np.float32]], Dict[str, float], bool, bool, Any]:
-    # moving satellites
-    self.constel.update_sat_position()
-    self.step_num += 1
-
     self._take_action(action_n)
 
     ue_sinr = self.constel.cal_transmission_sinr(ues=self.ues,
@@ -138,13 +135,15 @@ class LEOSatEnv(gym.Env):
     reward = self._cal_reward(ue_throughput=ue_throughput)
     # print(self.ee[self.step_num], self.data_rate[self.step_num], self.overhead[self.step_num])
     self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
-
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
 
-    obs = self.get_state_info()
+    self.step_num += 1
+    self.constel.update_sat_position()
+    has_action = (self.step_num % self.action_period == 0)
+    obs = self.get_state_info(has_action)
 
-    return (obs, reward, done, truncated, {})
+    return (obs, reward, done, truncated, {'has_action': has_action})
 
   def record_sinr_thpt(self, ue_sinr, ue_throughput):
     if self.last_episode:
@@ -324,7 +323,7 @@ class LEOSatEnv(gym.Env):
       np.random.seed(seed)
     if options:
       print(options)
-    return state, {}
+    return state, {'has_action': (self.step_num % self.action_period == 0)}
 
   def _init_env(self):
     self.step_num = 0

@@ -26,11 +26,11 @@ if __name__ == '__main__':
   ue_num_list = [3]
   max_ep = 1_000
   mode = 'DT'
-  bs_list = ['SCBS', 'SSBS', 'ABS']
-  tf_list = [1, 2, 3, 4, 5]
+  bs_list = ['ABS', 'SCBS', 'SSBS']
+  tf_list = [2, 3, 4, 5, 6]
   step_num = 100
 
-  dir_name = f'Baseline Comparison 2 {max_ep} eps'
+  dir_name = f'Beam sweeping - T_f {max_ep} eps'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:

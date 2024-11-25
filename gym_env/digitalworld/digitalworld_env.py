@@ -71,13 +71,13 @@ class DigitalWorldEnv(LEOSatEnv):
 
     return np.concatenate((norm_pg, norm_hr, norm_hi))
 
-  def get_state_info(self, ray_tracing=True) -> Dict[str, List[float]]:
+  def get_state_info(self, has_action=True) -> Dict[str, List[float]]:
     state_dict = {}
     for ue in self.ues:  # Don't move this!!! I fall for this two times QAQ
       ue.servable_clear()
 
     for sat_name in self.leo_agents:
-      if ray_tracing:
+      if has_action:
         rt_state = self.get_rt_state(sat_name)
         self.prev_rt_state[sat_name] = rt_state
       else:
@@ -88,8 +88,6 @@ class DigitalWorldEnv(LEOSatEnv):
     return state_dict
 
   def no_action_step(self):
-    self.constel.update_sat_position()
-    self.step_num += 1
     ue_sinr = self.constel.cal_transmission_sinr(ues=self.ues,
                                                  interference_beams=self.additional_beam_set)
     ue_throughput = self.constel.cal_throughput(ues=self.ues,
@@ -100,8 +98,13 @@ class DigitalWorldEnv(LEOSatEnv):
 
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
-    obs = self.get_state_info(ray_tracing=False)
-    return (obs, reward, done, truncated, {})
+
+    self.step_num += 1
+    self.constel.update_sat_position()
+    has_action = (self.step_num % self.action_period == 0)
+    obs = self.get_state_info(has_action)
+
+    return (obs, reward, done, truncated, {'has_action': has_action})
 
   def _cal_overhead(self, agent: Agent) -> float:
     leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
