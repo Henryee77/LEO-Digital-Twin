@@ -59,6 +59,7 @@ class Agent(object):
     self.cur_criticlayer_idx = 1
     self.twin_sharing_actor = None
     self.twin_sharing_critic = None
+    self.twin_sharing_param_num = 0
 
   def _init_dim(self):
 
@@ -202,6 +203,10 @@ class Agent(object):
     return self.args.federated_update_rate
 
   @property
+  def twin_sharing_update_rate(self):
+    return self.args.twin_sharing_update_rate
+
+  @property
   def cur_actorlayer_idx(self):
     """The current uploading layer index of the actor network"""
     return self._cur_actorlayer_idx
@@ -241,7 +246,7 @@ class Agent(object):
 
   @property
   def twin_sharing_param_num(self):
-    self.__twin_sharing_param_num
+    return self.__twin_sharing_param_num
 
   @twin_sharing_param_num.setter
   def twin_sharing_param_num(self, num):
@@ -270,7 +275,7 @@ class Agent(object):
     self.policy.load_critic_state_dict(state_dict)
 
   def update_nn_from_twin_sharing(self):
-    tau = self.federated_update_rate
+    tau = self.twin_sharing_update_rate
     for key in self.twin_sharing_actor:
       self.actor_state_dict[key] = torch.add(torch.mul(self.actor_state_dict[key], 1 - tau),
                                              torch.mul(self.twin_sharing_actor[key], tau))

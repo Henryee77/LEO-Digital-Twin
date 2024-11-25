@@ -278,7 +278,7 @@ if __name__ == '__main__':
       '--noise-clip', default=0.1, type=float,
       help='The clip range of policy noise')
   parser.add_argument(
-      '--epsilon-decay-rate', default=0.999, type=float,
+      '--epsilon-decay-rate', default=0.9999, type=float,
       help='The rate of epsilon decay')
   parser.add_argument(
       '--discount', default=1e-2, type=float,
@@ -300,6 +300,9 @@ if __name__ == '__main__':
   parser.add_argument(
       '--federated-layer-num-per-turn', default=2, type=int,
       help='number of layers per federated uploading')
+  parser.add_argument(
+      '--twin-sharing-update-rate', default=1e-2, type=float,
+      help='Network update rate of twin sharing')
   parser.add_argument(
       '--twin-sharing-period', default=5, type=int,
       help='Period of twin sharing uploading')

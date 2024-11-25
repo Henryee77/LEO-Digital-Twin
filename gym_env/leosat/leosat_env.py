@@ -160,16 +160,20 @@ class LEOSatEnv(gym.Env):
   def save_episode_result(self):
     self.tb_writer.add_scalars(f'{self.name} Env Param/average overhead',
                                {self.args.prefix: util.avg_nested_2d_dict(self.overhead)},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average data rate',
                                {self.args.prefix: util.avg_nested_2d_dict(self.data_rate)},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average throughput',
                                {self.args.prefix: util.avg_nested_2d_dict(self.throughput)},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average EE',
                                {self.args.prefix: util.avg_nested_2d_dict(self.ee)},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.reset_count)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average overflowed overhead',
+                               {self.args.prefix: sum(self.overflowed_overhead.values()) /
+                                len(self.overflowed_overhead)},
+                               self.reset_count)
 
   def _take_action(self, action_n: Dict[str, List[float]]):
     satbeam_list = []
@@ -258,7 +262,7 @@ class LEOSatEnv(gym.Env):
     if no_action:
       for sat_name in self.leo_agents:
         overhead = self.overflowed_overhead[sat_name]
-        self.overflowed_overhead[sat_name] -= constant.MOVING_TIMESLOT
+        self.overflowed_overhead[sat_name] = max(0, self.overflowed_overhead[sat_name] - constant.MOVING_TIMESLOT)
         sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
 
     for ue_name, throughput in ue_throughput.items():
@@ -271,8 +275,8 @@ class LEOSatEnv(gym.Env):
           if sat_name not in sat_tran_ratio:
             self.overhead[self.step_num][sat_name] = self._cal_overhead(agent)
             overhead = self.overhead[self.step_num][sat_name] + self.overflowed_overhead[sat_name]
-            self.overflowed_overhead[sat_name] += (overhead - constant.MOVING_TIMESLOT)
-            self.overflowed_overhead[sat_name] = max(0, self.overflowed_overhead[sat_name])
+            self.overflowed_overhead[sat_name] = max(
+              0, self.overflowed_overhead[sat_name] + (overhead - constant.MOVING_TIMESLOT))
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
 
           self.data_rate[self.step_num][sat_name] += sat_tran_ratio[sat_name] * throughput
@@ -350,6 +354,7 @@ class LEOSatEnv(gym.Env):
       cell_num = self.leo_agents[sat_name].sat.cell_topo.cell_number
       self.prev_cell_sinr[sat_name] = np.zeros((cell_num, ))
       self.prev_beam_power[sat_name] = np.zeros((cell_num, ))
+      self.overflowed_overhead[sat_name] = 0
 
     # TODO would not be feasible if cell_num is dynamic or is non-identical
     self.cell_num = self.leo_agents[self.agent_names[0]].sat.cell_topo.cell_number

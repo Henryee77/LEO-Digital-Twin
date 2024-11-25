@@ -115,6 +115,8 @@ class OffPolicyTrainer(object):
       return np.concatenate((self.cur_states[sat_name], self.twin_trainer.cur_states[sat_name]))
 
   def twin_parameter_query(self):
+    if not self.online or not self.twin_trainer.online:
+      return
     ps_start_time = time.time()
 
     if not self.twin_trainer.online:
@@ -134,6 +136,8 @@ class OffPolicyTrainer(object):
     self.twin_sharing_time += time.time() - ps_start_time
 
   def twin_parameter_update(self):
+    if not self.online or not self.twin_trainer.online:
+      return
     ps_start_time = time.time()
 
     for agent in self.leo_agent_dict.values():
@@ -247,24 +251,24 @@ class OffPolicyTrainer(object):
                                 self.nn_action_time + self.init_time + self.tb_time)
     if self.total_training_time == 0:
       return
-    print('------------------------------')
-    print(f'{self.env.unwrapped.name}:')
-    print(
+    self.log[self.args.log_name].info('------------------------------')
+    self.log[self.args.log_name].info(f'{self.env.unwrapped.name}:')
+    self.log[self.args.log_name].info(
       f'Satellite simulation time ratio: {self.sat_sim_time / self.total_training_time * 100:.2f} %')
-    print(
+    self.log[self.args.log_name].info(
       f'NN training time ratio: {self.nn_train_time / self.total_training_time * 100:.2f} %')
-    print(
+    self.log[self.args.log_name].info(
       f'Federated sharing time ratio: {self.federated_sharing_time / self.total_training_time * 100:.2f} %')
-    print(
+    self.log[self.args.log_name].info(
       f'Twin sharing time ratio: {self.twin_sharing_time / self.total_training_time * 100:.2f} %')
-    print(
+    self.log[self.args.log_name].info(
       f'Initialize Env time ratio: {self.init_time / self.total_training_time * 100:.2f} %')
-    print(
+    self.log[self.args.log_name].info(
       f'Action computation time ratio: {self.nn_action_time / self.total_training_time * 100:.2f} %')
-    print(
+    self.log[self.args.log_name].info(
       f'Tensorboard saving time ratio: {self.tb_time / self.total_training_time * 100:.2f} %')
-    print(f'total running time: {self.total_training_time / 3600: .2f} hr')
-    print('------------------------------')
+    self.log[self.args.log_name].info(f'total running time: {self.total_training_time / 3600: .2f} hr')
+    self.log[self.args.log_name].info('------------------------------')
 
   def save_eval_result(self, step_count: int) -> Dict[str, float]:
     if not self.online:
