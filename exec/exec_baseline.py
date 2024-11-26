@@ -4,7 +4,7 @@ import os
 if __name__ == '__main__':
   ue_num_list = [3]
   max_ep = 1_000
-  mode_list = ['DT + TS', 'DT', 'No DT']
+  mode_list = ['No DT']  # ['DT + TS', 'DT', 'No DT']
   step_num = 100
 
   def mode_2_start_ep(mode):
@@ -21,7 +21,7 @@ if __name__ == '__main__':
     elif mode == 'No DT':
       d_start_ep = max_ep + 1
       r_start_ep = 0
-      ps_period = 80
+      ps_period = (max_ep + 1) * step_num
       twin_sharing_period = (max_ep + 1) * step_num
     else:
       raise ValueError(f'No such {mode} system architecture.')

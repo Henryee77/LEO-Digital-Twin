@@ -303,7 +303,7 @@ class OffPolicyTrainer(object):
 
   def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], float, bool, Dict[Any, Any]]:
     if not self.online:
-      return None, None, False
+      return None, None, False, None
     # Take action in env
     sim_start_time = time.time()
 
@@ -324,12 +324,11 @@ class OffPolicyTrainer(object):
       self.ep_reward[agent_name] += env_reward[agent_name]
 
     self.sat_sim_time += time.time() - sim_start_time
-
     return prev_state_dict, sum(env_reward.values()), done, info
 
   def no_action_step(self, running_mode='training'):
     if not self.online:
-      return None, None, None, False
+      return None, False, None
     # Take action in env
     sim_start_time = time.time()
 

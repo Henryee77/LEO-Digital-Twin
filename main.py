@@ -155,21 +155,21 @@ def main(args):
 def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer, running_mode='training'):
   time_count = 0
   digital_done = real_done = False
-  info = digitalworld_trainer.reset_env(eval=True)
-  info = realworld_trainer.reset_env(eval=True)
+  d_info = digitalworld_trainer.reset_env(eval=True)
+  r_info = realworld_trainer.reset_env(eval=True)
 
   while time_count < args.max_time_per_ep and not (digital_done or real_done):
-    if info['has_action']:
+    if r_info['has_action']:
       digital_actions = digitalworld_trainer.deterministic_actions()
       real_actions = realworld_trainer.deterministic_actions()
 
-      _, _, digital_done, info = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
-      _, _, real_done, info = realworld_trainer.take_action(real_actions, running_mode=running_mode)
+      _, _, digital_done, d_info = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
+      _, _, real_done, r_info = realworld_trainer.take_action(real_actions, running_mode=running_mode)
 
       time_count += 1
     else:
-      _, digital_done, info = digitalworld_trainer.no_action_step()
-      _, real_done, info = realworld_trainer.no_action_step()
+      _, digital_done, d_info = digitalworld_trainer.no_action_step()
+      _, real_done, r_info = realworld_trainer.no_action_step()
 
   digitalworld_trainer.save_eval_result(time_count)
   realworld_trainer.save_eval_result(time_count)
@@ -178,22 +178,22 @@ def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer
 def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
   time_count = 0
   digital_done = real_done = False
-  info = digitalworld_trainer.reset_env()
-  info = realworld_trainer.reset_env()
+  d_info = digitalworld_trainer.reset_env()
+  r_info = realworld_trainer.reset_env()
 
   while time_count < args.max_time_per_ep and not (digital_done or real_done):
-    if info['has_action']:
+    if r_info['has_action']:
       digital_actions = digitalworld_trainer.stochastic_actions()
       real_actions = realworld_trainer.stochastic_actions()
 
       (digital_prev_state_dict,
        digital_step_total_reward,
        digital_done,
-       info) = digitalworld_trainer.take_action(digital_actions)
+       d_info) = digitalworld_trainer.take_action(digital_actions)
       (real_prev_state_dict,
        real_step_total_reward,
        real_done,
-       info) = realworld_trainer.take_action(real_actions)
+       r_info) = realworld_trainer.take_action(real_actions)
 
       if time_count % args.twin_sharing_period == 0:
         digitalworld_trainer.twin_parameter_query()
@@ -210,8 +210,8 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
                                              total_reward=real_step_total_reward,
                                              done=real_done)
     else:
-      _, digital_done, info = digitalworld_trainer.no_action_step()
-      _, real_done, info = realworld_trainer.no_action_step()
+      _, digital_done, d_info = digitalworld_trainer.no_action_step()
+      _, real_done, r_info = realworld_trainer.no_action_step()
 
     time_count += 1
 
