@@ -166,10 +166,11 @@ def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer
       _, _, digital_done, d_info = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
       _, _, real_done, r_info = realworld_trainer.take_action(real_actions, running_mode=running_mode)
 
-      time_count += 1
     else:
       _, digital_done, d_info = digitalworld_trainer.no_action_step()
       _, real_done, r_info = realworld_trainer.no_action_step()
+
+    time_count += 1
 
   digitalworld_trainer.save_eval_result(time_count)
   realworld_trainer.save_eval_result(time_count)
