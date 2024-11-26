@@ -135,11 +135,11 @@ class LEOSatEnv(gym.Env):
     reward = self._cal_reward(ue_throughput=ue_throughput)
     # print(self.ee[self.step_num], self.data_rate[self.step_num], self.overhead[self.step_num])
     self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
-    done = (self.step_num >= self.max_step)
-    truncated = (self.step_num >= self.max_step)
 
     self.step_num += 1
     self.constel.update_sat_position()
+    done = (self.step_num >= self.max_step)
+    truncated = (self.step_num >= self.max_step)
     has_action = (self.step_num % self.action_period == 0)
     obs = self.get_state_info(has_action)
 

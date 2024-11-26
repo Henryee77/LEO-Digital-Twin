@@ -282,9 +282,9 @@ class OffPolicyTrainer(object):
       self.log[self.args.log_name].info(
           f'Agent {agent.name}: Evaluation Reward {self.ep_reward[agent_name]:.6f} at episode {self.total_eps}')
       self.tb_writer.add_scalars(
-        'Eval_reward', {f'{self.env.unwrapped.name} {agent_name} reward': self.ep_reward[agent_name]}, self.total_eps)
+        'Eval_reward/Agent Reward', {f'{self.env.unwrapped.name} {agent_name} reward': self.ep_reward[agent_name]}, self.total_eps)
     self.tb_writer.add_scalars(
-      'Eval_reward', {f'{self.env.unwrapped.name} total reward': sum(self.ep_reward.values())}, self.total_eps)
+      'Eval_reward/Total Reward', {f'{self.env.unwrapped.name} total reward': sum(self.ep_reward.values())}, self.total_eps)
     self.tb_time += time.time() - start_time
 
   def save_training_result(self, step_count: int):

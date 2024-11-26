@@ -30,7 +30,7 @@ if __name__ == '__main__':
   tf_list = [2, 3, 4, 5, 6]
   step_num = 100
 
-  dir_name = f'Beam sweeping - T_f {max_ep} eps'
+  dir_name = f'2 - Beam sweeping-T_f {max_ep} eps'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:
