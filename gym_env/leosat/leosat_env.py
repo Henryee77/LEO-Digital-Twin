@@ -412,7 +412,8 @@ class LEOSatEnv(gym.Env):
                           sat_height=sat_height[i],
                           inclination_angle=inclination[i])
         for i in range(shell_num)],
-        channel=channel)
+        channel=channel,
+        args=self.args)
 
     # move the constellation to the desired simulated scenario
     constel.update_sat_position(constant.STARTING_TIMESLOT)

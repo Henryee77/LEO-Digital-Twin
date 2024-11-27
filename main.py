@@ -66,7 +66,7 @@ def main(args):
                                               agent_type='digital_LEO',
                                               args=args,
                                               device=device,
-                                              comp_freq=constant.DEFAULT_DT_CPU_CYCLE)
+                                              comp_freq=args.dt_computaion_speed)
 
   # Create env
   real_env = misc.make_env(args.real_env_name,
@@ -327,6 +327,22 @@ if __name__ == '__main__':
       '--a3c-global-update-freq', default=5, type=int,
       help='Frequency of global updating in A3C')
 
+  # ------------------- LEO -------------------------
+  parser.add_argument(
+      '--beam-sweeping-mode', type=str, default='ABS',
+      help='Beam-sweeping mode')
+  parser.add_argument(
+      '--cell-layer-num', type=int, default=constant.DEFAULT_CELL_LAYER,
+      help='Number of cell layer (related to cell number)')
+  parser.add_argument(
+      '--leo-computaion-speed', type=float, default=constant.DEFAULT_LEO_CPU_CYCLE,
+      help='LEO computation speed')
+
+  # --------------------- DT ------------------------
+  parser.add_argument(
+      '--dt-computaion-speed', type=float, default=constant.DEFAULT_DT_CPU_CYCLE,
+      help='DT computation speed')
+
   # ------------------- Env -------------------------
   parser.add_argument(
       '--real-env-name', type=str, default='RealWorld-v0',
@@ -334,9 +350,6 @@ if __name__ == '__main__':
   parser.add_argument(
       '--digital-env-name', type=str, default='DigitalWorld-v0',
       help='OpenAI gym environment name. Correspond to the digital twins')
-  parser.add_argument(
-      '--beam-sweeping-mode', type=str, default='ABS',
-      help='Beam-sweeping mode')
   parser.add_argument(
       '--max-ep-num', type=int, required=True,
       help='Total number of episodes')
@@ -358,6 +371,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--ue-num', type=int,
       help='The number of ues')
+  parser
 
   # ------------------ Misc -------------------------
   parser.add_argument(

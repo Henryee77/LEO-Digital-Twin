@@ -150,8 +150,8 @@ def propagation_delay(distance) -> float:
   return distance / constant.LIGHT_SPEED
 
 
-def rt_delay(unit_num) -> float:
-  return unit_num * constant.RT_DELAY_PER_UNIT
+def rt_delay(unit_num, comp_speed) -> float:
+  return unit_num * constant.RT_COMP_SIZE / comp_speed
 
 
 def d_longitude(origin_latitude: float, distance: float) -> float:

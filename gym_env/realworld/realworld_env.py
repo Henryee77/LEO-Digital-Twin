@@ -113,7 +113,7 @@ class RealWorldEnv(LEOSatEnv):
 
     if self.twin_online:
       realworld_header = agent.sat.beam_training_latency
-      digitalworld_header = (util.rt_delay(len(self.leo_agents) * len(self.ues))
+      digitalworld_header = (util.rt_delay(len(self.leo_agents) * len(self.ues), self.digital_agents[agent.sat_name].comp_freq)
                              + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
                              + util.propagation_delay(leo2dt_distance))
       state_exchange_overhead = (agent.sat.trans_latency(agent.state_dim * constant.FLOAT_SIZE, self.dt_server)

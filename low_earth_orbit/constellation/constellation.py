@@ -41,6 +41,7 @@ class Constellation(object):
       self,
       setup_data_list: List[ConstellationData],
       channel: Channel,
+      args=None,
   ):
     """The constructer of Constellation Class.
 
@@ -48,6 +49,7 @@ class Constellation(object):
         setup_data_list (list[ConstellationData]): All data for constellation.
         channel (Channel): Wireless channel.
     """
+    self.args = args
     self.shell_num = len(setup_data_list)
     self.setup_data_list = setup_data_list
     self.sat_number = sum(
@@ -110,8 +112,8 @@ class Constellation(object):
                         sat_index=sat_index,
                         angle_speed=self.angular_speed_orbital[shell_index],
                         position=Position(orbital=satellite_pos),
-                        cell_topo=CellTopology(center_point=Position(
-                            geodetic=projection_point)),
+                        cell_topo=CellTopology(center_point=Position(geodetic=projection_point),
+                                               cell_layer=self.args.cell_layer_num),
                         channel=self.wireless_channel)
 
     self.all_sat[sat_obj.name] = sat_obj

@@ -40,8 +40,8 @@ class CellTopology(object):
   def __init__(
       self,
       center_point: Position,
+      cell_layer: int,
       cell_radius: float = constant.DEFAULT_CELL_RADIUS,
-      cell_layer: int = constant.DEFAULT_CELL_LAYER,
   ):
     """The __init__ funciton for cell topology.
 
