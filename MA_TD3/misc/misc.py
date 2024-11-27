@@ -137,9 +137,13 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
 
 def load_rt_file(filename: str) -> Dict[str, Dict[int, Dict[str, float]]]:
   """Load the ray tracing simulation result file.
-  ### Nested dictionary hierarchy:
+
+  Nested dictionary hierarchy:
+  --------
     {t: {sat_name: {beam_index: [ray tracing data 1, ..., ray tracing data N]}}}
-  ### Key of ray tracing data:
+
+  Keys of ray tracing data:
+  --------
     - ue
     - received power (W)
     - phase (radians)
@@ -147,7 +151,9 @@ def load_rt_file(filename: str) -> Dict[str, Dict[int, Dict[str, float]]]:
     - path gain (dB)
     - h_r
     - h_i
-  ### Example:
+
+  Examples
+  --------
     ray_tracing_data = misc.load_rt_file()
     target_ue_path_loss = [data['path loss (dB)'] for data in ray_tracing_data[t]
                                             [sat_name][beam_index] if data['ue'] == target_ue]

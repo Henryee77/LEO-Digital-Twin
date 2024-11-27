@@ -26,7 +26,7 @@ if __name__ == '__main__':
   ue_num_list = [3]
   max_ep = 1_000
   mode = 'DT'
-  bs_list = ['ABS', 'SCBS', 'SSBS']
+  bs_list = ['SSBS']  # ['ABS', 'SCBS','SSBS']
   tf_list = [2, 3, 4, 5, 6]
   step_num = 100
 
