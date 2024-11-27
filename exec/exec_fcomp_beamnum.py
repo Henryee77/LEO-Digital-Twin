@@ -29,7 +29,7 @@ if __name__ == '__main__':
   mode = 'DT + TS'
   tf = constant.DEFAULT_ACTION_TIMESLOT
   bs_mode = 'ABS'
-  cell_layer_list = [2, 3, 4]
+  cell_layer_list = [1, 2, 3]
   fcomp_list = [1.25e9 * i for i in range(1, 10)]
   step_num = 100
 
