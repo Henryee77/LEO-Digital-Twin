@@ -334,7 +334,7 @@ class Satellite(object):
     Returns:
         bool: True if exceeds
     """
-    return self.all_power > self.max_power
+    return self.all_power > self.max_power * 1.0000001  # dealing with the precision in float calculation
 
   def assign_train_set(self, train_set: Set[int]):
     """Assign the training set to the satellite

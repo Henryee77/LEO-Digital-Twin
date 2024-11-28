@@ -10,5 +10,7 @@ from random import sample
 
 start_time = time.time()
 
+power = util.tolinear(46.40815561244022) + util.tolinear(47.50248870629099)
+print(util.todb(power), power)
 
 print(time.time() - start_time)
