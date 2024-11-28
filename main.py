@@ -342,6 +342,9 @@ if __name__ == '__main__':
   parser.add_argument(
       '--dt-computaion-speed', type=float, default=constant.DEFAULT_DT_CPU_CYCLE,
       help='DT computation speed')
+  parser.add_argument(
+      '--shared-state-type', type=int, default=2,
+      help='Number of the state type shared. 0: None, 1: pathloss, 2: pathloss + CSI')
 
   # ------------------- Env -------------------------
   parser.add_argument(

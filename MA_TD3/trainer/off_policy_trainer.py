@@ -105,14 +105,29 @@ class OffPolicyTrainer(object):
     if not self.online:
       raise ValueError(f'{self.env.unwrapped.name} is offline.')
     if not self.twin_trainer.online:
+      # TODO This section has the risk of causing bug, be careful!
       twin_state_len = self.twin_trainer.leo_agent_dict[sat_name].self_state_dim
       state_len = self.leo_agent_dict[sat_name].self_state_dim
-      if twin_state_len > state_len:
+      if twin_state_len > state_len:  # I'm real and the twin is digital
         return np.concatenate((self.cur_states[sat_name], self.cur_states[sat_name], np.zeros((twin_state_len - state_len,))))
-      else:
+      else:  # I'm digital and the twin is real
         return np.concatenate((self.cur_states[sat_name], self.cur_states[sat_name][:twin_state_len]))
     else:
-      return np.concatenate((self.cur_states[sat_name], self.twin_trainer.cur_states[sat_name]))
+      # TODO Using the name attribute to identify the trainer may cause some bugs, be careful!
+      if self.env.unwrapped.name == 'Real World':
+        real_state = self.cur_states[sat_name]
+
+        digital_agent = self.twin_trainer.leo_agent_dict[sat_name]
+        shared_digital_state = self.twin_trainer.cur_states[sat_name][digital_agent.shared_slice]
+        padding_len = digital_agent.self_state_dim - len(shared_digital_state)
+        digital_state = np.concatenate((shared_digital_state, np.zeros(padding_len,)))
+      elif self.env.unwrapped.name == 'Digital World':
+        digital_state = self.cur_states[sat_name]
+        real_state = self.twin_trainer.cur_states[sat_name]
+      else:
+        raise ValueError(f'No such {self.env.unwrapped.name} trainer and env.')
+
+      return np.concatenate((real_state, digital_state))
 
   def twin_parameter_query(self):
     if not self.online or not self.twin_trainer.online:
@@ -282,9 +297,9 @@ class OffPolicyTrainer(object):
       self.log[self.args.log_name].info(
           f'Agent {agent.name}: Evaluation Reward {self.ep_reward[agent_name]:.6f} at episode {self.total_eps}')
       self.tb_writer.add_scalars(
-        'Eval_reward/Agent Reward', {f'{self.env.unwrapped.name} {agent_name} reward': self.ep_reward[agent_name]}, self.total_eps)
+        'Eval_reward', {f'{self.env.unwrapped.name} {agent_name} reward': self.ep_reward[agent_name]}, self.total_eps)
     self.tb_writer.add_scalars(
-      'Eval_reward/Total Reward', {f'{self.env.unwrapped.name} total reward': sum(self.ep_reward.values())}, self.total_eps)
+      'Eval_reward', {f'{self.env.unwrapped.name} total reward': sum(self.ep_reward.values())}, self.total_eps)
     self.tb_time += time.time() - start_time
 
   def save_training_result(self, step_count: int):

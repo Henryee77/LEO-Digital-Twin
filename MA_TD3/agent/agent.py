@@ -71,8 +71,10 @@ class Agent(object):
 
     (self.observation_space,
      self.pos_slice,
-     self.beam_info_slice) = misc.generate_state_space(agent_type=self.agent_type,
-                                                       cell_num=self.sat.cell_topo.cell_number)
+     self.beam_info_slice,
+     self.shared_slice) = misc.generate_state_space(agent_type=self.agent_type,
+                                                    cell_num=self.sat.cell_topo.cell_number,
+                                                    shared_type=self.args.shared_state_type)
 
     self.min_actions = self.action_space.low
     self.max_actions = self.action_space.high

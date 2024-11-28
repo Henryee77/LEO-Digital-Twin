@@ -29,8 +29,8 @@ if __name__ == '__main__':
   mode = 'DT + TS'
   tf = constant.DEFAULT_ACTION_TIMESLOT
   bs_mode = 'ABS'
-  cell_layer_list = [1, 2, 3]
-  fcomp_list = [1.25e9 * i for i in range(1, 10)]
+  cell_layer_list = [3]
+  fcomp_list = [1.25e9 * i for i in range(3, 10)]
   step_num = 100
 
   dir_name = f'cell_layer-comp_speed {max_ep} eps'
