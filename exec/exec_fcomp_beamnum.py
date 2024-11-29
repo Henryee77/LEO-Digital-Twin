@@ -24,7 +24,7 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [3]
+  ue_num_list = [6]
   max_ep = 1_000
   mode = 'DT + TS'
   tf = constant.DEFAULT_ACTION_TIMESLOT
@@ -33,7 +33,7 @@ if __name__ == '__main__':
   fcomp_list = [1.25e9 * i for i in range(1, 10)]
   step_num = 100
 
-  dir_name = f'cell_layer-comp_speed {max_ep} eps'
+  dir_name = f'2 - cell_layer-comp_speed {max_ep} eps'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:
