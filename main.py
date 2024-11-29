@@ -304,7 +304,7 @@ if __name__ == '__main__':
       '--federated-layer-num-per-turn', default=2, type=int,
       help='number of layers per federated uploading')
   parser.add_argument(
-      '--twin-sharing-update-rate', default=1e-2, type=float,
+      '--twin-sharing-update-rate', default=1e-1, type=float,
       help='Network update rate of twin sharing')
   parser.add_argument(
       '--twin-sharing-period', default=5, type=int,
