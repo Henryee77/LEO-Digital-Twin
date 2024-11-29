@@ -12,7 +12,7 @@ class ReplayBuffer(object):
     self.size = 0
 
   def __len__(self):
-    return len(self.buffer)
+    return self.size
 
   def clear(self):
     self.buffer.clear()

@@ -8,6 +8,7 @@ from gym_env.leosat.leosat_env import LEOSatEnv
 from low_earth_orbit.util import util
 from low_earth_orbit.util import constant
 from MA_TD3.agent.agent import Agent
+from MA_TD3.misc import misc
 
 
 class DigitalWorldEnv(LEOSatEnv):
@@ -16,75 +17,139 @@ class DigitalWorldEnv(LEOSatEnv):
   def __init__(self,
                ax: plt.Axes,
                args,
+               tb_writer,
                agent_dict: Dict[str, Agent],
                real_agents: Dict[str, Agent],
                digital_agents: Dict[str, Agent],
                agent_names: List[str]):
     super().__init__(ax=ax,
                      args=args,
+                     tb_writer=tb_writer,
                      agent_dict=agent_dict,
                      real_agents=real_agents,
                      digital_agents=digital_agents,
                      agent_names=agent_names)
     self.name = 'Digital World'
+    self.rt_data = misc.load_rt_file(f'ue{len(self.ues)}_rt_result')
 
-  def _take_action(self, action, sat_name):
-    train_set = self.action_to_trainset(action[self.leo_agents[sat_name].beam_slice])
-    # print(train_set)
+    def mean_stdv_of_db(rt_data, key):
+      data_array = np.asarray([data[key]
+                               for t in rt_data
+                               for sat_name in rt_data[t]
+                               for b_i in rt_data[t][sat_name]
+                               for data in rt_data[t][sat_name][b_i]])
+      return np.mean(data_array), np.std(data_array)
 
-    self.constel.assign_training_set(sat_name=sat_name,
-                                     train_set=train_set)
+    self.path_gain_mean, self.path_gain_stdv = mean_stdv_of_db(self.rt_data, 'path gain (dB)')
+    self.path_loss_mean, self.path_loss_stdv = mean_stdv_of_db(self.rt_data, 'path loss (dB)')
+    self.hr_mean, self.hr_stdv = mean_stdv_of_db(self.rt_data, 'h_r')
+    self.hi_mean, self.hi_stdv = mean_stdv_of_db(self.rt_data, 'h_i')
+    self.prev_rt_state = {}
 
-    beamwidth_dict = self.action_to_beamwidth_dict(action[self.leo_agents[sat_name].beamwidth_slice], sat_name=sat_name)
-    for beam_idx, beamwidth in beamwidth_dict.items():
-      self.leo_agents[sat_name].sat.set_beamwidth(beam_idx=beam_idx, beamwidth=beamwidth)
-      # print(f'{beam_idx}, {beamwidth / constant.PI_IN_RAD}')
+  def get_rt_state(self, sat_name):
+    rt_info = self.rt_data[self.step_num][sat_name]
+    path_gain_res = np.zeros((self.cell_num, ))
+    # path_loss_res = np.zeros((self.cell_num, ))
+    h_r_res = np.zeros((self.cell_num, ))
+    h_i_res = np.zeros((self.cell_num, ))
 
-    self.leo_agents[sat_name].sat.scan_beam()
+    for b_i in range(self.cell_num):
+      for data in rt_info[b_i]:
+        ue_idx = data['ue']
+        self.ue_dict[f'ue{ue_idx}'].servable_add(
+          sat_name, b_i, util.todb(data['received power (W)'] * constant.MILLIWATT))
 
-  def action_to_beamwidth_dict(self, beamwidth_action: npt.NDArray[np.float64], sat_name) -> Dict[int, float]:
-    res = {}
-    agent = self.leo_agents[sat_name]
-    for i, beamwidth in enumerate(beamwidth_action):
-      res[i] = util.rescale_value(beamwidth,
-                                  agent.beamwidth_action_low[i],
-                                  agent.beamwidth_action_high[i],
-                                  agent.min_beamwidth,
-                                  agent.max_beamwidth)
+      path_gain_res[b_i] = max([data['path gain (dB)'] for data in rt_info[b_i]])
+      # path_loss_res[b_i] = min([data['path loss (dB)'] for data in rt_info[b_i]])
+      h_r_res[b_i] = max([abs(data['h_r']) for data in rt_info[b_i]])
+      h_i_res[b_i] = max([abs(data['h_r']) for data in rt_info[b_i]])
 
-    return res
+    norm_pg = util.standardize(path_gain_res, self.path_gain_mean, self.path_gain_stdv)
+    # norm_pl = util.standardize(path_loss_res, self.path_loss_mean, self.path_loss_stdv)
+    norm_hr = util.standardize(h_r_res, self.hr_mean, self.hr_stdv)
+    norm_hi = util.standardize(h_i_res, self.hi_mean, self.hi_stdv)
 
-  def action_to_power_dict(self, power_action: npt.NDArray[np.float64], sat_name) -> Dict[int, float]:
-    """Map the action output to the beam tx power.
-    Args:
-        power_action (npt.NDArray[np.float64]): Action of the power
-                                                of all beams and total power.
-    Returns:
-        Dict[int, float]: Dict of the power of each turned on beam.
-    """
-    # print(f'action: {power_action}')
-    online_beam = self.leo_agents[sat_name].sat.cell_topo.online_beam_set
-    power_dict = {}
-    for beam_idx in range(self.cell_num):
-      if beam_idx in online_beam:
-        power_dict[beam_idx] = abs(power_action[beam_idx])
+    return np.concatenate((norm_pg, norm_hr, norm_hi))
+
+  def get_state_info(self, has_action=True) -> Dict[str, List[float]]:
+    state_dict = {}
+    for ue in self.ues:  # Don't move this!!! I fall for this two times QAQ
+      ue.servable_clear()
+
+    for sat_name in self.leo_agents:
+      if has_action:
+        rt_state = self.get_rt_state(sat_name)
+        self.prev_rt_state[sat_name] = rt_state
       else:
-        power_dict[beam_idx] = 0
-    agent = self.leo_agents[sat_name]
-    total_power = util.tolinear(util.rescale_value(power_action[-1],
-                                                   agent.total_power_low[0],
-                                                   agent.total_power_high[0],
-                                                   agent.min_power,
-                                                   agent.max_power))
+        rt_state = self.prev_rt_state[sat_name]
 
-    multiplier = (total_power
-                  / (np.sum(np.fromiter(power_dict.values(), dtype=float)) + constant.MIN_POSITIVE_FLOAT))
-    for beam_idx in online_beam:
-      power_dict[beam_idx] *= multiplier
+      state_dict[sat_name] = np.float32(np.concatenate((self.get_position_state(sat_name),
+                                                        rt_state)))
+    return state_dict
 
-    total_power = np.sum(np.fromiter(power_dict.values(), dtype=float))
-    # print(f'total power: {util.todb(total_power)}')
-    for beam_idx in power_dict:
-      power_dict[beam_idx] = util.todb(util.truncate(power_dict[beam_idx]))
+  def no_action_step(self):
+    ue_sinr = self.constel.cal_transmission_sinr(ues=self.ues,
+                                                 interference_beams=self.additional_beam_set)
+    ue_throughput = self.constel.cal_throughput(ues=self.ues,
+                                                sinr=ue_sinr,
+                                                interference_beams=self.additional_beam_set)
+    reward = self._cal_reward(ue_throughput=ue_throughput, no_action=True)
+    self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
-    return power_dict
+    self.step_num += 1
+    self.constel.update_sat_position()
+    done = (self.step_num >= self.max_step)
+    truncated = (self.step_num >= self.max_step)
+    has_action = (self.step_num % self.action_period == 0)
+    obs = self.get_state_info(has_action)
+
+    return (obs, reward, done, truncated, {'has_action': has_action})
+
+  def _cal_overhead(self, agent: Agent) -> float:
+    leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
+
+    realworld_header = self.real_agents[agent.sat_name].sat.beam_training_latency
+
+    digitalworld_header = (util.rt_delay(len(self.leo_agents) * len(self.ues), self.digital_agents[agent.sat_name].comp_freq)
+                           + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
+                           + util.propagation_delay(leo2dt_distance))
+
+    state_exchange_overhead = (agent.sat.trans_latency(agent.state_dim * constant.FLOAT_SIZE, self.dt_server)
+                               + self.dt_server.trans_latency(agent.state_dim * constant.FLOAT_SIZE)
+                               + 2 * util.propagation_delay(leo2dt_distance))
+
+    leo_feedback_size = ((len(self.ues) + self.real_agents[agent.sat_name].twin_sharing_param_num / self.args.twin_sharing_period)
+                         * constant.FLOAT_SIZE)
+    leo_feedback_latency = agent.sat.trans_latency(leo_feedback_size, self.dt_server)
+
+    dt_feedback_size = ((self.digital_agents[agent.sat_name].twin_sharing_param_num / self.args.twin_sharing_period)
+                        * constant.FLOAT_SIZE)
+
+    dt_feedback_latency = self.dt_server.trans_latency(dt_feedback_size)
+
+    feedback_overhead = (leo_feedback_latency
+                         + dt_feedback_latency
+                         + 2 * util.propagation_delay(leo2dt_distance))
+
+    overhead = (max(realworld_header, digitalworld_header)
+                + state_exchange_overhead
+                + agent.computation_latency
+                + feedback_overhead)
+
+    if self.last_episode:
+      self.tb_writer.add_scalars(f'{self.name} Env Param/overhead',
+                                 {agent.name: overhead},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
+      self.tb_writer.add_scalars(f'{self.name} Env Param/realworld_header overhead',
+                                 {agent.name: realworld_header},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
+      self.tb_writer.add_scalars(f'{self.name} Env Param/digitalworld_header overhead',
+                                 {agent.name: digitalworld_header},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
+      self.tb_writer.add_scalars(f'{self.name} Env Param/comp header',
+                                 {agent.name: agent.computation_latency},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
+      self.tb_writer.add_scalars(f'{self.name} Env Param/feedback_overhead',
+                                 {agent.name: feedback_overhead},
+                                 self.step_num + (self.reset_count - 1) * self.max_step)
+    return overhead

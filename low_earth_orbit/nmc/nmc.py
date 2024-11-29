@@ -1,5 +1,5 @@
 """nmc."""
-from typing import List, Set
+from typing import List, Set, Dict
 
 from ..ground_user import User
 from ..constellation import Constellation
@@ -37,6 +37,8 @@ class NMC(object):
     handing_sat = set()
     for ue in self.ues:
       handoff, last_serving, next_serving = ue.a3_event_check()
+      # print(ue.name, handoff, last_serving, next_serving)
+      # print(ue.servable)
       if handoff:
         self.handoff(ue, next_serving)
         if last_serving:
@@ -50,9 +52,24 @@ class NMC(object):
       else:
         ue.online = False
 
-    self.reallocate_power(handing_sat)
+    self.equally_allocate_power(handing_sat)
 
-  def reallocate_power(self, handing_sat: Set[str]):
+  def allocate_power(self, power_dict: Dict[str, Dict[int, float]]):
+    for sat_name in power_dict:
+      self.constellation.all_sat[sat_name].clear_power()
+      for beam_idx, dbm_power in power_dict[sat_name].items():
+        self.constellation.all_sat[sat_name].set_beam_power(beam_idx=beam_idx, tx_power=dbm_power)
+
+  def update_ues_serving_history(self):
+    sinr_dict = self.constellation.cal_transmission_sinr(ues=self.ues)
+    for ue in self.ues:
+      satbeam = ue.last_serving
+      if satbeam:
+        beampos = self.constellation.all_sat[satbeam[0]].cell_topo.beam_list[satbeam[-1]].center_point
+        serv_sinr = sinr_dict[ue.name]
+        ue.serving_history[-1] = (satbeam, beampos, serv_sinr)
+
+  def equally_allocate_power(self, handing_sat: Set[str]):
     """Allocate the power of the satellite
        that has handover or handoff
 

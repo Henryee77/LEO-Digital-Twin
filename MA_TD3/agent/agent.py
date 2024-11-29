@@ -4,16 +4,18 @@ from typing import Literal, Dict
 from logging import Logger
 from gymnasium import spaces
 from torch import device
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
+from argparse import Namespace
+import torch
 import numpy as np
 import numpy.typing as npt
 from ..misc.replay_buffer import ReplayBuffer
+from ..misc import misc
 from ..policy.model import TD3, DDPG
 from low_earth_orbit.util.position import Position, Geodetic
 from low_earth_orbit.util import constant
 from low_earth_orbit.satellite.satellite import Satellite
 from low_earth_orbit.cell.cell_topology import CellTopology
-from low_earth_orbit.antenna.antenna import Antenna
 from low_earth_orbit.util import util
 
 
@@ -22,35 +24,30 @@ class Agent(object):
                policy_name: Literal['TD3', 'DDPG'],
                tb_writer: SummaryWriter,
                log: Dict[str, Logger],
-               args,
-               name: str,
+               args: Namespace,
+               sat_name: str,
                agent_type: str,
                device: device,
-               comp_freq: float = constant.DEFAULT_CPU_CYCLE):
+               comp_freq: float):
 
     self.log = log
     self.tb_writer = tb_writer
     self.args = args
-    self.name = name
     self.agent_type = agent_type
     self.device = device
     self.comp_freq = comp_freq
-    self.sat = Satellite(shell_index=0,
-                         plane_index=0,
-                         sat_index=0,
+    sat_indices = sat_name.split('_')
+    self.sat = Satellite(shell_index=sat_indices[0],
+                         plane_index=sat_indices[1],
+                         sat_index=sat_indices[2],
                          angle_speed=0,
                          position=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
-                         cell_topo=CellTopology(center_point=Position(geodetic=Geodetic(0, 0, constant.R_EARTH))),
-                         antenna=Antenna(),
+                         cell_topo=CellTopology(center_point=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
+                                                cell_layer=args.cell_layer_num),
                          channel=None)
 
-    if agent_type == 'real_LEO':
-      pass
-    elif agent_type == 'digital_LEO':
-      self._init_dim()
-      self.set_policy(policy_name)
-    else:
-      raise ValueError('No such agent type')
+    self._init_dim()
+    self.set_policy(policy_name)
 
     self.memory = ReplayBuffer(max_size=args.replay_buffer_size)
     self.epsilon = 1  # For exploration
@@ -59,57 +56,33 @@ class Agent(object):
     self.beta_pow_n = self.beta
     self.historical_avg_reward = 0
 
-    self._federated_update_rate = args.federated_update_rate
     self.cur_actorlayer_idx = 1
     self.cur_criticlayer_idx = 1
+    self.twin_sharing_actor = None
+    self.twin_sharing_critic = None
+    self.twin_sharing_param_num = 0
 
   def _init_dim(self):
-    cell_num = self.sat.cell_topo.cell_number
-    beam_action_low = np.array([-1] * cell_num)
-    beam_action_high = np.array([1] * cell_num)
-    self.beam_slice = slice(0, cell_num)
 
-    self.total_power_low = np.array([-1])
-    self.total_power_high = np.array([1])
-    self.min_power = 40
-    self.max_power = self.sat.max_power
-    self.power_slice = slice(0, cell_num + 1)
+    (self.action_space,
+     self.beam_slice,
+     self.power_slice,
+     self.beamwidth_slice) = misc.generate_action_space(self.sat.cell_topo.cell_number)
 
-    self.beamwidth_action_low = np.array([-1] * cell_num)
-    self.beamwidth_action_high = np.array([1] * cell_num)
-    self.beamwidth_slice = slice(cell_num + 1, cell_num * 2 + 1)
-    self.min_beamwidth = 2 * constant.PI_IN_RAD
-    self.max_beamwidth = 4 * constant.PI_IN_RAD
+    (self.observation_space,
+     self.pos_slice,
+     self.beam_info_slice,
+     self.shared_slice) = misc.generate_state_space(agent_type=self.agent_type,
+                                                    cell_num=self.sat.cell_topo.cell_number,
+                                                    shared_type=self.args.shared_state_type)
 
-    action_low = np.concatenate(
-      (beam_action_low, self.total_power_low, self.beamwidth_action_low))
-
-    action_high = np.concatenate(
-      (beam_action_high, self.total_power_high, self.beamwidth_action_high))
-
-    self.action_space = spaces.Box(low=np.float32(action_low),
-                                   high=np.float32(action_high),
-                                   dtype=np.float32)
-
-    self.pos_low = np.array([-1] * 2)
-    self.pos_high = np.array([1] * 2)
-    sinr_diff_low = np.array([-1] * cell_num)
-    sinr_diff_high = np.array([1] * cell_num)
-
-    obs_low = np.concatenate((self.pos_low, sinr_diff_low))
-    obs_high = np.concatenate((self.pos_high, sinr_diff_high))
-
-    self.observation_space = spaces.Box(low=np.float32(obs_low),  #
-                                        high=np.float32(obs_high),
-                                        dtype=np.float32)
-
-    self.max_actions = self.action_space.high
     self.min_actions = self.action_space.low
+    self.max_actions = self.action_space.high
 
-    self.state_dim = self.observation_space.shape[0]
-    self.action_dim = self.action_space.shape[0]
-    self.actor_n_hidden = self.args.ra_actor_n_hidden
-    self.critic_n_hidden = self.args.ra_critic_n_hidden
+    self.__self_state_dim = (len(self.observation_space.low[self.pos_slice]) +
+                             len(self.observation_space.low[self.beam_info_slice]))
+    self.__state_dim = self.observation_space.shape[0]
+    self.__action_dim = self.action_space.shape[0]
 
     self.log[self.args.log_name].info('[{}] State dim: {}'.format(
         self.name, self.state_dim))
@@ -117,11 +90,11 @@ class Agent(object):
         self.name, self.action_dim))
 
   def set_policy(self, policy_name):
-    denom = [1, 2, 4, 8, 16, 32]
-    self.actor_hidden_nodes = [round(self.actor_n_hidden / x) for x in denom]
-    self.critic_hidden_nodes = [round(self.critic_n_hidden / x) for x in denom]
+    hidden_layer_denom = [1, 2, 4, 8, 16]
+    self.actor_hidden_nodes = [round(self.args.actor_n_hidden / x) for x in hidden_layer_denom]
+    self.critic_hidden_nodes = [round(self.args.critic_n_hidden / x) for x in hidden_layer_denom]
     if policy_name == 'TD3':
-      self.policy = TD3(
+      self.__policy = TD3(
           actor_input_dim=self.state_dim,
           actor_output_dim=self.action_dim,
           critic_input_dim=self.state_dim + self.action_dim,
@@ -129,14 +102,14 @@ class Agent(object):
           critic_hidden_nodes=self.critic_hidden_nodes,
           name=self.name,
           args=self.args,
-          action_low=self.action_space.low,
-          action_high=self.action_space.high,
+          action_low=self.min_actions,
+          action_high=self.max_actions,
           device=self.device)
     elif policy_name == 'DDPG':
-      self.policy = DDPG(state_dim=self.state_dim,
-                         action_dim=self.action_dim,
-                         device=self.device,
-                         args=self.args)
+      self.__policy = DDPG(state_dim=self.state_dim,
+                           action_dim=self.action_dim,
+                           device=self.device,
+                           args=self.args)
     else:
       raise ValueError(f'No {policy_name} policy')
 
@@ -149,24 +122,56 @@ class Agent(object):
     self._sat = sat
 
   @property
-  def action_dim(self):
-    return self._action_dim
+  def sat_name(self) -> str:
+    return self.sat.name
 
-  @action_dim.setter
-  def action_dim(self, dim):
-    if not isinstance(dim, int):
-      raise TypeError('Action dimension must be int')
-    self._action_dim = dim
+  @property
+  def name(self) -> str:
+    return self.agent_type + '_' + self.sat_name
+
+  @property
+  def policy(self):
+    return self.__policy
+
+  @policy.setter
+  def policy(self, pol):
+    self.__policy = pol
+
+  @property
+  def action_dim(self):
+    return self.__action_dim
 
   @property
   def state_dim(self):
-    return self._state_dim
+    return self.__state_dim
 
-  @state_dim.setter
-  def state_dim(self, dim):
-    if not isinstance(dim, int):
-      raise TypeError('State dimension must be int')
-    self._state_dim = dim
+  @property
+  def self_state_dim(self):
+    return self.__self_state_dim
+
+  @property
+  def pos_low(self):
+    return self.observation_space.low[self.pos_slice]
+
+  @property
+  def pos_high(self):
+    return self.observation_space.high[self.pos_slice]
+
+  @property
+  def total_power_low(self):
+    return self.action_space.low[self.power_slice][-1]
+
+  @property
+  def total_power_high(self):
+    return self.action_space.high[self.power_slice][-1]
+
+  @property
+  def beamwidth_action_low(self):
+    return self.action_space.low[self.beamwidth_slice]
+
+  @property
+  def beamwidth_action_high(self):
+    return self.action_space.high[self.beamwidth_slice]
 
   @property
   def actor_state_dict(self):
@@ -198,7 +203,11 @@ class Agent(object):
 
   @property
   def federated_update_rate(self):
-    return self._federated_update_rate
+    return self.args.federated_update_rate
+
+  @property
+  def twin_sharing_update_rate(self):
+    return self.args.twin_sharing_update_rate
 
   @property
   def cur_actorlayer_idx(self):
@@ -226,6 +235,7 @@ class Agent(object):
   def sharing_weight(self, w):
     if w < 0:
       self.log[self.args.log_name].info(f'Invalid weight of agent {self.name} (w = {w})')
+      # print(self.historical_avg_reward)
       w = constant.MIN_POSITIVE_FLOAT
     self._sharing_weight = w
 
@@ -236,6 +246,18 @@ class Agent(object):
   @property
   def computation_latency(self) -> float:
     return constant.F_0 * self.nn_param_num / self.comp_freq
+
+  @property
+  def twin_sharing_param_num(self):
+    return self.__twin_sharing_param_num
+
+  @twin_sharing_param_num.setter
+  def twin_sharing_param_num(self, num):
+    self.__twin_sharing_param_num = num
+
+  def set_twin_sharing_param_num(self, a_idx_list, c_idx_list):
+    self.twin_sharing_param_num = (sum([self.policy.actor_layer_param_num[a_idx] for a_idx in a_idx_list]) +
+                                   sum([self.policy.critic_layer_param_num[c_idx] for c_idx in c_idx_list]))
 
   def get_scaled_pos(self, plot_range: float) -> npt.NDArray[np.float32]:
     return np.array([util.rescale_value(self.sat.position.geodetic.longitude,
@@ -253,17 +275,27 @@ class Agent(object):
     self.policy.load_actor_state_dict(state_dict)
 
   def load_critic_state_dict(self, state_dict):
-    self.policy.load_critic_state_dict(state_dict=state_dict)
+    self.policy.load_critic_state_dict(state_dict)
+
+  def update_nn_from_twin_sharing(self):
+    tau = self.twin_sharing_update_rate
+    for key in self.twin_sharing_actor:
+      self.actor_state_dict[key] = torch.add(torch.mul(self.actor_state_dict[key], 1 - tau),
+                                             torch.mul(self.twin_sharing_actor[key], tau))
+
+    for key in self.twin_sharing_critic:
+      self.critic_state_dict[key] = torch.add(torch.mul(self.critic_state_dict[key], 1 - tau),
+                                              torch.mul(self.twin_sharing_critic[key], tau))
 
   def save_weight(self, filename, directory):
     self.log[self.args.log_name].info("[{}] Saved weight".format(self.name))
     self.policy.save(filename, directory)
 
-  def load_weight(self, filename, directory="./pytorch_models"):
+  def load_weight(self, filename: str, directory="./pytorch_models"):
     """Load state dict from file.
 
     Args:
-        filename (_type_): filename
+        filename (str): filename
         directory (str, optional): directory of the file. Defaults to "./pytorch_models".
     """
     self.log[self.args.log_name].info("[{}] Loaded weight".format(self.name))
@@ -300,7 +332,7 @@ class Agent(object):
     assert not np.isnan(action).any()
 
     self.tb_writer.add_scalar(
-        f'debug/{self.agent_type} {self.name}_epsilon', self.epsilon, total_timesteps)
+        f'debug/{self.name}_epsilon', self.epsilon, total_timesteps)
 
     return action
 
@@ -314,13 +346,13 @@ class Agent(object):
 
     self.sharing_weight = min(self.args.max_sharing_weight, r / self.historical_avg_reward)
 
-    self.tb_writer.add_scalars(f'{self.agent_type} {self.name}/historical_avg_reward',
+    self.tb_writer.add_scalars(f'{self.name}/historical_avg_reward',
                                {self.name: self.historical_avg_reward}, total_train_iter)
-    self.tb_writer.add_scalars(f'{self.agent_type} {self.name}/sharing_weight',
+    self.tb_writer.add_scalars(f'{self.name}/sharing_weight',
                                {self.name: self.sharing_weight}, total_train_iter)
 
   def update_policy(self, total_train_iter):
-    if len(self.memory) > self.args.batch_size * self.args.iter_num * 2:
+    if len(self.memory) > self.args.batch_size * 2:
       debug = self.policy.train(
           replay_buffer=self.memory,
           total_train_iter=total_train_iter)
@@ -331,4 +363,4 @@ class Agent(object):
 
       for key, value in debug.items():
         self.tb_writer.add_scalars(
-          f'{self.agent_type} {self.name}/{key}', {self.name: value}, total_train_iter)
+          f'{self.name}/{key}', {self.name: value}, total_train_iter)

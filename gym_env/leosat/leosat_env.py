@@ -1,11 +1,13 @@
 """leosat_env.py"""
 from __future__ import annotations
-from typing import List, Set, Dict
+from typing import List, Set, Dict, Tuple, Any
 import random
+import csv
 import gymnasium as gym
 import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
 from gymnasium import spaces
 from low_earth_orbit.ground_user import User
 from low_earth_orbit.constellation import Constellation
@@ -25,6 +27,7 @@ class LEOSatEnv(gym.Env):
   def __init__(self,
                ax: plt.Axes,
                args,
+               tb_writer: SummaryWriter,
                agent_dict: Dict[str, Agent],
                real_agents: Dict[str, Agent],
                digital_agents: Dict[str, Agent],
@@ -32,32 +35,40 @@ class LEOSatEnv(gym.Env):
     super(LEOSatEnv, self).__init__()
     self.name = 'LEOSat'
     self.ax = ax
-    # self.main_sat_name = '0_3_8'
+    self.args = args
+    self.tb_writer = tb_writer
     self.constel = self.ues = self.nmc = None
     self.ue_dict = {}
     self.prev_cell_sinr = {}
     self.prev_beam_power = {}
-    self.reward = {}
-    self._leo_agents = agent_dict
+    self.ee = {}
+    self.data_rate = {}
+    self.throughput = {}
+    self.overhead = {}
+    self.ue_pos_data = {}
+    self.load_ues_data()
+
+    self.online = False
+    self.twin_online = False
+    self.leo_agents = agent_dict
     self.real_agents = real_agents
     self.digital_agents = digital_agents
     self.agent_num = len(agent_names)
     self.agent_names = agent_names
     self.cell_num = 0
-    if self.leo_agents is not None:
-      self._init_env()
+    self.wireless_channel = Channel()
 
     self.step_num = 0
-    self.max_step = args.step_per_ep
-    self.train_per_move = 1
-    self.plot_range = 2  # the plotting range
+    self.action_period = args.action_timeslot / constant.MOVING_TIMESLOT
+    self.reset_count = 0
+    self.max_step = args.max_time_per_ep
+    self.last_episode = False
+    self.plot_range = 2.5  # the plotting range
 
-    self.action_space = spaces.Box(np.array([0]), np.array([0]))  # dummy for gym template
-    self.observation_space = spaces.Box(np.array([0]), np.array([0]))
+    self.action_space = spaces.Box(np.array([-1]), np.array([1]))  # dummy for gym template
+    self.observation_space = spaces.Box(np.array([-10]), np.array([10]))
 
     self.max_power = constant.MAX_POWER
-    self.min_diff_sinr = -20
-    self.max_diff_sinr = 20
 
     self.additional_beam_set = set()
     self.random_interfer_beam_num = 2
@@ -65,6 +76,12 @@ class LEOSatEnv(gym.Env):
     self.interfer_power_low = 20
     self.interfer_power_high = util.truncate(
       self.max_power - util.todb(self.random_interfer_beam_num))
+    self.overflowed_overhead = {}
+    for sat_name in self.agent_names:
+      self.overflowed_overhead[sat_name] = 0
+
+    if self.leo_agents is not None:
+      self._init_env()
 
   @ property
   def name(self):
@@ -76,11 +93,11 @@ class LEOSatEnv(gym.Env):
 
   @ property
   def leo_agents(self) -> Dict[str, Agent]:
-    return self._leo_agents
+    return self.__leo_agents
 
   @ leo_agents.setter
   def leo_agents(self, agent_dict: Dict[str, Agent]):
-    self._leo_agents = agent_dict
+    self.__leo_agents = agent_dict
 
   @ property
   def real_agents(self) -> Dict[str, Agent]:
@@ -102,26 +119,12 @@ class LEOSatEnv(gym.Env):
       raise ValueError('Digital agents cannot be None type')
     self._digital_agents = agent_dict
 
-  def step(self, action_n: Dict[str, npt.NDArray]):
-    # moving satellites
-    if self.step_num % self.train_per_move == 0:
-      self.constel.update_sat_position()
-    for ue in self.ues:
-      ue.servable_clear()
+  def set_online(self, self_online, twin_online):
+    self.online = self_online
+    self.twin_online = twin_online
 
-    for sat_name, action in action_n.items():
-      # print(f'{sat_name} action: {action}')
-      self._take_action(action, sat_name)
-
-    self.nmc.a3_event_check()
-    # self.add_random_interference()
-
-    for sat_name, action in action_n.items():
-      # set the beam power of the main satellite
-      power_dict = self.action_to_power_dict(action[self.leo_agents[sat_name].power_slice], sat_name)
-      self.leo_agents[sat_name].sat.clear_power()
-      for beam_idx, power in power_dict.items():
-        self.leo_agents[sat_name].sat.set_beam_power(beam_idx=beam_idx, tx_power=power)
+  def step(self, action_n: Dict[str, npt.NDArray]) -> Tuple[Dict[str, npt.NDArray[np.float32]], Dict[str, float], bool, bool, Any]:
+    self._take_action(action_n)
 
     ue_sinr = self.constel.cal_transmission_sinr(ues=self.ues,
                                                  interference_beams=self.additional_beam_set)
@@ -129,40 +132,138 @@ class LEOSatEnv(gym.Env):
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
 
-    cell_sinr = {}
-    for sat_name in self.agent_names:
-      cell_sinr[sat_name] = np.zeros((self.cell_num, ))
-    for ue in self.ues:
-      if ue.last_serving is not None:
-        sat_name, beam_idx = ue.last_serving
-        cell_sinr[sat_name][beam_idx] += util.tolinear(ue_sinr[ue.name])
-    for sat_name in self.agent_names:
-      for beam_idx, user_num in self.leo_agents[sat_name].sat.cell_topo.serving_status.items():
-        cell_sinr[sat_name][beam_idx] = util.todb(cell_sinr[sat_name][beam_idx] / user_num)
-
-    beam_power = {}
-    for sat_name in self.agent_names:
-      tmp_beam_power = np.zeros((self.cell_num, ))
-      sat = self.leo_agents[sat_name].sat
-      for beam_idx in range(self.cell_num):
-        tmp_beam_power[beam_idx] = sat.get_beam_info(beam_idx)[0]
-      beam_power[sat_name] = tmp_beam_power
-
-    self._cal_reward(ue_throughput=ue_throughput)
+    reward = self._cal_reward(ue_throughput=ue_throughput)
+    # print(self.ee[self.step_num], self.data_rate[self.step_num], self.overhead[self.step_num])
+    self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     self.step_num += 1
+    self.constel.update_sat_position()
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
+    has_action = (self.step_num % self.action_period == 0)
+    obs = self.get_state_info(has_action)
 
-    obs = self.get_state_info(cell_sinr, beam_power)
-    return (obs, self.reward, done, truncated, {})
+    return (obs, reward, done, truncated, {'has_action': has_action})
 
-  def _cal_reward(self, ue_throughput):
-    for key in self.reward:
-      self.reward[key] = 0.0
-    # print(f'dB: {sat_power}')
-    # print(util.tolinear(sat_power))
+  def record_sinr_thpt(self, ue_sinr, ue_throughput):
+    if self.last_episode:
+      for ue_name, sinr in ue_sinr.items():
+        self.tb_writer.add_scalars(f'{self.name} Env Param/ue sinr',
+                                   {ue_name: sinr},
+                                   self.step_num + (self.reset_count - 1) * self.max_step)
+      for ue_name, throughput in ue_throughput.items():
+        self.tb_writer.add_scalars(f'{self.name} Env Param/ue throughput',
+                                   {ue_name: throughput},
+                                   self.step_num + (self.reset_count - 1) * self.max_step)
+
+  def save_episode_result(self):
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average overhead',
+                               {self.args.prefix: util.avg_nested_2d_dict(self.overhead)},
+                               self.reset_count)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average data rate',
+                               {self.args.prefix: util.avg_nested_2d_dict(self.data_rate)},
+                               self.reset_count)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average throughput',
+                               {self.args.prefix: util.avg_nested_2d_dict(self.throughput)},
+                               self.reset_count)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average EE',
+                               {self.args.prefix: util.avg_nested_2d_dict(self.ee)},
+                               self.reset_count)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average overflowed overhead',
+                               {self.args.prefix: sum(self.overflowed_overhead.values()) /
+                                len(self.overflowed_overhead)},
+                               self.reset_count)
+
+  def _take_action(self, action_n: Dict[str, List[float]]):
+    satbeam_list = []
+    for sat_name, action in action_n.items():
+      agent = self.leo_agents[sat_name]
+      turned_on_beams = self.action_to_beam_list(action=action[agent.beam_slice])
+      satbeam_list = satbeam_list + [(sat_name, beam_idx) for beam_idx in turned_on_beams]
+    for ue in self.ues:
+      # print(ue.servable, satbeam_list)
+      ue.filter_servable(satbeam_list)
+      # print(self.name, self.step_num, ue.servable)
+
+    # beam decision and handover
+    self.nmc.a3_event_check()
+
+    dbm_power_dict = {}
+    for sat_name, action in action_n.items():
+      agent = self.leo_agents[sat_name]
+      dbm_power_dict[sat_name] = self.action_to_power_dict(action[agent.power_slice], sat_name)
+
+      beamwidth_dict = self.action_to_beamwidth_dict(action[agent.beamwidth_slice], sat_name)
+      for beam_idx, beamwidth in beamwidth_dict.items():
+        self.leo_agents[sat_name].sat.set_beamwidth(beam_idx=beam_idx, beamwidth=beamwidth)
+
+    self.nmc.allocate_power(dbm_power_dict)
+    self.nmc.update_ues_serving_history()
+
+  def action_to_beam_list(self, action: npt.NDArray[np.float64]) -> List[int]:
+    """Map the action output to the serving beam set.
+
+    Args:
+        action (float): Action of beams
+
+    Returns:
+        Set[int]: Serving beam set.
+    """
+    return [i for i, power in enumerate(action) if power > 0]
+
+  def action_to_power_dict(self, power_action: npt.NDArray[np.float64], sat_name) -> Dict[int, float]:
+    """Map the action output to the beam tx power.
+    Args:
+        power_action (npt.NDArray[np.float64]): Action of the power
+                                                of all beams and total power.
+    Returns:
+        Dict[int, float]: Dict of the power of each turned on beam.
+    """
+    online_beam = self.leo_agents[sat_name].sat.cell_topo.online_beam_set
+    mw_power_dict = {}
+    dbm_power_dict = {}
+    for beam_idx in range(self.cell_num):
+      if beam_idx in online_beam:
+        mw_power_dict[beam_idx] = abs(power_action[beam_idx])
+      else:
+        mw_power_dict[beam_idx] = 0
+    agent = self.leo_agents[sat_name]
+    total_power_mw = util.tolinear(util.rescale_value(power_action[-1],
+                                                      agent.total_power_low,
+                                                      agent.total_power_high,
+                                                      agent.sat.min_power,
+                                                      agent.sat.max_power))
+
+    multiplier = (total_power_mw
+                  / (np.sum(np.fromiter(mw_power_dict.values(), dtype=float)) + constant.MIN_POSITIVE_FLOAT))
+    for beam_idx in online_beam:
+      mw_power_dict[beam_idx] *= multiplier
+
+    for beam_idx in mw_power_dict:
+      dbm_power_dict[beam_idx] = util.todb(mw_power_dict[beam_idx])
+
+    return dbm_power_dict
+
+  def action_to_beamwidth_dict(self, beamwidth_action: npt.NDArray[np.float64], sat_name) -> Dict[int, float]:
+    res = {}
+    agent = self.leo_agents[sat_name]
+    for i, beamwidth in enumerate(beamwidth_action):
+      res[i] = util.rescale_value(beamwidth,
+                                  agent.beamwidth_action_low[i],
+                                  agent.beamwidth_action_high[i],
+                                  agent.sat.min_beamwidth,
+                                  agent.sat.max_beamwidth)
+
+    return res
+
+  def _cal_reward(self, ue_throughput: Dict[str, float], no_action=False) -> Dict[str, float]:
     sat_tran_ratio = {}
+    if no_action:
+      for sat_name in self.leo_agents:
+        overhead = self.overflowed_overhead[sat_name]
+        self.overflowed_overhead[sat_name] = max(0, self.overflowed_overhead[sat_name] - constant.MOVING_TIMESLOT)
+        sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
+
     for ue_name, throughput in ue_throughput.items():
       last_satbeam = self.ue_dict[ue_name].last_serving
       # print(self.ue_dict[ue_name].servable)
@@ -171,56 +272,27 @@ class LEOSatEnv(gym.Env):
         agent = self.leo_agents[sat_name]
         if len(agent.sat.cell_topo.serving) > 0:
           if sat_name not in sat_tran_ratio:
-            dt_comp_latency = max([dt.computation_latency for dt in self.digital_agents.values()])
-            leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
+            self.overhead[self.step_num][sat_name] = self._cal_overhead(agent)
+            overhead = self.overhead[self.step_num][sat_name] + self.overflowed_overhead[sat_name]
+            self.overflowed_overhead[sat_name] = max(
+              0, self.overflowed_overhead[sat_name] + (overhead - constant.MOVING_TIMESLOT))
+            sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
 
-            overhead = (max(agent.sat.beam_training_latency + agent.computation_latency,
-                            dt_comp_latency + self.dt_server.trans_latency(agent.action_dim * constant.INT_SIZE) + util.propagation_delay(leo2dt_distance))
-                        + agent.sat.trans_latency(constant.FLOAT_SIZE, self.dt_server) + util.propagation_delay(leo2dt_distance))
-            # print(agent.sat.beam_training_latency, agent.computation_latency)
-            sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.TIMESLOT)
+          self.data_rate[self.step_num][sat_name] += sat_tran_ratio[sat_name] * throughput
+          self.throughput[self.step_num][sat_name] += throughput
+          self.ee[self.step_num][sat_name] += (sat_tran_ratio[sat_name] * throughput /
+                                               (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6)
 
-          self.reward[sat_name] += sat_tran_ratio[sat_name] * throughput / util.tolinear(agent.sat.all_power) / 1e3
+    return self.ee[self.step_num]
 
-  def get_state_info(self, cell_sinr, beam_power, init=False):
-    sat_pos = {}
-    sinr_diff_dict = {}
-    for sat_name in self.leo_agents:
-      sat_pos[sat_name] = self.leo_agents[sat_name].get_scaled_pos(plot_range=self.plot_range)
+  def _cal_overhead(self, agent: Agent) -> float:
+    pass
 
-    if init:
-      for sat_name in self.leo_agents:
-        sinr_diff_dict[sat_name] = np.zeros((self.cell_num, ))
-    else:
-      for sat_name in self.leo_agents:
-        sinr_diff = cell_sinr[sat_name] - self.prev_cell_sinr[sat_name]
-        power_diff = beam_power[sat_name] - self.prev_beam_power[sat_name]
+  def get_position_state(self, sat_name) -> npt.NDArray[np.float32]:
+    return self.leo_agents[sat_name].get_scaled_pos(plot_range=self.plot_range)
 
-        estimated_channel_diff = sinr_diff - power_diff
-        closed_beam_bool = np.logical_or(
-          cell_sinr[sat_name] == 0, self.prev_cell_sinr[sat_name] == 0)
-        estimated_channel_diff[closed_beam_bool] = 0  # Set the diff of closed beams to zero
-        assert not np.isnan(estimated_channel_diff).any()
-
-        sinr_diff_dict[sat_name] = np.clip(estimated_channel_diff,
-                                           self.min_diff_sinr,
-                                           self.max_diff_sinr) / self.max_diff_sinr
-        self.prev_cell_sinr[sat_name] = cell_sinr[sat_name]
-        self.prev_beam_power[sat_name] = beam_power[sat_name]
-
-    state_dict = {}
-    for sat_name, pos in sat_pos.items():
-      state_dict[sat_name] = np.float32(np.concatenate((pos, sinr_diff_dict[sat_name])))
-      # state_dict[sat_name] = np.float32(pos)
-
-    return state_dict
-
-  def _take_action(self):
-    """Take action"""
-    raise ValueError('At template funtion')
-
-  def action_to_power_dict(self, power_action: npt.NDArray[np.float64], sat_name) -> Dict[int, float]:
-    raise ValueError('At template funtion')
+  def get_state_info(self) -> Dict[str, List[float]]:
+    pass
 
   def add_random_interference(self):
     """Other satellites have random beam act as interference """
@@ -240,39 +312,21 @@ class LEOSatEnv(gym.Env):
             sat.cell_topo.add_serving(f'{beam_idx}', beam_idx)
             self.additional_beam_set.add((intefere_sat_name, beam_idx))
 
-  def action_to_trainset(self, action: npt.NDArray[np.float64]) -> Set[int]:
-    """Map the action output to the training beam set.
-
-    Args:
-        action (float): Action
-
-    Returns:
-        Set[int]: Training beam set.
-    """
-    train_set = set()
-    # print(action)
-    for i, act in enumerate(action):
-      if act >= 0:
-        train_set.add(i)
-    # print(action)
-    # print(train_set)
-    return train_set
-
-  def reset(self, seed=None, options=None):
+  def reset(self, seed=None, options=None) -> Tuple[Dict[str, List[float]], Any]:
     super().reset(seed=seed)
 
     self._init_env()
-    state = self.get_state_info(self.prev_cell_sinr, self.prev_beam_power, init=True)
+    state = self.get_state_info()
+    self.reset_count += 1
 
     if seed:
       np.random.seed(seed)
     if options:
       print(options)
-    return state, {}
+    return state, {'has_action': (self.step_num % self.action_period == 0)}
 
   def _init_env(self):
     self.step_num = 0
-    self.wireless_channel = Channel()
     self.constel = self.make_constellation(channel=self.wireless_channel)
     self.ues = self.make_ues()
     self.dt_server = User('DT server', position=Position(geodetic=Geodetic(longitude=constant.ORIGIN_LONG,
@@ -282,13 +336,24 @@ class LEOSatEnv(gym.Env):
       self.ue_dict[ue.name] = ue
     self.nmc = self.make_nmc(constel=self.constel, ues=self.ues)
 
+    for t in range(self.max_step + 1):
+      self.ee[t] = {}
+      self.data_rate[t] = {}
+      self.overhead[t] = {}
+      self.throughput[t] = {}
+      for sat_name in self.agent_names:
+        self.ee[t][sat_name] = 0
+        self.data_rate[t][sat_name] = 0
+        self.overhead[t][sat_name] = 0
+        self.throughput[t][sat_name] = 0
+
     for sat_name in self.agent_names:
       self.leo_agents[sat_name].sat = self.constel.all_sat[sat_name]
       self.leo_agents[sat_name].sat.servable = self.ues
       cell_num = self.leo_agents[sat_name].sat.cell_topo.cell_number
       self.prev_cell_sinr[sat_name] = np.zeros((cell_num, ))
       self.prev_beam_power[sat_name] = np.zeros((cell_num, ))
-      self.reward[sat_name] = 0.0
+      self.overflowed_overhead[sat_name] = 0
 
     # TODO would not be feasible if cell_num is dynamic or is non-identical
     self.cell_num = self.leo_agents[self.agent_names[0]].sat.cell_topo.cell_number
@@ -321,8 +386,8 @@ class LEOSatEnv(gym.Env):
              constant.ORIGIN_LONG + self.plot_range))
     plt.ylim((constant.ORIGIN_LATI - self.plot_range,
              constant.ORIGIN_LATI + self.plot_range))
-    self.ax.set_title(f't: {self.step_num},\n'
-                      f'reward: {self.reward[sat_name]:7.2f}, '
+    self.ax.set_title(f'{self.name}    t: {self.step_num},\n'
+                      f'ee: {self.ee[self.step_num][sat_name]:7.2f}, '
                       f'power: {self.leo_agents[sat_name].sat.all_power:3.2f} dBm', {'fontsize': 28})
     # self.leo_agents[sat_name].sat.cell_topo.print_all_beams()
     plt.show()
@@ -347,11 +412,19 @@ class LEOSatEnv(gym.Env):
                           sat_height=sat_height[i],
                           inclination_angle=inclination[i])
         for i in range(shell_num)],
-        channel=channel)
+        channel=channel,
+        args=self.args)
 
     # move the constellation to the desired simulated scenario
-    constel.update_sat_position(-20 * constant.TIMESLOT)
+    constel.update_sat_position(constant.STARTING_TIMESLOT)
     return constel
+
+  def load_ues_data(self):
+    with open(f'low_earth_orbit/util/ue_position/ue_position_{self.args.ue_num}.csv', mode='r', newline='') as f:
+      reader = csv.DictReader(f)
+      for row in reader:
+        ue_idx = int(row.pop('ue_idx'))
+        self.ue_pos_data[ue_idx] = row
 
   def make_ues(self) -> List[User]:
     """Make a list of users
@@ -359,15 +432,12 @@ class LEOSatEnv(gym.Env):
     Returns:
         List[User]: The user list
     """
-    ue_long = [120.99, 121.58, 120.5]
-    ue_lati = [24.78, 25.03, 22.33]
-    if len(ue_long) != len(ue_lati):
-      raise ValueError('The length of ue_long and ue_lati is not the same.')
-    ues = [User(f'ue{i}',
-                Position(geodetic=Geodetic(
-                  longitude=ue_long[i],
-                  latitude=ue_lati[i],
-                  height=constant.R_EARTH))) for i in range(len(ue_long))]
+    ues = [0] * self.args.ue_num
+    for ue_idx in self.ue_pos_data:
+      ues[ue_idx] = User(name=f'ue{ue_idx}',
+                         position=Position(geodetic=Geodetic(longitude=float(self.ue_pos_data[ue_idx]['longitude']),
+                                                             latitude=float(self.ue_pos_data[ue_idx]['latitude']),
+                                                             height=float(self.ue_pos_data[ue_idx]['height']))))
 
     return ues
 

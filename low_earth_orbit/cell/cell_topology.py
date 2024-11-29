@@ -26,7 +26,7 @@ class CellTopology(object):
   """
 
   serving: Dict[str, int]
-  training_beam: Set[int]
+  __training_beam: Set[int]
   grid_points: List[Position]
   center_u: npt.NDArray[np.float64]
   center_v: npt.NDArray[np.float64]
@@ -40,8 +40,8 @@ class CellTopology(object):
   def __init__(
       self,
       center_point: Position,
+      cell_layer: int,
       cell_radius: float = constant.DEFAULT_CELL_RADIUS,
-      cell_layer: int = constant.DEFAULT_CELL_LAYER,
   ):
     """The __init__ funciton for cell topology.
 
@@ -62,7 +62,7 @@ class CellTopology(object):
       self._cell_number += i * 6
 
     self._beam_list = [
-        Beam(center_point=center_point) for _ in range(self.cell_number)
+        Beam(index=i, center_point=center_point) for i in range(self.cell_number)
     ]
 
     self.generate_xyz_coord_grid()
@@ -74,7 +74,8 @@ class CellTopology(object):
       )
 
     self.serving = {}
-    self.training_beam = set()
+    self.__training_beam = set()
+    self.__non_training_beam = set(i for i in range(self.cell_number))
     self.grid_points = []
 
   @property
@@ -109,6 +110,22 @@ class CellTopology(object):
     return self._beam_list
 
   @property
+  def training_beam(self):
+    return self.__training_beam
+
+  @training_beam.setter
+  def training_beam(self, beam_set):
+    self.__training_beam = beam_set
+
+  @property
+  def non_training_beam(self):
+    return self.__non_training_beam
+
+  @non_training_beam.setter
+  def non_training_beam(self, beam_set):
+    self.__non_training_beam = beam_set
+
+  @property
   def serving_status(self) -> Dict[int, int]:
     """Number of users in each beam.
 
@@ -132,6 +149,14 @@ class CellTopology(object):
   @property
   def training_beam_num(self) -> float:
     return len(self.training_beam)
+
+  def clear_training_beam(self):
+    self.__training_beam.clear()
+    self.non_training_beam = set(i for i in range(self.cell_number))
+
+  def add_training_beam(self, beam_set: Set[int]):
+    self.training_beam.update(beam_set)
+    self.non_training_beam.difference_update(beam_set)
 
   def generate_xyz_coord_grid(self):
     """Generate the XYZ-plane coordinate of the cell grid"""
@@ -455,51 +480,19 @@ class CellTopology(object):
 
     self.plot_cell(ax, cell_plot_mode, color_dict)
 
-  def sinr_of_users(
-      self,
-      serving_ue: List[User],
-      tx_gain: List[float],
-      channel_loss: List[float],
-      i_power: List[float],
-      mode: str = "run",
-  ) -> List[float]:
-    """Get the sinr of a list of user
-
-    Args:
-        ue (User): the user
-        tx_gain (float): transmitting antenna gain
-        channel_loss (float): the channel loss from the ue to sat
-        i_power (float): The total interference power each ue gets
-        mode (str): the mode this function is running
-                    (run or debug)
-
-    Returns:
-        float: the SINR
-    """
-    return [
-        self.beam_list[self.serving[ue.name]].calc_sinr(
-            ue=ue,
-            tx_gain=tx_gain[i],
-            channel_loss=channel_loss[i],
-            interference_power=i_power[i],
-            mode=mode,
-        )
-        for i, ue in enumerate(serving_ue)
-    ]
-
-  def beam_pos_of_serving_ue(self, ue: User) -> Position:
-    """Return the position of the beam which is serving the ue
+  def serving_beam_of_ue(self, ue: User) -> Beam:
+    """Return the beam which is serving the ue.
 
     Args:
         ue (User): The user
 
     Returns:
-        Position: The position of the beam center
+        Beam: The serving beam
     """
-    return self.beam_list[self.serving[ue.name]].center_point
+    return self.beam_list[self.serving[ue.name]]
 
   def find_nearby(
-      self, ue_pos: Position, r: Optional[float] = None
+      self, ue: User, r: Optional[float] = None
   ) -> Set[int]:
     """Find the nearby beam_index within r.
 
@@ -510,7 +503,6 @@ class CellTopology(object):
     Returns:
         The list of index of the beam index.
     """
-
     # James
     search_r = 1.5
 
@@ -524,8 +516,71 @@ class CellTopology(object):
     res = set(
         i
         for i, item in enumerate(self.beam_list)
-        if _dis(item.center_point, ue_pos, r)
+        if _dis(item.center_point, ue.position, r)
     )
+    return res
+
+  def hobs(self, ue: User):
+    serv_hist = ue.serving_history
+    # EBS
+    if len(serv_hist) < ue.training_window_size:
+      return self.non_training_beam
+
+    succ_index = 0
+    last_beam_pos = None
+    for i, serv_data in reversed(list(enumerate(serv_hist))):
+      if serv_data[-1] >= constant.SINR_THRESHOLD:
+        succ_index = i
+        last_beam_pos = serv_data[1]
+        break
+    # print(f'{ue.name} suc_idx: {succ_index}')
+
+    if last_beam_pos is None:
+      # print(serv_hist)
+      return self.non_training_beam
+
+    long_diff_list = [serv_hist[i][1].geodetic.longitude - serv_hist[i - 1][1].geodetic.longitude
+                      for i in range(1, len(serv_hist))]
+    lati_diff_list = [serv_hist[i][1].geodetic.latitude - serv_hist[i - 1][1].geodetic.latitude
+                      for i in range(1, len(serv_hist))]
+
+    s = (constant.DEFAULT_TRAINING_WINDOW_SIZE - succ_index)
+
+    long_start, long_end = self._get_training_range(
+      s, long_diff_list, last_beam_pos.geodetic.longitude, util.d_longitude(last_beam_pos.geodetic.latitude, self.cell_distance))
+    lati_start, lati_end = self._get_training_range(
+      s, lati_diff_list, last_beam_pos.geodetic.latitude, util.d_latitude(self.cell_distance))
+
+    res = self._get_training_area(long_start, long_end, lati_start, lati_end)
+    return res
+
+  def _get_training_range(self, s: int, diff_list, last_pos: float, d_l: float):
+    epsilon = s * max([abs(x) for x in diff_list])
+
+    max_l = max(diff_list)
+    min_l = min(diff_list)
+
+    if s == 1 and max_l <= 0:
+      head = last_pos - constant.POS_ERR_MARGIN - d_l - epsilon
+      tail = last_pos + constant.POS_ERR_MARGIN + d_l
+    elif s == 1 and min_l >= 0:
+      head = last_pos - constant.POS_ERR_MARGIN - d_l
+      tail = last_pos + constant.POS_ERR_MARGIN + d_l + epsilon
+    else:
+      head = last_pos - constant.POS_ERR_MARGIN - d_l - epsilon
+      tail = last_pos + constant.POS_ERR_MARGIN + d_l + epsilon
+
+    return head, tail
+
+  def _get_training_area(self, long_start, long_end, lati_start, lati_end):
+    res = set()
+    for beam_idx in self.non_training_beam:
+      beam_long = self.beam_list[beam_idx].center_point.geodetic.longitude
+      beam_lati = self.beam_list[beam_idx].center_point.geodetic.latitude
+      if (beam_long >= long_start and beam_long <= long_end
+              and beam_lati >= lati_start and beam_lati <= lati_end):
+        res.add(beam_idx)
+
     return res
 
   def set_beam_power(self, beam_idx: int, tx_power: float):
@@ -583,6 +638,27 @@ class CellTopology(object):
     """
     power_mw = sum(util.tolinear(beam.tx_power) for beam in self.beam_list)
     return util.todb(power_mw)
+
+  def export_power_dict(self) -> Dict[int, float]:
+    """Export the tx power of every beam into a dictionary.
+
+    Returns:
+        Dict[int, float]: {beam_index: tx_power}
+    """
+    res = {}
+    for b_idx in range(self.cell_number):
+      res[b_idx] = self.beam_list[b_idx].tx_power
+
+    return res
+
+  def import_power_dict(self, power_dict: Dict[int, float]):
+    """Import the tx power data from a dictionary.
+
+    Args:
+        power_dict (Dict[int, float]): {beam_index: tx_power}
+    """
+    for beam_idx, power in power_dict.items():
+      self.beam_list[beam_idx].tx_power = power
 
   def print_all_beams(self):
     for i, beam in enumerate(self.beam_list):

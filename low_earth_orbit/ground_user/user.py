@@ -1,6 +1,6 @@
 """The Ground User module."""
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 import collections
 
 from ..util import Position
@@ -19,7 +19,7 @@ class User(object):
     online: Is this UE is been serving or not
   """
   servable: UEservable
-  serving_history: collections.deque[SatBeamID]
+  serving_history: collections.deque[Tuple[SatBeamID, Position, float]]
   a3_table: Dict[SatBeamID, int]
   serving_sinr: float = constant.MIN_NEG_FLOAT
   _online: bool = False
@@ -31,7 +31,7 @@ class User(object):
       name: str,
       position: Position,
       rx_gain: float = constant.DEFAULT_RX_GAIN,
-      training_window: int = constant.DEFAULT_TRAINING_WINDOW_SIZE
+      training_window_size: int = constant.DEFAULT_TRAINING_WINDOW_SIZE
   ):
     """The __init__ funciton for user.
 
@@ -46,22 +46,33 @@ class User(object):
     self.name = name
     self.position = position
     self.rx_gain = rx_gain
-    self._training_window = training_window
+    self.__training_window_size = training_window_size
 
     self.servable = {}
-    self.serving_history = collections.deque(maxlen=training_window)
+    self.serving_history = collections.deque(maxlen=training_window_size)
     self.a3_table = {}
 
   @property
-  def training_window(self):
-    return self._training_window
+  def training_window_size(self):
+    return self.__training_window_size
 
   @property
-  def last_serving(self):
+  def last_serving_history(self):
+    if len(self.serving_history) == 0:
+      return None
+    return self.serving_history[-1]
+
+  @property
+  def last_serving(self) -> SatBeamID:
+    """The last serving SatBeamID.
+
+    Returns:
+        SatBeamID: sat name and beam index. (tuple(str, int))
+    """
     if not self.online:
       return None
     if self.serving_history:
-      return self.serving_history[-1]
+      return self.last_serving_history[0]
     return None
 
   @property
@@ -110,7 +121,15 @@ class User(object):
     rx_data = RxData(rsrp=rsrp)
     self.servable[(name_sat, beam_num)] = rx_data
 
-  def serving_add(self, sat_beam: SatBeamID) -> None:
+  def filter_servable(self, filter_target: List[SatBeamID]):
+    new_servable = {}
+    for sat_beam in filter_target:
+      if sat_beam in self.servable:
+        new_servable[sat_beam] = self.servable[sat_beam]
+
+    self.servable = new_servable
+
+  def serving_add(self, sat_beam: SatBeamID, beam_pos=None, serv_sinr=None) -> None:
     """Add final result for the serving.
 
     Args:
@@ -118,10 +137,12 @@ class User(object):
         beam_num (int): The bean index of sat
     """
     self.online = True
-    self.serving_history.append(sat_beam)
+    self.serving_history.append((sat_beam, beam_pos, serv_sinr))
 
-    self.serving_sinr = self.servable[
-        sat_beam].rsrp  # fake power, need to use real power
+    if serv_sinr is None:
+      self.serving_sinr = self.servable[sat_beam].rsrp
+    else:
+      self.serving_sinr = serv_sinr
 
   def update_one_beam_a3(self, sat_beam: SatBeamID) -> int:
     """Get the time of a3 event for sat_beam.

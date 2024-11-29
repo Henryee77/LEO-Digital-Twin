@@ -10,6 +10,7 @@ import itur
 PI = math.pi
 PI_IN_RAD = math.pi / 180
 KM = 1000
+MILLIWATT = 1000
 
 # Nature
 R_EARTH = 6371 * KM  # 6371 km
@@ -17,15 +18,20 @@ ANGULAR_SPEED_EARTH = 7.292115856e-5
 LIGHT_SPEED = 299792458
 THERMAL_NOISE_POWER = -174
 STAND_GRAVIT_PARA = 3.986004418e14
+KELVIN_TO_CELCIUS = -273.15
+DAY_IN_MONTH = [np.nan, 31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+MONTH_NUM = 12
 
 # Simulation Configuration
-TIMESLOT = 2  # training period (sec)
+MOVING_TIMESLOT = 1  # movement period (sec)
+DEFAULT_ACTION_TIMESLOT = MOVING_TIMESLOT * 2
+STARTING_TIMESLOT = -40
 
 # Beam-Training Parameteres
 SINR_THRESHOLD = 10  # (dB)
 DEFAULT_TRAINING_WINDOW_SIZE = 4
 BEAM_TRAINING_ACCURACY_THRESHOLD = 0.75
-T_BEAM = 0.015  # (s)
+T_BEAM = 0.02  # (s)
 T_FB = 0.005
 T_ACK = 0.005
 A3_INTER_SAT_OFFSET = 6
@@ -35,6 +41,7 @@ A3_RESET = 0
 A3_ONE_TIMESLOT = 1
 TIME_TO_TRIGGER = 2  # 2 timeslot
 OFFLINE_TIME_TO_TRIGGER = 0  # 0 timeslot
+POS_ERR_MARGIN = 0.03  # longitude, latitude
 
 # Ground User
 DEFAULT_RX_GAIN = 40  # (dB)
@@ -53,6 +60,8 @@ MAIN_LOBE_RANGE = 3.3  # The approximation to get the range of main lobe
 DEFAULT_CENTRAL_FREQUENCY = 20e9  # 20 GHz
 DEFAULT_BANDWIDTH = 100e6  # 100 MHz
 DEFAULT_BEAMWIDTH_3DB = 3.3 * PI_IN_RAD  # 3.3 deg
+DEFAULT_MIN_BEAMWIDTH = 2 * PI_IN_RAD
+DEFAULT_MAX_BEAMWIDTH = 4 * PI_IN_RAD
 DEFAULT_BEAM_SWEEPING_ALG = 1
 
 # Channel
@@ -80,13 +89,17 @@ DEFAULT_APERTURE_SIZE = 0.15  # (m)
 DEFAULT_ANTENNA_EFFICIENCY = 0.8
 ANT_GAIN_COEFF = 2.07123
 
+# Limit
 # because one of a denominator in the antenna gain fomula is raised to the power 3
 MIN_POSITIVE_FLOAT = float(sys.float_info.min**(1. / 4))
 MIN_NEG_FLOAT = -1 * sys.float_info.max
 INT_SIZE = 4  # bytes
 FLOAT_SIZE = 4
+MAX_DB = np.log10(sys.float_info.max)  # 308 dB
+MIN_DB = -MAX_DB
 
 # Sat
+MIN_POWER = 40
 MAX_POWER = 50  # dBm
 
 # Plot
@@ -101,7 +114,8 @@ DEFAULT_CELL_SERV_COLOR = 'g'
 CELL_ALPHA = 0.5
 
 # Latency
-DEFAULT_CPU_CYCLE = 5e9
-F_0 = 50
-DEFAULT_RT_DELAY = 0.5
+DEFAULT_DT_CPU_CYCLE = 2.5e9
+DEFAULT_LEO_CPU_CYCLE = 2.5e9
+F_0 = 10
+RT_COMP_SIZE = 5e7
 DEFAULT_GATEWAY_THROUGHPUT = 100e6  # bytes/s

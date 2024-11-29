@@ -19,6 +19,7 @@ class Beam(object):
   served_ue: Set[str]  # set of served users
 
   def __init__(self,
+               index: int,
                center_point: Position,
                tx_power: float = constant.MIN_NEG_FLOAT,
                central_frequency: float = constant.DEFAULT_CENTRAL_FREQUENCY,
@@ -37,6 +38,7 @@ class Beam(object):
         ValueError: The value of the power, frequency and angle must be
                     non-negative.
     """
+    self.__index = index
     self.tx_power = tx_power
     self.central_frequency = central_frequency
     self.bandwidth = bandwidth
@@ -49,6 +51,10 @@ class Beam(object):
             f'central_frequency: {self.central_frequency:.1e} Hz, '
             f'bandwidth: {self.bandwidth:.1e} Hz, '
             f'beamwidth_3db: {self.beamwidth_3db / constant.PI_IN_RAD} deg')
+
+  @property
+  def index(self):
+    return self.__index
 
   @property
   def tx_power(self):
@@ -135,7 +141,7 @@ class Beam(object):
     Args:
         ue (User): The user this beam is serving
         tx_gain (float): The tx antenna gain (in dB) this user gets
-        interference_power (float): The interference power (in dB)
+        interference_power (float): The interference power (in dBm)
                                     this user gets
         mode (str): the mode this function is running
                     (run or debug)
@@ -146,14 +152,18 @@ class Beam(object):
     noise_power = constant.THERMAL_NOISE_POWER + util.todb(self.bandwidth)
     n_and_i = util.todb(
         util.tolinear(interference_power) + util.tolinear(noise_power))
+
+    sinr = self.tx_power + tx_gain + ue.rx_gain - channel_loss - n_and_i
     if mode == 'debug':
-      print(f'Tx Power: {self.tx_power}, '
+      print(f'Tx Power: {self.tx_power} dBm, '
             f'Tx Gain: {tx_gain}, '
             f'UE Rx Gain: {ue.rx_gain}, '
-            f'Channel Loss: {channel_loss}, '
-            f'Interference Power: {interference_power}, '
-            f'Interference and Noise: {n_and_i}')
-    return self.tx_power + tx_gain + ue.rx_gain - channel_loss - n_and_i
+            f'Channel Loss: {channel_loss} dB, '
+            f'Interference Power: {interference_power} dBm, '
+            f'Noise power: {noise_power} dBm,'
+            f'Interference and Noise: {n_and_i} dBm,'
+            f'SINR: {sinr}')
+    return sinr
 
   def has_interference(self, other_beam: Beam) -> bool:
     """Decide if there is interference between two beams.

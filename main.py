@@ -6,7 +6,8 @@ from datetime import datetime
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
+from low_earth_orbit.util import constant
 from MA_TD3.misc import misc
 from MA_TD3.agent import Agent
 from MA_TD3.trainer import OffPolicyTrainer
@@ -16,16 +17,20 @@ def main(args):
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   print(device)
   # Create directories
-  if not os.path.exists('./log'):
-    os.makedirs('./log')
+  tb_path = f'./tb_result/{args.dir_name}'
+  log_path = f'./log/{args.dir_name}'
+  if not os.path.exists(tb_path):
+    os.makedirs(tb_path)
+  if not os.path.exists(log_path):
+    os.makedirs(log_path)
   if not os.path.exists('./pytorch_models'):
     os.makedirs('./pytorch_models')
   if not os.path.exists('./config'):
     os.makedirs('./config')
 
   # Set logs
-  tb_writer = SummaryWriter(logdir=f'./log/tb_{args.log_name}', flush_secs=60)
-  log = misc.set_log(args)
+  tb_writer = SummaryWriter(log_dir=f'{tb_path}/tb_{args.log_name}')
+  log = misc.set_log(args, log_path=log_path)
   saving_directory = 'pytorch_models'
   loading_directory = 'pytorch_models'
   filename = args.model
@@ -41,52 +46,48 @@ def main(args):
   ax.set_aspect('equal', adjustable='box')
   plt.ion()
 
-  agent_name_list = ['3_0_24', '2_0_1', '1_0_9']
+  sat_name_list = ['3_0_24', '2_0_1', '1_0_9']
   # Initialize agents
   realworld_agent_dict = {}
   digitalworld_agent_dict = {}
-  for agent_name in agent_name_list:
-    realworld_agent_dict[agent_name] = Agent(policy_name=args.model,
-                                             tb_writer=tb_writer,
-                                             log=log,
-                                             name=agent_name,
-                                             agent_type='real_LEO',
-                                             args=args,
-                                             device=device)
-    digitalworld_agent_dict[agent_name] = Agent(policy_name=args.model,
-                                                tb_writer=tb_writer,
-                                                log=log,
-                                                name=agent_name,
-                                                agent_type='digital_LEO',
-                                                args=args,
-                                                device=device)
+  for sat_name in sat_name_list:
+    realworld_agent_dict[sat_name] = Agent(policy_name=args.model,
+                                           tb_writer=tb_writer,
+                                           log=log,
+                                           sat_name=sat_name,
+                                           agent_type='real_LEO',
+                                           args=args,
+                                           device=device,
+                                           comp_freq=constant.DEFAULT_LEO_CPU_CYCLE)
+    digitalworld_agent_dict[sat_name] = Agent(policy_name=args.model,
+                                              tb_writer=tb_writer,
+                                              log=log,
+                                              sat_name=sat_name,
+                                              agent_type='digital_LEO',
+                                              args=args,
+                                              device=device,
+                                              comp_freq=args.dt_computaion_speed)
 
   # Create env
   real_env = misc.make_env(args.real_env_name,
                            args=args,
                            ax=ax,
+                           tb_writer=tb_writer,
                            agent_dict=realworld_agent_dict,
                            real_agents=realworld_agent_dict,
                            digital_agents=digitalworld_agent_dict,
-                           agent_names=agent_name_list)
+                           agent_names=sat_name_list)
   digital_env = misc.make_env(args.digital_env_name,
                               args=args,
                               ax=ax,
+                              tb_writer=tb_writer,
                               agent_dict=digitalworld_agent_dict,
                               real_agents=realworld_agent_dict,
                               digital_agents=digitalworld_agent_dict,
-                              agent_names=agent_name_list)
-  print(f'real env name: {real_env.name}')
-  print(f'digital env name: {digital_env.name}')
-  '''real_env.leo_agents = realworld_agent_dict
-  real_env.real_agents = realworld_agent_dict
-  real_env.digital_agents = digitalworld_agent_dict
-  real_env.reset()
+                              agent_names=sat_name_list)
+  print(f'real env name: {real_env.unwrapped.name}')
+  print(f'digital env name: {digital_env.unwrapped.name}')
 
-  digital_env.leo_agents = digitalworld_agent_dict
-  digital_env.real_agents = realworld_agent_dict
-  digital_env.digital_agents = digitalworld_agent_dict
-  digital_env.reset()'''
   # Start training
   trainer_dict = {'TD3': 'Off-Policy',
                   'DDPG': 'Off-Policy',
@@ -104,33 +105,46 @@ def main(args):
                                             tb_writer=tb_writer,
                                             env=digital_env,
                                             leo_agent_dict=digitalworld_agent_dict)
+    realworld_trainer.twin_trainer = digitalworld_trainer
+    digitalworld_trainer.twin_trainer = realworld_trainer
+
     if args.running_mode == 'training':
-      while digitalworld_trainer.total_eps < args.ep_max_timesteps:
-        pre_training_process(args, realworld_trainer, digitalworld_trainer)
+      for ep_cnt in range(1, args.max_ep_num + 1):
+        if max(digitalworld_trainer.total_eps, realworld_trainer.total_eps) == args.dt_online_ep:
+          digitalworld_trainer.online = True
+        if max(digitalworld_trainer.total_eps, realworld_trainer.total_eps) == args.realLEO_online_ep:
+          realworld_trainer.online = True
+
+        training_process(args, realworld_trainer, digitalworld_trainer)
+
+        # evaluate performance every certain steps
+        if ep_cnt % args.eval_period == 0:
+          eval_process(args, realworld_trainer, digitalworld_trainer)
+          tb_writer.flush()
 
       digitalworld_trainer.print_time()
-      # realworld_trainer.print_time()
+      realworld_trainer.print_time()
 
-      for agent_name, agent in realworld_agent_dict.items():
+      for _, agent in realworld_agent_dict.items():
         agent.policy.save(
-          filename=f'{filename}_real_world_{agent_name}', directory=saving_directory)
-      for agent_name, agent in digitalworld_agent_dict.items():
+          filename=f'{filename}_{agent.name}', directory=saving_directory)
+      for _, agent in digitalworld_agent_dict.items():
         agent.policy.save(
-            filename=f'{filename}_digital_world_{agent_name}', directory=saving_directory)
+            filename=f'{filename}_{agent.name}', directory=saving_directory)
       misc.save_config(args=args)
 
     elif args.running_mode == 'testing':
       print(f'Testing {filename}......')
-      for agent_name, agent in realworld_agent_dict.items():
+      for _, agent in realworld_agent_dict.items():
         agent.policy.load(
-          filename=f'{filename}_real_world_{agent_name}', directory=loading_directory)
-      for agent_name, agent in digitalworld_agent_dict.items():
+          filename=f'{filename}_{agent.name}', directory=loading_directory)
+      for _, agent in digitalworld_agent_dict.items():
         agent.policy.load(
-          filename=f'{filename}_digital_world_{agent_name}', directory=loading_directory)
+          filename=f'{filename}_{agent.name}', directory=loading_directory)
 
-      testing_process()
+      eval_process(args, realworld_trainer, digitalworld_trainer, running_mode=args.running_mode)
     else:
-      raise ValueError(f'No {args.running_mode} running mode')
+      raise ValueError(f'No \'{args.running_mode}\' running mode')
 
   else:
     raise ValueError('On-policy trainer dict is not yet finished.')
@@ -138,21 +152,72 @@ def main(args):
   tb_writer.close()
 
 
-def pre_training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
-  # run one episode with epsilon greedy
-  digitalworld_trainer.collect_one_episode()
+def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer, running_mode='training'):
+  time_count = 0
+  digital_done = real_done = False
+  d_info = digitalworld_trainer.reset_env(eval=True)
+  r_info = realworld_trainer.reset_env(eval=True)
 
-  # train the neural network
-  digitalworld_trainer.train()
+  while time_count < args.max_time_per_ep and not (digital_done or real_done):
+    if r_info['has_action']:
+      digital_actions = digitalworld_trainer.deterministic_actions()
+      real_actions = realworld_trainer.deterministic_actions()
 
-  # evaluate performance
-  if digitalworld_trainer.total_eps % args.eval_period == 0:
-    digitalworld_trainer.eval_progress()
+      _, _, digital_done, d_info = digitalworld_trainer.take_action(digital_actions, running_mode=running_mode)
+      _, _, real_done, r_info = realworld_trainer.take_action(real_actions, running_mode=running_mode)
+
+    else:
+      _, digital_done, d_info = digitalworld_trainer.no_action_step()
+      _, real_done, r_info = realworld_trainer.no_action_step()
+
+    time_count += 1
+
+  digitalworld_trainer.save_eval_result(time_count)
+  realworld_trainer.save_eval_result(time_count)
 
 
-def testing_process(realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
-  realworld_trainer.eval_progress(str='testing')
-  digitalworld_trainer.eval_progress(str='testing')
+def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer: OffPolicyTrainer):
+  time_count = 0
+  digital_done = real_done = False
+  d_info = digitalworld_trainer.reset_env()
+  r_info = realworld_trainer.reset_env()
+
+  while time_count < args.max_time_per_ep and not (digital_done or real_done):
+    if r_info['has_action']:
+      digital_actions = digitalworld_trainer.stochastic_actions()
+      real_actions = realworld_trainer.stochastic_actions()
+
+      (digital_prev_state_dict,
+       digital_step_total_reward,
+       digital_done,
+       d_info) = digitalworld_trainer.take_action(digital_actions)
+      (real_prev_state_dict,
+       real_step_total_reward,
+       real_done,
+       r_info) = realworld_trainer.take_action(real_actions)
+
+      if time_count % args.twin_sharing_period == 0:
+        digitalworld_trainer.twin_parameter_query()
+        realworld_trainer.twin_parameter_query()
+        digitalworld_trainer.twin_parameter_update()
+        realworld_trainer.twin_parameter_update()
+
+      digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
+                                                action_dict=digital_actions,
+                                                total_reward=digital_step_total_reward,
+                                                done=digital_done)
+      realworld_trainer.save_to_replaybuffer(prev_state_dict=real_prev_state_dict,
+                                             action_dict=real_actions,
+                                             total_reward=real_step_total_reward,
+                                             done=real_done)
+    else:
+      _, digital_done, d_info = digitalworld_trainer.no_action_step()
+      _, real_done, r_info = realworld_trainer.no_action_step()
+
+    time_count += 1
+
+  digitalworld_trainer.save_training_result(time_count)
+  realworld_trainer.save_training_result(time_count)
 
 
 if __name__ == '__main__':
@@ -166,16 +231,16 @@ if __name__ == '__main__':
     '--batch-size', default=16, type=int,
     help='Batch size for both actor and critic')
   parser.add_argument(
-      '--actor-lr', default=1e-6, type=float,
+      '--actor-lr', default=5e-5, type=float,
       help='Learning rate for actor')
   parser.add_argument(
-      '--critic-lr', default=2e-5, type=float,
+      '--critic-lr', default=1e-4, type=float,
       help='Learning rate for critic')
   parser.add_argument(
-      '--lr-reduce-factor', default=0.999, type=float,
+      '--lr-reduce-factor', default=0.9, type=float,
       help='Reduce factor of learning rate')
   parser.add_argument(
-      '--lr-reduce-patience', default=5000, type=int,
+      '--lr-reduce-patience', default=100, type=int,
       help='Patience of reducing learning rate')
   parser.add_argument(
       '--lambda-l2', default=1e-9, type=float,
@@ -184,22 +249,16 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--ra-actor-n-hidden', default=3200, type=int,
+      '--actor-n-hidden', default=3200, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--ra-critic-n-hidden', default=6400, type=int,
+      '--critic-n-hidden', default=6400, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--ch-actor-n-hidden', default=1200, type=int,
-      help='Number of hidden neuron')
+      '--training-period', default=25, type=int,
+      help='Peiord (number of radio frame) of NN training.')
   parser.add_argument(
-      '--ch-critic-n-hidden', default=2400, type=int,
-      help='Number of hidden neuron')
-  parser.add_argument(
-      '--iter-num', default=4, type=int,
-      help='Number of base training iteration')
-  parser.add_argument(
-      '--replay-buffer-size', default=10000, type=int,
+      '--replay-buffer-size', default=2000, type=int,
       help='The printing number of the network weight (for debug)')
 
   # --------------- TD3 -----------------------
@@ -210,7 +269,7 @@ if __name__ == '__main__':
       '--policy-freq', default=2, type=int,
       help='Frequency of delayed policy updates')
   parser.add_argument(
-      '--min-epsilon', default=0.35, type=float,
+      '--min-epsilon', default=0.25, type=float,
       help='The minimum of epsilon')
   parser.add_argument(
       '--expl-noise', default=0.2, type=float,
@@ -222,7 +281,7 @@ if __name__ == '__main__':
       '--noise-clip', default=0.1, type=float,
       help='The clip range of policy noise')
   parser.add_argument(
-      '--epsilon-decay-rate', default=0.99999, type=float,
+      '--epsilon-decay-rate', default=0.9999, type=float,
       help='The rate of epsilon decay')
   parser.add_argument(
       '--discount', default=1e-2, type=float,
@@ -233,23 +292,32 @@ if __name__ == '__main__':
 
   # -----------Parameter Sharing ---------------
   parser.add_argument(
-      '--federated-update-rate', default=5e-3, type=float,
+      '--federated-update-rate', default=1e-1, type=float,
       help='Network exchanging rate of federated agents')
   parser.add_argument(
-      '--federated-upload-freq', default=5, type=int,
-      help='Frequency of federated uploading per learning iteration')
+      '--federated-upload-period', default=80, type=int,
+      help='Period of federated uploading')
   parser.add_argument(
-      '--federated-download-freq', default=15, type=int,
-      help='Frequency of federated downloading per learning iteration')
+      '--federated-download-period', default=80, type=int,
+      help='Period of federated downloading')
+  parser.add_argument(
+      '--federated-layer-num-per-turn', default=2, type=int,
+      help='number of layers per federated uploading')
+  parser.add_argument(
+      '--twin-sharing-update-rate', default=1e-1, type=float,
+      help='Network update rate of twin sharing')
+  parser.add_argument(
+      '--twin-sharing-period', default=5, type=int,
+      help='Period of twin sharing uploading')
+  parser.add_argument(
+      '--twin-sharing-layer-num-per-turn', default=1, type=int,
+      help='number of layers per twin sharing')
   parser.add_argument(
       '--historical-smoothing-coef', default=0.9, type=float,
       help='The smoothing coefficient of the historical average reward')
   parser.add_argument(
       '--max-sharing-weight', default=2, type=float,
       help='Maximum weight of parameter sharing for each agent')
-  parser.add_argument(
-      '--uploaded-layer-num-per-turn', default=2, type=int,
-      help='number of layers per uploading')
   parser.add_argument(
       '--partial-upload-type', default='by-turns', type=str,
       help='"random" or "by-turns"')
@@ -259,6 +327,25 @@ if __name__ == '__main__':
       '--a3c-global-update-freq', default=5, type=int,
       help='Frequency of global updating in A3C')
 
+  # ------------------- LEO -------------------------
+  parser.add_argument(
+      '--beam-sweeping-mode', type=str, default='ABS',
+      help='Beam-sweeping mode')
+  parser.add_argument(
+      '--cell-layer-num', type=int, default=constant.DEFAULT_CELL_LAYER,
+      help='Number of cell layer (related to cell number)')
+  parser.add_argument(
+      '--leo-computaion-speed', type=float, default=constant.DEFAULT_LEO_CPU_CYCLE,
+      help='LEO computation speed')
+
+  # --------------------- DT ------------------------
+  parser.add_argument(
+      '--dt-computaion-speed', type=float, default=constant.DEFAULT_DT_CPU_CYCLE,
+      help='DT computation speed')
+  parser.add_argument(
+      '--shared-state-type', type=int, default=2,
+      help='Number of the state type shared. 0: None, 1: pathloss, 2: pathloss + CSI')
+
   # ------------------- Env -------------------------
   parser.add_argument(
       '--real-env-name', type=str, default='RealWorld-v0',
@@ -267,14 +354,27 @@ if __name__ == '__main__':
       '--digital-env-name', type=str, default='DigitalWorld-v0',
       help='OpenAI gym environment name. Correspond to the digital twins')
   parser.add_argument(
-      '--ep-max-timesteps', type=int, required=True,
+      '--max-ep-num', type=int, required=True,
       help='Total number of episodes')
   parser.add_argument(
-      '--step-per-ep', default=50, type=int,
+      '--max-time-per-ep', default=100, type=int,
+      help='Total number of steps in one episode')
+  parser.add_argument(
+      '--action-timeslot', default=constant.DEFAULT_ACTION_TIMESLOT, type=int,
       help='Total number of steps in one episode')
   parser.add_argument(
       '--eval-period', default=10, type=int,
       help='The evaluation frequency')
+  parser.add_argument(
+      '--dt_online_ep', type=int,
+      help='The episode to turn on digital twins')
+  parser.add_argument(
+      '--realLEO_online_ep', type=int,
+      help='The episode to turn on real LEOs')
+  parser.add_argument(
+      '--ue-num', type=int,
+      help='The number of ues')
+  parser
 
   # ------------------ Misc -------------------------
   parser.add_argument(
@@ -283,6 +383,9 @@ if __name__ == '__main__':
   parser.add_argument(
       '--prefix', default='', type=str,
       help='Prefix for tb_writer and logging')
+  parser.add_argument(
+      '--dir-name', default='', type=str,
+      help='Name of the tb directory')
   parser.add_argument(
       '--seed', default=456789, type=int,
       help='Sets Gym, PyTorch and Numpy seeds')
@@ -293,9 +396,11 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   # Set log name
-
-  now = datetime.now()
-  time_string = now.strftime('%Y_%m_%d_%H_%M_%S')
+  time_string = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
   args.log_name = f'{args.prefix}_log_{time_string}'
 
+  start_time = time.time()
+
   main(args=args)
+
+  print(f'Total time from main: {(time.time() - start_time) / 3600: .2f} hr')

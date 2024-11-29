@@ -1,7 +1,7 @@
 """The basic util module."""
-
+from scipy import special as sp
 import os
-from typing import Tuple, Set, overload
+from typing import overload, Tuple, Set, Dict, Any
 
 import math
 import numpy as np
@@ -11,6 +11,10 @@ import matplotlib.pyplot as plt
 from . import constant
 
 DIRPATH = os.path.dirname(__file__)
+
+
+def qfunc(x):
+  return 0.5 - 0.5 * sp.erf(x / math.sqrt(2))
 
 
 @overload
@@ -32,7 +36,7 @@ def todb(linear):
   Returns:
       In db scale.
   """
-  return 10 * np.log10(linear)
+  return np.clip(10 * np.log10(linear), constant.MIN_DB, constant.MAX_DB)
 
 
 @overload
@@ -65,15 +69,20 @@ def sign(x: float) -> int:
   raise ValueError("NAN")
 
 
-def rescale_value(x, r_min, r_max, t_min, t_max) -> float:
+@overload
+def rescale_value(x: npt.NDArray, r_min: float, r_max: float, t_min: float, t_max: float) -> npt.NDArray:
+  ...
+
+
+def rescale_value(x: float, r_min: float, r_max: float, t_min: float, t_max: float) -> float:
   """Rescale the value from domain R to doamin T
 
   Args:
-      x (_type_): The input value
-      r_min (_type_): min value of space R
-      r_max (_type_): max value of space R
-      t_min (_type_): min value of space T
-      t_max (_type_): max value of space T
+      x (float): The input value
+      r_min (float): min value of space R
+      r_max (float): max value of space R
+      t_min (float): min value of space T
+      t_max (float): max value of space T
 
   Returns:
       float: The rescaled value
@@ -81,6 +90,25 @@ def rescale_value(x, r_min, r_max, t_min, t_max) -> float:
   res = (x - r_min) / (r_max - r_min) * (t_max - t_min) + t_min
   # print(f'debug: {x}, {res}, {t_min}, {t_max}')
   return res
+
+
+@overload
+def standardize(x: npt.NDArray, mean: float, stdv: float) -> npt.NDArray:
+  ...
+
+
+def standardize(x: float, mean: float, stdv: float) -> float:
+  """Standardization
+
+  Args:
+      x (float): input
+      mean (float): mean
+      stdv (float): standard deviation
+
+  Returns:
+      float: (x - mean) / stdv
+  """
+  return (x - mean) / stdv
 
 
 def truncate(x: float, precision: int = 3) -> float:
@@ -120,3 +148,24 @@ def plot_taiwan_shape(ax: plt.Axes):
 
 def propagation_delay(distance) -> float:
   return distance / constant.LIGHT_SPEED
+
+
+def rt_delay(unit_num, comp_speed) -> float:
+  return unit_num * constant.RT_COMP_SIZE / comp_speed
+
+
+def d_longitude(origin_latitude: float, distance: float) -> float:
+  return (distance / constant.R_EARTH) / constant.PI_IN_RAD / math.cos(origin_latitude * constant.PI_IN_RAD)
+
+
+def d_latitude(distance: float) -> float:
+  return (distance / constant.R_EARTH) / constant.PI_IN_RAD
+
+
+def avg_nested_2d_dict(dict_2d: Dict[Any, Dict[Any, int | float]]) -> float:
+  cnt = 0
+  total_value = 0
+  for dict in dict_2d.values():
+    cnt += len(dict)
+    total_value += sum(dict.values())
+  return total_value / cnt
