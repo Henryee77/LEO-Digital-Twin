@@ -14,3 +14,6 @@ FOR /F %k in (requirements.txt) DO pip install %k
 
 Update all package (shell command): 
 pip freeze | %{$_.split('==')[0]} | %{pip install --upgrade $_}
+
+
+tensorboard --logdir="

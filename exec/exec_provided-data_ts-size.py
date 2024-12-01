@@ -36,8 +36,9 @@ if __name__ == '__main__':
   twin_sharing_period_list = [5 * i for i in range(1, 10)]
   d_start_ep, r_start_ep, ps_period, twin_sharing_period = mode_2_start_ep(mode)
 
-  dir_name = f'cell_layer-comp_speed {max_ep} eps'
+  dir_name = f'provided_data-twin_sharing {max_ep} eps'
   # dir_name = 'debug'
+  bugged_folders = []
 
   for ue_num in ue_num_list:
     for shared_state_type in provide_type:
@@ -59,4 +60,7 @@ if __name__ == '__main__':
         )
         if error_code > 0:
           print('--------------------------------------------------------------------------------------------------')
-          raise ValueError('Runtime error.')
+          # raise ValueError('Runtime error.')
+          bugged_folders.append(prefix)
+
+  print(bugged_folders)
