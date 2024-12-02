@@ -324,6 +324,8 @@ class OffPolicyTrainer(object):
 
     new_env_observation, env_reward, done, _, info = self.env.step(action_dict)
 
+    self.sat_sim_time += time.time() - sim_start_time
+
     if running_mode == "training":
       self.train()
     else:
@@ -338,7 +340,6 @@ class OffPolicyTrainer(object):
     for agent_name in env_reward:
       self.ep_reward[agent_name] += env_reward[agent_name]
 
-    self.sat_sim_time += time.time() - sim_start_time
     return prev_state_dict, sum(env_reward.values()), done, info
 
   def no_action_step(self, running_mode='training'):
