@@ -141,6 +141,9 @@ class LEOSatEnv(gym.Env):
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
     has_action = (self.step_num % self.action_period == 0)
+    if has_action:
+      for sat_name in self.agent_names:
+        self.overflowed_overhead[sat_name] = 0
     obs = self.get_state_info(has_action)
 
     return (obs, reward, done, truncated, {'has_action': has_action})
@@ -274,8 +277,7 @@ class LEOSatEnv(gym.Env):
           if sat_name not in sat_tran_ratio:
             self.overhead[self.step_num][sat_name] = self._cal_overhead(agent)
             overhead = self.overhead[self.step_num][sat_name] + self.overflowed_overhead[sat_name]
-            self.overflowed_overhead[sat_name] = max(
-              0, self.overflowed_overhead[sat_name] + (overhead - constant.MOVING_TIMESLOT))
+            self.overflowed_overhead[sat_name] = max(0, overhead - constant.MOVING_TIMESLOT)
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
 
           self.data_rate[self.step_num][sat_name] += sat_tran_ratio[sat_name] * throughput

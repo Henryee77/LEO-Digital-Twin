@@ -24,7 +24,7 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [3, 6, 9, 12, 15]
+  ue_num_list = [3, 6, 9]
   max_ep = 1_000
   step_num = 100
   mode = 'DT + TS'
