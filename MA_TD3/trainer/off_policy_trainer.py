@@ -350,6 +350,8 @@ class OffPolicyTrainer(object):
 
     new_env_observation, env_reward, done, _, info = self.env.unwrapped.no_action_step()
 
+    self.sat_sim_time += time.time() - sim_start_time
+
     if running_mode == "training":
       self.train()
     else:
@@ -360,8 +362,6 @@ class OffPolicyTrainer(object):
     self.total_timesteps += 1
     for agent_name in env_reward:
       self.ep_reward[agent_name] += env_reward[agent_name]
-
-    self.sat_sim_time += time.time() - sim_start_time
 
     return sum(env_reward.values()), done, info
 

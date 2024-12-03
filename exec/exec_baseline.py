@@ -33,7 +33,7 @@ if __name__ == '__main__':
   mode_list = ['DT + TS', 'DT', 'No DT']
   step_num = 100
 
-  dir_name = f'4 - Baseline Comparison {max_ep} eps'
+  dir_name = f'2 - Baseline Comparison {max_ep} eps'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:
