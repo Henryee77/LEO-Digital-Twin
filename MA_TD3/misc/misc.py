@@ -10,6 +10,7 @@ from logging import Logger
 from datetime import datetime
 from collections import OrderedDict
 from typing import List, Tuple, Dict, OrderedDict
+import numpy.typing as npt
 
 import torch
 from torch import nn
@@ -137,7 +138,7 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
   return result, index
 
 
-def onehot_from_logits(logits):
+def onehot_from_logits(logits: npt.NDArray[np.float32] | torch.Tensor):
   """Given batch of logits, return one-hot sample
   Ref: https://github.com/shariqiqbal2810/maddpg-pytorch/blob/master/utils/misc.py
   """

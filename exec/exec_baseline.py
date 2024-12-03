@@ -24,7 +24,7 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [3]
+  ue_num_list = [3, 6]
   max_ep = 1_000
   tf = constant.DEFAULT_ACTION_TIMESLOT
   bs_mode = 'ABS'
@@ -33,7 +33,7 @@ if __name__ == '__main__':
   mode_list = ['DT + TS', 'DT', 'No DT']
   step_num = 100
 
-  dir_name = f'2 - Baseline Comparison {max_ep} eps'
+  dir_name = f'4 - Baseline Comparison {max_ep} eps'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:

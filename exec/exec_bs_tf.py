@@ -30,7 +30,7 @@ if __name__ == '__main__':
   cell_layer = 3
   f_comp = constant.DEFAULT_DT_CPU_CYCLE
   bs_list = ['ABS', 'SCBS', 'SSBS']
-  tf_list = [2, 3, 4, 5, 6]
+  tf_list = [1, 2, 3, 4, 5]
   step_num = 100
 
   dir_name = f'3 - Beam sweeping-T_f {max_ep} eps'

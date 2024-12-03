@@ -249,13 +249,13 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--actor-n-hidden', default=3200, type=int,
+      '--actor-n-hidden', default=3000, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--critic-n-hidden', default=6400, type=int,
+      '--critic-n-hidden', default=6000, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--training-period', default=25, type=int,
+      '--training-period', default=40, type=int,
       help='Peiord (number of radio frame) of NN training.')
   parser.add_argument(
       '--replay-buffer-size', default=2000, type=int,
