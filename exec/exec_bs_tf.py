@@ -24,9 +24,9 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [3]
-  max_ep = 1_000
-  mode = 'DT + TS'
+  ue_num_list = [3, 6]
+  max_ep = 750
+  mode = 'DT'
   cell_layer = 3
   f_comp = constant.DEFAULT_DT_CPU_CYCLE
   bs_list = ['ABS', 'SCBS', 'SSBS']

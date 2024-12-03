@@ -24,7 +24,7 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [6]
+  ue_num_list = [3, 6]
   max_ep = 1_000
   mode = 'DT + TS'
   tf = constant.DEFAULT_ACTION_TIMESLOT

@@ -110,9 +110,8 @@ class DigitalWorldEnv(LEOSatEnv):
 
     realworld_header = self.real_agents[agent.sat_name].sat.beam_training_latency
 
-    digitalworld_header = (util.rt_delay(len(self.leo_agents) * len(self.ues), self.digital_agents[agent.sat_name].comp_freq)
-                           + self.dt_server.trans_latency(agent.state_dim * constant.INT_SIZE)
-                           + util.propagation_delay(leo2dt_distance))
+    digitalworld_header = util.rt_delay(len(self.digital_agents) * len(self.ues),
+                                        self.digital_agents[agent.sat_name].comp_freq)
 
     state_exchange_overhead = (agent.sat.trans_latency(agent.state_dim * constant.FLOAT_SIZE, self.dt_server)
                                + self.dt_server.trans_latency(agent.state_dim * constant.FLOAT_SIZE)
@@ -136,20 +135,22 @@ class DigitalWorldEnv(LEOSatEnv):
                 + agent.computation_latency
                 + feedback_overhead)
 
-    if self.last_episode:
-      self.tb_writer.add_scalars(f'{self.name} Overhead/overhead',
-                                 {agent.name: overhead},
-                                 self.step_num + (self.reset_count - 1) * self.max_step)
-      self.tb_writer.add_scalars(f'{self.name} Overhead/realworld_header overhead',
-                                 {agent.name: realworld_header},
-                                 self.step_num + (self.reset_count - 1) * self.max_step)
-      self.tb_writer.add_scalars(f'{self.name} Overhead/digitalworld_header overhead',
-                                 {agent.name: digitalworld_header},
-                                 self.step_num + (self.reset_count - 1) * self.max_step)
-      self.tb_writer.add_scalars(f'{self.name} Overhead/comp header',
-                                 {agent.name: agent.computation_latency},
-                                 self.step_num + (self.reset_count - 1) * self.max_step)
-      self.tb_writer.add_scalars(f'{self.name} Overhead/feedback_overhead',
-                                 {agent.name: feedback_overhead},
-                                 self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name} Overhead/overhead',
+                               {agent.name: overhead},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name} Overhead/realworld header overhead',
+                               {agent.name: realworld_header},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name} Overhead/digitalworld header overhead',
+                               {agent.name: digitalworld_header},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name} Overhead/state exchange overhead overhead',
+                               {agent.name: state_exchange_overhead},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name} Overhead/comp header',
+                               {agent.name: agent.computation_latency},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
+    self.tb_writer.add_scalars(f'{self.name} Overhead/feedback overhead',
+                               {agent.name: feedback_overhead},
+                               self.step_num + (self.reset_count - 1) * self.max_step)
     return overhead
