@@ -59,6 +59,7 @@ class LEOSatEnv(gym.Env):
     self.wireless_channel = Channel()
 
     self.step_num = 0
+    self.total_step_num = 0
     self.action_period = args.action_timeslot / constant.MOVING_TIMESLOT
     self.reset_count = 0
     self.max_step = args.max_time_per_ep
@@ -137,6 +138,7 @@ class LEOSatEnv(gym.Env):
     self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     self.step_num += 1
+    self.total_step_num += 1
     self.constel.update_sat_position()
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
@@ -153,11 +155,11 @@ class LEOSatEnv(gym.Env):
       for ue_name, sinr in ue_sinr.items():
         self.tb_writer.add_scalars(f'{self.name} Env Param/ue sinr',
                                    {ue_name: sinr},
-                                   self.step_num + (self.reset_count - 1) * self.max_step)
+                                   self.total_step_num)
       for ue_name, throughput in ue_throughput.items():
         self.tb_writer.add_scalars(f'{self.name} Env Param/ue throughput',
                                    {ue_name: throughput},
-                                   self.step_num + (self.reset_count - 1) * self.max_step)
+                                   self.total_step_num)
 
   def save_episode_result(self):
     self.tb_writer.add_scalars(f'{self.name} Env Param/average overhead',

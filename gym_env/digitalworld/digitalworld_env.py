@@ -97,6 +97,7 @@ class DigitalWorldEnv(LEOSatEnv):
     self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     self.step_num += 1
+    self.total_step_num += 1
     self.constel.update_sat_position()
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
@@ -137,20 +138,20 @@ class DigitalWorldEnv(LEOSatEnv):
 
     self.tb_writer.add_scalars(f'{self.name} Overhead/overhead',
                                {agent.name: overhead},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.total_step_num)
     self.tb_writer.add_scalars(f'{self.name} Overhead/realworld header overhead',
                                {agent.name: realworld_header},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.total_step_num)
     self.tb_writer.add_scalars(f'{self.name} Overhead/digitalworld header overhead',
                                {agent.name: digitalworld_header},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.total_step_num)
     self.tb_writer.add_scalars(f'{self.name} Overhead/state exchange overhead overhead',
                                {agent.name: state_exchange_overhead},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.total_step_num)
     self.tb_writer.add_scalars(f'{self.name} Overhead/comp header',
                                {agent.name: agent.computation_latency},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.total_step_num)
     self.tb_writer.add_scalars(f'{self.name} Overhead/feedback overhead',
                                {agent.name: feedback_overhead},
-                               self.step_num + (self.reset_count - 1) * self.max_step)
+                               self.total_step_num)
     return overhead
