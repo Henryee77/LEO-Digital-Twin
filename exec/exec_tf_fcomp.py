@@ -34,7 +34,7 @@ if __name__ == '__main__':
   tf_list = [1, 2, 3, 4, 5]
   step_num = 100
 
-  dir_name = f'T_f - f_comp {max_ep} eps'
+  dir_name = f'T_f - f_comp {max_ep} eps - 2'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:

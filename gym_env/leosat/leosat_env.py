@@ -166,16 +166,16 @@ class LEOSatEnv(gym.Env):
 
   def save_episode_result(self):
     self.tb_writer.add_scalars(f'{self.name} Env Param/average overhead',
-                               {self.args.prefix: util.avg_nested_2d_dict(self.overhead)},
+                               {self.args.prefix: util.avg_time_sat_dict(self.overhead)},
                                self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average data rate',
-                               {self.args.prefix: util.avg_nested_2d_dict(self.data_rate)},
+                               {self.args.prefix: util.avg_time_sat_dict(self.data_rate)},
                                self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average throughput',
-                               {self.args.prefix: util.avg_nested_2d_dict(self.throughput)},
+                               {self.args.prefix: util.avg_time_sat_dict(self.throughput)},
                                self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average EE',
-                               {self.args.prefix: util.avg_nested_2d_dict(self.ee)},
+                               {self.args.prefix: util.avg_time_sat_dict(self.ee)},
                                self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average overflowed overhead',
                                {self.args.prefix: sum(self.overflowed_overhead.values()) /
