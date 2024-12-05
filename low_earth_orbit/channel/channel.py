@@ -23,7 +23,7 @@ class Channel():
     self.nakagami = Nakagami()
 
     self.month = month
-    self.load_rainfall_data()
+    # self.load_rainfall_data()
 
   def free_space(self, distance: float, freq: float) -> float:
     """The free space path loss model.
@@ -115,8 +115,8 @@ class Channel():
         f=fc / 1e9,
         el=constant.PI / constant.PI_IN_RAD / 2,
         rho=water_vapor_density,
-        P=temperature,
-        T=atmos_pressure,
+        P=atmos_pressure,
+        T=temperature,
         mode='approx')
 
     return float(zenith_att.value)
@@ -299,7 +299,7 @@ class Channel():
       T_lat_list = [float(data) for data in f.read().split(' ')]
     with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/LON_T_LIST.TXT', mode='r', newline='') as f:
       T_lon_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/T_Month{month:0>2}.TXT', mode='r', newline='') as f:
+    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/T_Month{self.month:0>2}.TXT', mode='r', newline='') as f:
       for line in f.read().splitlines():
         mean_surface_temp.append([float(data) + constant.KELVIN_TO_CELCIUS for data in line.split(' ')])
     mean_surface_temp = list(map(list, zip(*mean_surface_temp)))
@@ -308,7 +308,7 @@ class Channel():
       MT_lat_list = [float(data) for data in f.read().split(' ')]
     with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/LON_MT_LIST.TXT', mode='r', newline='') as f:
       MT_lon_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/MT_Month{month:0>2}.TXT', mode='r', newline='') as f:
+    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/MT_Month{self.month:0>2}.TXT', mode='r', newline='') as f:
       for line in f.read().splitlines():
         mean_total_rainfall.append([float(data) for data in line.split(' ')])
     mean_total_rainfall = list(map(list, zip(*mean_total_rainfall)))

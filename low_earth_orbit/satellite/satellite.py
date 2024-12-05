@@ -26,7 +26,7 @@ class Satellite(object):
                position: Position,
                angle_speed: float,
                cell_topo: CellTopology,
-               channel: Channel,
+               channel: Channel = None,
                max_power: float = constant.MAX_POWER,
                min_power: float = constant.MIN_POWER,
                total_bandwidth=constant.DEFAULT_BANDWIDTH,
@@ -312,7 +312,7 @@ class Satellite(object):
                                                      (1 + ue.temperature_var),
                                                      atmos_pressure=constant.GROUND_ATMOS_PRESSURE *
                                                      (1 + ue.atmos_press_var))
-    if 'debug':
+    if mode == 'debug':
       print(f'{(1 + self.nakagami_m_var)},'
             f'{(1 + self.rx_power_var)},'
             f'{(1 + self.los_power_var)},'

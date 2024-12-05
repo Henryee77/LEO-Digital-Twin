@@ -65,7 +65,7 @@ r = 10
 
 long = constant.ORIGIN_LONG
 lati = constant.ORIGIN_LATI
-LEO_constellation.update_sat_position(time=-10 * constant.TIMESLOT)
+LEO_constellation.update_sat_position(time=-10 * constant.MOVING_TIMESLOT)
 for t in range(simulation_time + 1):
   # _time = time.time()
 
@@ -105,7 +105,7 @@ for t in range(simulation_time + 1):
   LEO_constellation.scan_ues(user_list)
   # print(f'---{time.time() - _time}')
   # print(obj.servable)
-  LEO_constellation.update_sat_position(time=constant.TIMESLOT)
+  LEO_constellation.update_sat_position(time=constant.MOVING_TIMESLOT)
   obj_nmc.a3_event_check()
   obj_nmc.update_ues_serving_history()
   throughput = LEO_constellation.cal_throughput(ues=user_list)
