@@ -24,26 +24,26 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [3, 6, 9]
-  max_ep = 1_000
+  ue_num_list = [3]
+  max_ep = 500
   step_num = 100
   mode = 'DT + TS'
   tf = constant.DEFAULT_ACTION_TIMESLOT
   bs_mode = 'ABS'
   cell_layer = 3
-  f_comp = 2.5e9
+  f_comp = 5e9
   provide_type = [0, 1, 2]
-  twin_sharing_period_list = [5 * i for i in range(1, 10)]
+  twin_sharing_period_list = [20 * i + 10 for i in range(0, 5)]
   d_start_ep, r_start_ep, ps_period, twin_sharing_period = mode_2_start_ep(mode)
 
-  dir_name = f'provided_data-twin_sharing {max_ep} eps'
+  dir_name = f'statetype_param_sharing_period {max_ep} eps'
   # dir_name = 'debug'
   bugged_folders = []
 
   for ue_num in ue_num_list:
     for shared_state_type in provide_type:
       for ts_period in twin_sharing_period_list:
-        prefix = f'shared_type-{shared_state_type} ts_period-{ts_period} ue{ue_num}'
+        prefix = f'shared_type-{shared_state_type} param_sharing_period-{ts_period} ue{ue_num}'
 
         error_code = os.system(
           f'python main.py --model "TD3" --max-ep-num {max_ep} --max-time-per-ep {step_num} '

@@ -171,10 +171,8 @@ def d_latitude(distance: float) -> float:
   return (distance / constant.R_EARTH) / constant.PI_IN_RAD
 
 
-def avg_nested_2d_dict(dict_2d: Dict[Any, Dict[Any, int | float]]) -> float:
-  cnt = 0
+def avg_time_sat_dict(dict_2d: Dict[Any, Dict[Any, int | float]]) -> float:
   total_value = 0
   for dict in dict_2d.values():
-    cnt += len(dict)
     total_value += sum(dict.values())
-  return total_value / cnt
+  return total_value / len(dict_2d.keys())

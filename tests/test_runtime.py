@@ -17,6 +17,7 @@ import argparse
 import functools
 import time
 import timeit
+import copy
 import numpy as np
 from random import sample
 
@@ -114,11 +115,12 @@ def test_export_power_dict(constell: Constellation, sat_name_list):
 
 
 def test_func():
-  a = util.random_sign()
+  pass
 
 
 if __name__ == '__main__':
   constell = init_constel()
   sat_name_list = ['3_0_24', '2_0_1', '1_0_9']
+
   # print(timeit.timeit(functools.partial(test_export_power_dict, constell, sat_name_list), number=round(1e2)))
-  print(timeit.timeit(test_func, number=round(1e5)))
+  print(timeit.timeit(functools.partial(test_func), number=round(1e1)))
