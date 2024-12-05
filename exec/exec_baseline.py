@@ -1,4 +1,6 @@
 import os
+import sys
+import subprocess
 from low_earth_orbit.util import constant
 
 
@@ -24,8 +26,8 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [3, 6]
-  max_ep = 1_000
+  ue_num_list = [3]
+  max_ep = 500
   tf = constant.DEFAULT_ACTION_TIMESLOT
   bs_mode = 'ABS'
   cell_layer = 3
@@ -41,8 +43,8 @@ if __name__ == '__main__':
       prefix = f'{mode} ue{ue_num}'
       d_start_ep, r_start_ep, ps_period, twin_sharing_period = mode_2_start_ep(mode)
 
-      error_code = os.system(
-        f'python main.py --model "TD3" --max-ep-num {max_ep} --max-time-per-ep {step_num} '
+      cmd = (
+        f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
         f'--action-timeslot {tf} '
         f'--beam-sweeping-mode {bs_mode} '
         f'--cell-layer-num {cell_layer} '
@@ -50,8 +52,8 @@ if __name__ == '__main__':
         f'--dt_online_ep {d_start_ep} --realLEO_online_ep {r_start_ep} '
         f'--federated-upload-period {ps_period} --federated-download-period {ps_period} '
         f'--twin-sharing-period {twin_sharing_period} '
-        f'--ue-num {ue_num} --prefix "{prefix}" --dir-name "{dir_name}"'
+        f'--ue-num {ue_num}'
       )
-      if error_code > 0:
-        print('--------------------------------------------------------------------------------------------------')
-        raise ValueError('Runtime error.')
+      path_cmd = ['--prefix', prefix, '--dir-name', dir_name]
+      call_cmd = cmd.split(' ')
+      proc = subprocess.call([sys.executable] + call_cmd + path_cmd)
