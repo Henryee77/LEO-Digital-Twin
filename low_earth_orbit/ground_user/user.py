@@ -2,6 +2,7 @@
 
 from typing import Dict, Tuple, List
 import collections
+import numpy as np
 
 from ..util import Position
 from ..util import constant
@@ -51,6 +52,32 @@ class User(object):
     self.servable = {}
     self.serving_history = collections.deque(maxlen=training_window_size)
     self.a3_table = {}
+
+    self.reset_channel_params()
+
+  @property
+  def water_vap_var(self):
+    return self.__water_vap_var
+
+  @water_vap_var.setter
+  def water_vap_var(self, var):
+    self.__water_vap_var = np.clip(var, -constant.MAX_L_VARIATION_PERCENT, constant.MAX_L_VARIATION_PERCENT)
+
+  @property
+  def temperature_var(self):
+    return self.__temperature_var
+
+  @temperature_var.setter
+  def temperature_var(self, var):
+    self.__temperature_var = np.clip(var, -constant.MAX_M_VARIATION_PERCENT, constant.MAX_M_VARIATION_PERCENT)
+
+  @property
+  def atmos_press_var(self):
+    return self.__atmos_press_var
+
+  @atmos_press_var.setter
+  def atmos_press_var(self, var):
+    self.__atmos_press_var = np.clip(var, -constant.MAX_S_VARIATION_PERCENT, constant.MAX_S_VARIATION_PERCENT)
 
   @property
   def training_window_size(self):
@@ -105,6 +132,22 @@ class User(object):
         float: latency
     """
     return data_size / self.data_rate
+
+  def reset_channel_params(self):
+    self.water_vap_var = 0
+    self.temperature_var = 0
+    self.atmos_press_var = 0
+
+  def update_channel_params(self):
+    l_high = constant.MAX_L_VARIATION_PERCENT * 0.1
+    l_low = -l_high
+    m_high = constant.MAX_M_VARIATION_PERCENT * 0.1
+    m_low = -m_high
+    s_high = constant.MAX_S_VARIATION_PERCENT * 0.1
+    s_low = -s_high
+    self.water_vap_var = self.water_vap_var + np.random.uniform(l_low, l_high)
+    self.temperature_var = self.temperature_var + np.random.uniform(m_low, m_high)
+    self.atmos_press_var = self.atmos_press_var + np.random.uniform(s_low, s_high)
 
   def servable_clear(self) -> None:
     """Clear the servable dict."""

@@ -345,6 +345,9 @@ if __name__ == '__main__':
   parser.add_argument(
       '--shared-state-type', type=int, default=2,
       help='Number of the state type shared. 0: None, 1: pathloss, 2: pathloss + CSI')
+  parser.add_argument(
+      '--dt-param-error', type=float, default=0,
+      help='The error of the environment parameters sending from the real LEO')
 
   # ------------------- Env -------------------------
   parser.add_argument(

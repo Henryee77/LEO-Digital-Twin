@@ -43,8 +43,8 @@ class Agent(object):
                          angle_speed=0,
                          position=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
                          cell_topo=CellTopology(center_point=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
-                                                cell_layer=args.cell_layer_num),
-                         channel=None)
+                                                cell_layer=args.cell_layer_num)
+                         )
 
     self._init_dim()
     self.set_policy(policy_name)

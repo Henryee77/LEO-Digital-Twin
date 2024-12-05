@@ -13,7 +13,6 @@ from low_earth_orbit.ground_user import User
 from low_earth_orbit.constellation import Constellation
 from low_earth_orbit.constellation import ConstellationData
 from low_earth_orbit.nmc import NMC
-from low_earth_orbit.channel import Channel
 from low_earth_orbit.util import util
 from low_earth_orbit.util import Position
 from low_earth_orbit.util import Geodetic
@@ -56,7 +55,6 @@ class LEOSatEnv(gym.Env):
     self.agent_num = len(agent_names)
     self.agent_names = agent_names
     self.cell_num = 0
-    self.wireless_channel = Channel()
 
     self.step_num = 0
     self.total_step_num = 0
@@ -331,7 +329,7 @@ class LEOSatEnv(gym.Env):
 
   def _init_env(self):
     self.step_num = 0
-    self.constel = self.make_constellation(channel=self.wireless_channel)
+    self.constel = self.make_constellation()
     self.ues = self.make_ues()
     self.dt_server = User('DT server', position=Position(geodetic=Geodetic(longitude=constant.ORIGIN_LONG,
                                                                            latitude=constant.ORIGIN_LATI,
@@ -402,7 +400,7 @@ class LEOSatEnv(gym.Env):
     diff_lo = abs(sat.position.geodetic.longitude - constant.ORIGIN_LONG)
     return diff_la < r and diff_lo < r
 
-  def make_constellation(self, channel: Channel) -> Constellation:
+  def make_constellation(self) -> Constellation:
     """Make a constellation"""
     shell_num = 4
     plane_num = [1, 1, 1, 1, 1]
@@ -416,7 +414,6 @@ class LEOSatEnv(gym.Env):
                           sat_height=sat_height[i],
                           inclination_angle=inclination[i])
         for i in range(shell_num)],
-        channel=channel,
         args=self.args)
 
     # move the constellation to the desired simulated scenario

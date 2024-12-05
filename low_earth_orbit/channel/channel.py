@@ -1,6 +1,6 @@
 """The channel model."""
 
-from typing import overload, Tuple, List
+from typing import Tuple, List
 import csv
 import functools
 import math
@@ -23,43 +23,7 @@ class Channel():
     self.nakagami = Nakagami()
 
     self.month = month
-    mean_surface_temp = []
-    mean_total_rainfall = []
-    rain_rate_exceed_001 = []
-
-    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/LAT_T_LIST.TXT', mode='r', newline='') as f:
-      T_lat_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/LON_T_LIST.TXT', mode='r', newline='') as f:
-      T_lon_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/T_Month{month:0>2}.TXT', mode='r', newline='') as f:
-      for line in f.read().splitlines():
-        mean_surface_temp.append([float(data) + constant.KELVIN_TO_CELCIUS for data in line.split(' ')])
-    mean_surface_temp = list(map(list, zip(*mean_surface_temp)))
-
-    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/LAT_MT_LIST.TXT', mode='r', newline='') as f:
-      MT_lat_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/LON_MT_LIST.TXT', mode='r', newline='') as f:
-      MT_lon_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/MT_Month{month:0>2}.TXT', mode='r', newline='') as f:
-      for line in f.read().splitlines():
-        mean_total_rainfall.append([float(data) for data in line.split(' ')])
-    mean_total_rainfall = list(map(list, zip(*mean_total_rainfall)))
-
-    with open(f'low_earth_orbit/util/rainfall_data/rainfall rate exceeded 0.01 percent/LAT_R001_LIST.TXT', mode='r', newline='') as f:
-      R001_lat_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/rainfall rate exceeded 0.01 percent/LON_R001_LIST.TXT', mode='r', newline='') as f:
-      R001_lon_list = [float(data) for data in f.read().split(' ')]
-    with open(f'low_earth_orbit/util/rainfall_data/rainfall rate exceeded 0.01 percent/R001.TXT', mode='r', newline='') as f:
-      for line in f.read().splitlines():
-        rain_rate_exceed_001.append([float(data) for data in line.split(' ')])
-    rain_rate_exceed_001 = list(map(list, zip(*rain_rate_exceed_001)))
-
-    # print(len(R001_lon_list), len(R001_lat_list))
-    # print(len(rain_rate_exceed_001), len(rain_rate_exceed_001[0]))
-
-    self.mean_temp_grid = RegularGridInterpolator((T_lon_list, T_lat_list), mean_surface_temp)
-    self.mean_rainfall_grid = RegularGridInterpolator((MT_lon_list, MT_lat_list), mean_total_rainfall)
-    self.rain_rate_001_grid = RegularGridInterpolator((R001_lon_list, R001_lat_list), rain_rate_exceed_001)
+    self.load_rainfall_data()
 
   def free_space(self, distance: float, freq: float) -> float:
     """The free space path loss model.
@@ -93,14 +57,6 @@ class Channel():
     R = A * np.exp(1j * alpha) + Z
     return abs(R)
 
-  @ overload
-  def scintillation_loss(self, elevation_angle: float) -> float:
-    ...
-
-  @ overload
-  def scintillation_loss(self, elevation_angle: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    ...
-
   def scintillation_loss(self, elevation_angle):
     """The scintillation loss model.
 
@@ -117,15 +73,12 @@ class Channel():
     scint_loss = constant.SCINTILLATION_TABLE[epsilon_index]
     return scint_loss
 
-  @ overload
-  def gas_attenuation(self, fc: float, elevation_angle: float) -> float:
-    ...
-
-  @ overload
-  def gas_attenuation(self, fc: float, elevation_angle: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    ...
-
-  def gas_attenuation(self, fc, elevation_angle):
+  def gas_attenuation(self,
+                      fc: float,
+                      elevation_angle: float,
+                      water_vapor_density: float,
+                      temperature: float,
+                      atmos_pressure: float):
     """The gas attenuation model.
     The gas attenuation is zenith loss / sin(elevation_angle).
     The longer the distance through the troposphere (small elevation angle),
@@ -138,9 +91,17 @@ class Channel():
     Returns:
       (float): The gas attenuation in dB
     """
-    return self.zenith_attenuation(fc=fc) / np.sin(elevation_angle)
+    return self.zenith_attenuation(fc=fc,
+                                   water_vapor_density=water_vapor_density,
+                                   temperature=temperature,
+                                   atmos_pressure=atmos_pressure) / np.sin(elevation_angle)
 
-  def zenith_attenuation(self, fc: float) -> float:
+  @functools.cache
+  def zenith_attenuation(self,
+                         fc: float,
+                         water_vapor_density: float,
+                         temperature: float,
+                         atmos_pressure: float) -> float:
     """The zenith attenuation model.
     Zenith loss is the loss when the elevation angle is 90 degrees.
 
@@ -153,15 +114,19 @@ class Channel():
     zenith_att = itu676.gaseous_attenuation_slant_path(
         f=fc / 1e9,
         el=constant.PI / constant.PI_IN_RAD / 2,
-        rho=constant.GROUND_WATER_VAP_DENSITY,
-        P=constant.GROUND_ATMOS_PRESSURE,
-        T=constant.GROUND_TEMPERATURE,
+        rho=water_vapor_density,
+        P=temperature,
+        T=atmos_pressure,
         mode='approx')
 
     return float(zenith_att.value)
 
-  @ functools.cache
-  def cal_deterministic_loss(self, distance: float, freq: float, elevation_angle: float) -> float:
+  def cal_deterministic_loss(self, distance: float,
+                             freq: float,
+                             elevation_angle: float,
+                             water_vapor_density: float,
+                             temperature: float,
+                             atmos_pressure: float) -> float:
     """Calculate the deterministic part of the loss.
 
     Args:
@@ -174,7 +139,8 @@ class Channel():
     """
     fspl = self.free_space(distance=distance, freq=freq)
     scpl = self.scintillation_loss(elevation_angle)
-    gpl = self.gas_attenuation(freq, elevation_angle)
+    gpl = self.gas_attenuation(freq, elevation_angle,
+                               water_vapor_density, temperature, atmos_pressure)
     '''rl = self.itu_rain_attenuation(rain_rate=rain_rate,
                                    L_s=distance / constant.KM,
                                    freq=freq,
@@ -182,7 +148,10 @@ class Channel():
 
     return fspl + scpl + gpl  # + rl
 
-  def cal_stochastic_loss(self) -> float:
+  def cal_stochastic_loss(self,
+                          nakagami_m: float,
+                          rx_power_ratio: float,
+                          los_power_ratio: float,) -> float:
     """Calculate the stochastic part of the loss.
 
     Args:
@@ -190,12 +159,21 @@ class Channel():
     Returns:
       (float): The total stochastic loss (dB)
     """
-    sr_loss = self.shadowed_rician_fading(b=constant.SCATTER_COMPONENT_HALF_POWER,
-                                          m=constant.NAKAGAMI_PARAMETER,
-                                          Omega=constant.LOS_COMPONENT_POWER)
+    sr_loss = self.shadowed_rician_fading(b=rx_power_ratio - los_power_ratio,
+                                          m=nakagami_m,
+                                          Omega=los_power_ratio)
     return sr_loss
 
-  def cal_total_loss(self, distance: float, freq: float, elevation_angle: float) -> float:
+  def cal_total_loss(self,
+                     distance: float,
+                     freq: float,
+                     elevation_angle: float,
+                     nakagami_m: float,
+                     rx_power_ratio: float,
+                     los_power_ratio: float,
+                     water_vapor_density: float,
+                     temperature: float,
+                     atmos_pressure: float) -> float:
     """Calculate the total loss for sat and ue.
 
     Args:
@@ -211,8 +189,14 @@ class Channel():
                                            freq=round(freq,
                                                       constant.CACHED_PRECISION),
                                            elevation_angle=round(elevation_angle,
-                                                                 constant.CACHED_PRECISION))
-    stoch_loss = self.cal_stochastic_loss()
+                                                                 constant.CACHED_PRECISION),
+                                           water_vapor_density=round(water_vapor_density,
+                                                                     constant.CACHED_PRECISION),
+                                           temperature=round(temperature,
+                                                             constant.CACHED_PRECISION),
+                                           atmos_pressure=round(atmos_pressure,
+                                                                constant.CACHED_PRECISION))
+    stoch_loss = self.cal_stochastic_loss(nakagami_m, rx_power_ratio, los_power_ratio)
 
     return det_loss + stoch_loss
 
@@ -275,7 +259,7 @@ class Channel():
 
   def modified_rain_attenuation(self, rain_rate: float, L_s: float, height_diff: float, freq: float, elevation_angle: float, polarization_angle: float = 0) -> float:
     # reference paper: Rain Attenuation Prediction Model for Satellite Communications in Tropical Regions
-    k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[int(freq / 1e9)]
+    k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[round(freq / 1e9)]
     k = (k_h + k_v + (k_h - k_v) * (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / 2
     alpha = (k_h * alpha_h + k_v * alpha_v + (k_h * alpha_h - k_v * alpha_v) *
              (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / (2 * k)
@@ -300,8 +284,44 @@ class Channel():
     """
     if rain_rate == 0:
       return 0
-    k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[int(freq / 1e9)]
+    k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[round(freq / 1e9)]
     k = (k_h + k_v + (k_h - k_v) * (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / 2
     alpha = (k_h * alpha_h + k_v * alpha_v + (k_h * alpha_h - k_v * alpha_v) *
              (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / (2 * k)
     return k * (rain_rate ** alpha) * L_s
+
+  def load_rainfall_data(self):
+    mean_surface_temp = []
+    mean_total_rainfall = []
+    rain_rate_exceed_001 = []
+
+    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/LAT_T_LIST.TXT', mode='r', newline='') as f:
+      T_lat_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/LON_T_LIST.TXT', mode='r', newline='') as f:
+      T_lon_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/T_Month{month:0>2}.TXT', mode='r', newline='') as f:
+      for line in f.read().splitlines():
+        mean_surface_temp.append([float(data) + constant.KELVIN_TO_CELCIUS for data in line.split(' ')])
+    mean_surface_temp = list(map(list, zip(*mean_surface_temp)))
+
+    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/LAT_MT_LIST.TXT', mode='r', newline='') as f:
+      MT_lat_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/LON_MT_LIST.TXT', mode='r', newline='') as f:
+      MT_lon_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/MT_Month{month:0>2}.TXT', mode='r', newline='') as f:
+      for line in f.read().splitlines():
+        mean_total_rainfall.append([float(data) for data in line.split(' ')])
+    mean_total_rainfall = list(map(list, zip(*mean_total_rainfall)))
+
+    with open(f'low_earth_orbit/util/rainfall_data/rainfall rate exceeded 0.01 percent/LAT_R001_LIST.TXT', mode='r', newline='') as f:
+      R001_lat_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/rainfall rate exceeded 0.01 percent/LON_R001_LIST.TXT', mode='r', newline='') as f:
+      R001_lon_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/rainfall rate exceeded 0.01 percent/R001.TXT', mode='r', newline='') as f:
+      for line in f.read().splitlines():
+        rain_rate_exceed_001.append([float(data) for data in line.split(' ')])
+    rain_rate_exceed_001 = list(map(list, zip(*rain_rate_exceed_001)))
+
+    self.mean_temp_grid = RegularGridInterpolator((T_lon_list, T_lat_list), mean_surface_temp)
+    self.mean_rainfall_grid = RegularGridInterpolator((MT_lon_list, MT_lat_list), mean_total_rainfall)
+    self.rain_rate_001_grid = RegularGridInterpolator((R001_lon_list, R001_lat_list), rain_rate_exceed_001)

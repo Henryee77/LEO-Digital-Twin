@@ -40,14 +40,13 @@ class Constellation(object):
   def __init__(
       self,
       setup_data_list: List[ConstellationData],
-      channel: Channel,
       args=None,
   ):
     """The constructer of Constellation Class.
 
     Args:
         setup_data_list (list[ConstellationData]): All data for constellation.
-        channel (Channel): Wireless channel.
+        args: args
     """
     self.args = args
     self.shell_num = len(setup_data_list)
@@ -59,7 +58,6 @@ class Constellation(object):
         for data in self.setup_data_list
     ]
     self.all_sat = {}
-    self.wireless_channel = channel
     self.create_all_sat()
 
   def create_all_sat(self):

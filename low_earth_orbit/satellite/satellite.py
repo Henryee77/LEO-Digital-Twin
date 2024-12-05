@@ -4,6 +4,7 @@ from typing import List, Dict, Set
 from typing import Tuple
 import collections
 import math
+import numpy as np
 
 from ..antenna import Antenna
 from ..cell import CellTopology, Beam
@@ -38,12 +39,22 @@ class Satellite(object):
     self.angle_speed = angle_speed
     self.cell_topo = cell_topo
     self.antenna_list = [Antenna() for _ in range(self.cell_topo.cell_number)]
-    self.wireless_channel = channel
+    if channel:
+      self.wireless_channel = channel
+    else:
+      self.wireless_channel = Channel()
+
     self.__max_power = max_power
     self.__min_power = min_power
     self.total_bandwidth = total_bandwidth
     self.beam_alg = beam_alg
     self.__bs_latency = 0
+    self.large_param_variation = 0
+    self.mid_param_variation = 0
+    self.small_param_variation = 0
+    self.nakagami_m_var = 0
+    self.los_power_var = 0
+    self.rx_power_var = 0
 
   @property
   def shell_index(self):
@@ -113,6 +124,30 @@ class Satellite(object):
     return [ue for ue in self.servable if ue.name in self.cell_topo.serving.keys()]
 
   @property
+  def nakagami_m_var(self):
+    return self.__nakagami_m_var
+
+  @nakagami_m_var.setter
+  def nakagami_m_var(self, var):
+    self.__nakagami_m_var = np.clip(var, -constant.MAX_L_VARIATION_PERCENT, constant.MAX_L_VARIATION_PERCENT)
+
+  @property
+  def los_power_var(self):
+    return self.__los_power_var
+
+  @los_power_var.setter
+  def los_power_var(self, var):
+    self.__los_power_var = np.clip(var, -constant.MAX_M_VARIATION_PERCENT, constant.MAX_M_VARIATION_PERCENT)
+
+  @property
+  def rx_power_var(self):
+    return self.__rx_power_var
+
+  @rx_power_var.setter
+  def rx_power_var(self, var):
+    self.__rx_power_var = np.clip(var, -constant.MAX_S_VARIATION_PERCENT, constant.MAX_S_VARIATION_PERCENT)
+
+  @property
   def intrinsic_beam_sweeping_latency(self) -> float:
     return self.cell_topo.training_beam_num * constant.T_BEAM
 
@@ -168,6 +203,22 @@ class Satellite(object):
       antenna.beamwidth_3db = constant.DEFAULT_BEAMWIDTH_3DB
     for i in range(self.cell_topo.cell_number):
       self.cell_topo.set_beamwidth(i, constant.DEFAULT_BEAMWIDTH_3DB)
+
+  def reset_channel_params(self):
+    self.nakagami_m_var = 0
+    self.los_power_var = 0
+    self.rx_power_var = 0
+
+  def update_channel_params(self):
+    l_high = constant.MAX_L_VARIATION_PERCENT * 0.1
+    l_low = -l_high
+    m_high = constant.MAX_M_VARIATION_PERCENT * 0.1
+    m_low = -m_high
+    s_high = constant.MAX_S_VARIATION_PERCENT * 0.1
+    s_low = -s_high
+    self.nakagami_m_var = self.nakagami_m_var + np.random.uniform(l_low, l_high)
+    self.los_power_var = self.los_power_var + np.random.uniform(m_low, m_high)
+    self.rx_power_var = self.rx_power_var + np.random.uniform(s_low, s_high)
 
   def update_pos(self, time: float):
     """Update the position by the given time
@@ -225,7 +276,7 @@ class Satellite(object):
 
     Args:
         ue (User): The user this satellite is serving.
-        serving_beam (int): The target beam to calculate SINR. 
+        serving_beam (int): The target beam to calculate SINR.
         i_power (float): The total interference power ue gets.
         mode (str): The mode this function is running.
                     (run or debug)
@@ -248,7 +299,27 @@ class Satellite(object):
     tx_gain = float(self.antenna_list[beam_index].calc_antenna_gain(theta))
     path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
                                                      freq=self.antenna_list[beam_index].central_frequency,
-                                                     elevation_angle=epsilon)
+                                                     elevation_angle=epsilon,
+                                                     nakagami_m=constant.NAKAGAMI_PARAMETER *
+                                                     (1 + self.nakagami_m_var),
+                                                     rx_power_ratio=constant.TOTAL_POWER_RECEIVED *
+                                                     (1 + self.rx_power_var),
+                                                     los_power_ratio=constant.LOS_COMPONENT_POWER *
+                                                     (1 + self.los_power_var),
+                                                     water_vapor_density=constant.GROUND_WATER_VAP_DENSITY *
+                                                     (1 + ue.water_vap_var),
+                                                     temperature=constant.GROUND_TEMPERATURE *
+                                                     (1 + ue.temperature_var),
+                                                     atmos_pressure=constant.GROUND_ATMOS_PRESSURE *
+                                                     (1 + ue.atmos_press_var))
+    if 'debug':
+      print(f'{(1 + self.nakagami_m_var)},'
+            f'{(1 + self.rx_power_var)},'
+            f'{(1 + self.los_power_var)},'
+            f'{(1 + ue.water_vap_var)},'
+            f'{(1 + ue.temperature_var)},'
+            f'{(1 + ue.atmos_press_var)}')
+
     channel_loss = path_loss
 
     return serving_beam.calc_sinr(
