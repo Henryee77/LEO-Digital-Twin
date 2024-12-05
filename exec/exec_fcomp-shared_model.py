@@ -24,33 +24,33 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [3, 6]
-  max_ep = 1_000
+  ue_num_list = [3]
+  max_ep = 500
   mode = 'DT + TS'
   tf = constant.DEFAULT_ACTION_TIMESLOT
   bs_mode = 'ABS'
-  cell_layer_list = [1, 2, 3]
-  fcomp_list = [1.25e9 * i for i in range(1, 10)]
+
+  fcomp_list = [0.75e9 + 1e9 * i for i in range(0, 6)]
+  model_sharing_period_list = [5 + 15 * i for i in range(1, 6)]
   step_num = 100
 
-  dir_name = f'2 - cell_layer-comp_speed {max_ep} eps'
+  dir_name = f'ms_period-comp_speed {max_ep} eps'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:
-    for cell_layer in cell_layer_list:
+    for ms_period in model_sharing_period_list:
       for f_comp in fcomp_list:
-        prefix = f'layer-{cell_layer} f_comp-{f_comp / 1e9:.2f} ue{ue_num}'
+        prefix = f'ms_period-{ms_period} f_comp-{f_comp / 1e9:.2f} ue{ue_num}'
         d_start_ep, r_start_ep, ps_period, twin_sharing_period = mode_2_start_ep(mode)
 
         error_code = os.system(
           f'python main.py --model "TD3" --max-ep-num {max_ep} --max-time-per-ep {step_num} '
           f'--action-timeslot {tf} '
           f'--beam-sweeping-mode {bs_mode} '
-          f'--cell-layer-num {cell_layer} '
+          f'--model-sharing-period {ms_period} '
           f'--dt-computaion-speed {f_comp} '
           f'--dt_online_ep {d_start_ep} --realLEO_online_ep {r_start_ep} '
           f'--federated-upload-period {ps_period} --federated-download-period {ps_period} '
-          f'--twin-sharing-period {twin_sharing_period} '
           f'--ue-num {ue_num} --prefix "{prefix}" --dir-name "{dir_name}"'
         )
         if error_code > 0:

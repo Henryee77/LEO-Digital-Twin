@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Literal, Dict
 from logging import Logger
+import queue
 from gymnasium import spaces
 from torch import device
 from torch.utils.tensorboard import SummaryWriter
@@ -52,9 +53,8 @@ class Agent(object):
     self.memory = ReplayBuffer(max_size=args.replay_buffer_size)
     self.epsilon = 1  # For exploration
     self.sharing_weight = 1
-    self.beta = args.historical_smoothing_coef
-    self.beta_pow_n = self.beta
-    self.historical_avg_reward = 0
+    self.hist_reward_q = queue.Queue()
+    self.hist_total_reward = 0
 
     self.cur_actorlayer_idx = 1
     self.cur_criticlayer_idx = 1
@@ -340,14 +340,21 @@ class Agent(object):
     self.memory.add((obs, new_obs, action, reward, done))
 
   def update_share_weight(self, r: float, total_train_iter: int):
-    # self.beta_pow_n *= math.pow(self.beta, self.args.iter_num * self.args.federated_freq)
-    self.historical_avg_reward = self.beta * self.historical_avg_reward + (1 - self.beta) * r
-    # / (1 - self.beta_pow_n))
+    if self.hist_reward_q.qsize() <= self.args.historical_reward_window:
+      self.hist_total_reward -= self.hist_reward_q.get()
+    self.hist_total_reward += r
+    self.hist_reward_q.put(r)
 
-    self.sharing_weight = min(self.args.max_sharing_weight, r / self.historical_avg_reward)
+    historical_avg_reward = self.hist_total_reward / self.hist_reward_q.qsize()
+
+    indic = (r - historical_avg_reward) / historical_avg_reward
+    beta = self.args.sharing_weight_growth_rate
+    nu = self.args.sharing_weight_asymptote_occurrence
+
+    self.sharing_weight = (1 + np.exp(-beta * indic)) ** (-nu)
 
     self.tb_writer.add_scalars(f'{self.name}/historical_avg_reward',
-                               {self.name: self.historical_avg_reward}, total_train_iter)
+                               {self.name: historical_avg_reward}, total_train_iter)
     self.tb_writer.add_scalars(f'{self.name}/sharing_weight',
                                {self.name: self.sharing_weight}, total_train_iter)
 

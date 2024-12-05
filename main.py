@@ -198,8 +198,10 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
        real_done,
        r_info) = realworld_trainer.take_action(real_actions)
 
-      if time_count % args.twin_sharing_period == 0:
+      if time_count % args.env_param_sharing_period == 0:
         digitalworld_trainer.receive_sensing_env_param()
+
+      if time_count % args.model_sharing_period == 0:
         digitalworld_trainer.twin_parameter_query()
         realworld_trainer.twin_parameter_query()
         digitalworld_trainer.twin_parameter_update()
@@ -293,7 +295,7 @@ if __name__ == '__main__':
       '--full-explore-steps', default=1e4, type=int,
       help='Number of steps to do exploration')
 
-  # -----------Parameter Sharing ---------------
+  # -----------Federated Sharing ---------------
   parser.add_argument(
       '--federated-update-rate', default=1e-1, type=float,
       help='Network exchanging rate of federated agents')
@@ -307,23 +309,31 @@ if __name__ == '__main__':
       '--federated-layer-num-per-turn', default=2, type=int,
       help='number of layers per federated uploading')
   parser.add_argument(
+      '--partial-upload-type', default='by-turns', type=str,
+      help='"random" or "by-turns"')
+
+  # ------------Twin Sharing ---------------
+  parser.add_argument(
       '--twin-sharing-update-rate', default=1e-1, type=float,
       help='Network update rate of twin sharing')
   parser.add_argument(
-      '--twin-sharing-period', default=5, type=int,
+      '--model-sharing-period', default=5, type=int,
+      help='Period of twin sharing uploading')
+  parser.add_argument(
+      '--env-param-sharing-period', default=5, type=int,
       help='Period of twin sharing uploading')
   parser.add_argument(
       '--twin-sharing-layer-num-per-turn', default=1, type=int,
       help='number of layers per twin sharing')
   parser.add_argument(
-      '--historical-smoothing-coef', default=0.9, type=float,
-      help='The smoothing coefficient of the historical average reward')
+      '--historical-reward-window', default=100, type=int,
+      help='Window size of calculating the historical average reward')
   parser.add_argument(
-      '--max-sharing-weight', default=2, type=float,
-      help='Maximum weight of parameter sharing for each agent')
+      '--sharing-weight-growth-rate', default=2, type=float,
+      help='The growth rate of the generalised logistic function')
   parser.add_argument(
-      '--partial-upload-type', default='by-turns', type=str,
-      help='"random" or "by-turns"')
+      '--sharing-weight-asymptote-occurrence', default=3, type=float,
+      help='The nu variable of the generalised logistic function')
 
   # ---------------- A3C baseline -------------------
   parser.add_argument(

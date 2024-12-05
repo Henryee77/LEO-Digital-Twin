@@ -126,11 +126,11 @@ class RealWorldEnv(LEOSatEnv):
       state_exchange_overhead = (agent.sat.trans_latency(agent.state_dim * constant.FLOAT_SIZE, self.dt_server)
                                  + self.dt_server.trans_latency(agent.state_dim * constant.FLOAT_SIZE)
                                  + 2 * util.propagation_delay(leo2dt_distance))
-      leo_feedback_size = ((len(self.ues) + self.real_agents[agent.sat_name].twin_sharing_param_num / self.args.twin_sharing_period)
+      leo_feedback_size = ((len(self.ues) + self.real_agents[agent.sat_name].twin_sharing_param_num / self.args.model_sharing_period)
                            * constant.FLOAT_SIZE)
       leo_feedback_latency = agent.sat.trans_latency(leo_feedback_size, self.dt_server)
 
-      dt_feedback_size = ((self.digital_agents[agent.sat_name].twin_sharing_param_num / self.args.twin_sharing_period)
+      dt_feedback_size = ((self.digital_agents[agent.sat_name].twin_sharing_param_num / self.args.model_sharing_period)
                           * constant.FLOAT_SIZE)
 
       dt_feedback_latency = self.dt_server.trans_latency(dt_feedback_size)
