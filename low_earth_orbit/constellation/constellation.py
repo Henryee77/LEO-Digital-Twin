@@ -245,7 +245,7 @@ class Constellation(object):
                                                  online_beam_set=set(servable_ue.last_serving
                                                                      for servable_ue in sat.servable
                                                                      if (servable_ue.last_serving is not None
-                                                                         and servable_ue.last_serving[0] != ue.last_serving[0]))
+                                                                         and (ue.last_serving is None or servable_ue.last_serving[0] != ue.last_serving[0])))
                                                  )
       else:
         ues_sinr = self._no_training_result(ues=ues, sat=sat)

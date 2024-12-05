@@ -109,6 +109,13 @@ class RealWorldEnv(LEOSatEnv):
     obs = self.get_state_info(has_action)
     return (obs, reward, done, truncated, {'has_action': has_action})
 
+  def dynamic_channel_update(self):
+    for sat_name in self.real_agents:
+      self.real_agents[sat_name].sat.update_channel_params()
+
+    for ue in self.ues:
+      ue.update_channel_params()
+
   def _cal_overhead(self, agent: Agent) -> float:
     leo2dt_distance = self.dt_server.position.calculate_distance(agent.sat.position)
 

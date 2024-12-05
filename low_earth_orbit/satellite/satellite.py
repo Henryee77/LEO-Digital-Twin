@@ -49,12 +49,8 @@ class Satellite(object):
     self.total_bandwidth = total_bandwidth
     self.beam_alg = beam_alg
     self.__bs_latency = 0
-    self.large_param_variation = 0
-    self.mid_param_variation = 0
-    self.small_param_variation = 0
-    self.nakagami_m_var = 0
-    self.los_power_var = 0
-    self.rx_power_var = 0
+
+    self.reset_channel_params()
 
   @property
   def shell_index(self):
@@ -124,28 +120,34 @@ class Satellite(object):
     return [ue for ue in self.servable if ue.name in self.cell_topo.serving.keys()]
 
   @property
-  def nakagami_m_var(self):
-    return self.__nakagami_m_var
+  def nakagami_m(self):
+    return self.__nakagami_m
 
-  @nakagami_m_var.setter
-  def nakagami_m_var(self, var):
-    self.__nakagami_m_var = np.clip(var, -constant.MAX_L_VARIATION_PERCENT, constant.MAX_L_VARIATION_PERCENT)
-
-  @property
-  def los_power_var(self):
-    return self.__los_power_var
-
-  @los_power_var.setter
-  def los_power_var(self, var):
-    self.__los_power_var = np.clip(var, -constant.MAX_M_VARIATION_PERCENT, constant.MAX_M_VARIATION_PERCENT)
+  @nakagami_m.setter
+  def nakagami_m(self, value):
+    self.__nakagami_m = np.clip(value,
+                                (1 - constant.MAX_L_VARIATION_PERCENT) * constant.NAKAGAMI_PARAMETER,
+                                (1 + constant.MAX_L_VARIATION_PERCENT) * constant.NAKAGAMI_PARAMETER)
 
   @property
-  def rx_power_var(self):
-    return self.__rx_power_var
+  def los_power_ratio(self):
+    return self.__los_component_power
 
-  @rx_power_var.setter
-  def rx_power_var(self, var):
-    self.__rx_power_var = np.clip(var, -constant.MAX_S_VARIATION_PERCENT, constant.MAX_S_VARIATION_PERCENT)
+  @los_power_ratio.setter
+  def los_power_ratio(self, value):
+    self.__los_component_power = np.clip(value,
+                                         (1 - constant.MAX_M_VARIATION_PERCENT) * constant.LOS_COMPONENT_POWER,
+                                         (1 + constant.MAX_M_VARIATION_PERCENT) * constant.LOS_COMPONENT_POWER)
+
+  @property
+  def rx_power_ratio(self):
+    return self.__rx_power_ratio
+
+  @rx_power_ratio.setter
+  def rx_power_ratio(self, value):
+    self.__rx_power_ratio = np.clip(value,
+                                    (1 - constant.MAX_S_VARIATION_PERCENT) * constant.TOTAL_POWER_RECEIVED_RATIO,
+                                    (1 + constant.MAX_S_VARIATION_PERCENT) * constant.TOTAL_POWER_RECEIVED_RATIO)
 
   @property
   def intrinsic_beam_sweeping_latency(self) -> float:
@@ -205,20 +207,20 @@ class Satellite(object):
       self.cell_topo.set_beamwidth(i, constant.DEFAULT_BEAMWIDTH_3DB)
 
   def reset_channel_params(self):
-    self.nakagami_m_var = 0
-    self.los_power_var = 0
-    self.rx_power_var = 0
+    self.nakagami_m = constant.NAKAGAMI_PARAMETER
+    self.los_power_ratio = constant.LOS_COMPONENT_POWER
+    self.rx_power_ratio = constant.TOTAL_POWER_RECEIVED_RATIO
 
   def update_channel_params(self):
-    l_high = constant.MAX_L_VARIATION_PERCENT * 0.1
+    l_high = constant.MAX_L_VARIATION_PERCENT * constant.MAX_VAR_PERCENT
     l_low = -l_high
-    m_high = constant.MAX_M_VARIATION_PERCENT * 0.1
+    m_high = constant.MAX_M_VARIATION_PERCENT * constant.MAX_VAR_PERCENT
     m_low = -m_high
-    s_high = constant.MAX_S_VARIATION_PERCENT * 0.1
+    s_high = constant.MAX_S_VARIATION_PERCENT * constant.MAX_VAR_PERCENT
     s_low = -s_high
-    self.nakagami_m_var = self.nakagami_m_var + np.random.uniform(l_low, l_high)
-    self.los_power_var = self.los_power_var + np.random.uniform(m_low, m_high)
-    self.rx_power_var = self.rx_power_var + np.random.uniform(s_low, s_high)
+    self.nakagami_m = self.nakagami_m + constant.NAKAGAMI_PARAMETER * np.random.uniform(l_low, l_high)
+    self.los_power_ratio = self.los_power_ratio + constant.LOS_COMPONENT_POWER * np.random.uniform(m_low, m_high)
+    self.rx_power_ratio = self.rx_power_ratio + constant.TOTAL_POWER_RECEIVED_RATIO * np.random.uniform(s_low, s_high)
 
   def update_pos(self, time: float):
     """Update the position by the given time
@@ -300,25 +302,19 @@ class Satellite(object):
     path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
                                                      freq=self.antenna_list[beam_index].central_frequency,
                                                      elevation_angle=epsilon,
-                                                     nakagami_m=constant.NAKAGAMI_PARAMETER *
-                                                     (1 + self.nakagami_m_var),
-                                                     rx_power_ratio=constant.TOTAL_POWER_RECEIVED *
-                                                     (1 + self.rx_power_var),
-                                                     los_power_ratio=constant.LOS_COMPONENT_POWER *
-                                                     (1 + self.los_power_var),
-                                                     water_vapor_density=constant.GROUND_WATER_VAP_DENSITY *
-                                                     (1 + ue.water_vap_var),
-                                                     temperature=constant.GROUND_TEMPERATURE *
-                                                     (1 + ue.temperature_var),
-                                                     atmos_pressure=constant.GROUND_ATMOS_PRESSURE *
-                                                     (1 + ue.atmos_press_var))
+                                                     nakagami_m=self.nakagami_m,
+                                                     rx_power_ratio=self.rx_power_ratio,
+                                                     los_power_ratio=self.los_power_ratio,
+                                                     water_vapor_density=ue.water_vap_density,
+                                                     temperature=ue.temperature,
+                                                     atmos_pressure=ue.atmos_pressure)
     if mode == 'debug':
-      print(f'{(1 + self.nakagami_m_var)},'
-            f'{(1 + self.rx_power_var)},'
-            f'{(1 + self.los_power_var)},'
-            f'{(1 + ue.water_vap_var)},'
-            f'{(1 + ue.temperature_var)},'
-            f'{(1 + ue.atmos_press_var)}')
+      print(f'{(self.nakagami_m - constant.NAKAGAMI_PARAMETER) / constant.NAKAGAMI_PARAMETER},'
+            f'{(self.rx_power_ratio - constant.TOTAL_POWER_RECEIVED_RATIO) / constant.TOTAL_POWER_RECEIVED_RATIO},'
+            f'{(self.los_power_ratio - constant.LOS_COMPONENT_POWER) / constant.LOS_COMPONENT_POWER},'
+            f'{(ue.water_vap_density - constant.GROUND_WATER_VAP_DENSITY) / constant.GROUND_WATER_VAP_DENSITY},'
+            f'{(ue.temperature - constant.GROUND_TEMPERATURE) / constant.GROUND_TEMPERATURE},'
+            f'{(ue.atmos_pressure - constant.GROUND_ATMOS_PRESSURE) / constant.GROUND_ATMOS_PRESSURE}')
 
     channel_loss = path_loss
 

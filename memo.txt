@@ -1,11 +1,9 @@
 
 ##Training commands:
-python main.py --model "TD3" --ep-max-timesteps 20 --prefix "debug"
-python main.py --model "TD3" --ep-max-timesteps 15000 --prefix "DT_15k eps"
-python main.py --env-name "LEOSat-v0" --model "DDPG" --ep-max-timesteps 40000 --prefix "ma-ddpg" --running-mode "testing"
+python main.py --model "TD3" --max-ep-num 10 --dir-name "debug" --prefix "parameter debug"
 
 ##Testing commands:
-python main.py --env-name "LEOSat-v0" --model "TD3" --ep-max-timesteps 20000 --prefix "test new state def (sinr_diff-power_diff)"
+python main.py --env-name "LEOSat-v0" --model "TD3" --max-ep-num 20000 --prefix "test new state def (sinr_diff-power_diff)"
 
 
 ##Install all package from requirements.txt: 

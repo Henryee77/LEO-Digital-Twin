@@ -56,28 +56,34 @@ class User(object):
     self.reset_channel_params()
 
   @property
-  def water_vap_var(self):
-    return self.__water_vap_var
+  def water_vap_density(self):
+    return self.__water_vap_density
 
-  @water_vap_var.setter
-  def water_vap_var(self, var):
-    self.__water_vap_var = np.clip(var, -constant.MAX_L_VARIATION_PERCENT, constant.MAX_L_VARIATION_PERCENT)
-
-  @property
-  def temperature_var(self):
-    return self.__temperature_var
-
-  @temperature_var.setter
-  def temperature_var(self, var):
-    self.__temperature_var = np.clip(var, -constant.MAX_M_VARIATION_PERCENT, constant.MAX_M_VARIATION_PERCENT)
+  @water_vap_density.setter
+  def water_vap_density(self, value):
+    self.__water_vap_density = np.clip(value,
+                                       (1 - constant.MAX_L_VARIATION_PERCENT) * constant.GROUND_WATER_VAP_DENSITY,
+                                       (1 + constant.MAX_L_VARIATION_PERCENT) * constant.GROUND_WATER_VAP_DENSITY)
 
   @property
-  def atmos_press_var(self):
-    return self.__atmos_press_var
+  def temperature(self):
+    return self.__temperature
 
-  @atmos_press_var.setter
-  def atmos_press_var(self, var):
-    self.__atmos_press_var = np.clip(var, -constant.MAX_S_VARIATION_PERCENT, constant.MAX_S_VARIATION_PERCENT)
+  @temperature.setter
+  def temperature(self, value):
+    self.__temperature = np.clip(value,
+                                 (1 - constant.MAX_M_VARIATION_PERCENT) * constant.GROUND_TEMPERATURE,
+                                 (1 + constant.MAX_M_VARIATION_PERCENT) * constant.GROUND_TEMPERATURE)
+
+  @property
+  def atmos_pressure(self):
+    return self.__atmos_pressure
+
+  @atmos_pressure.setter
+  def atmos_pressure(self, value):
+    self.__atmos_pressure = np.clip(value,
+                                    (1 - constant.MAX_S_VARIATION_PERCENT) * constant.GROUND_ATMOS_PRESSURE,
+                                    (1 + constant.MAX_S_VARIATION_PERCENT) * constant.GROUND_ATMOS_PRESSURE)
 
   @property
   def training_window_size(self):
@@ -134,20 +140,21 @@ class User(object):
     return data_size / self.data_rate
 
   def reset_channel_params(self):
-    self.water_vap_var = 0
-    self.temperature_var = 0
-    self.atmos_press_var = 0
+    self.water_vap_density = constant.GROUND_WATER_VAP_DENSITY
+    self.temperature = constant.GROUND_TEMPERATURE
+    self.atmos_pressure = constant.GROUND_ATMOS_PRESSURE
 
   def update_channel_params(self):
-    l_high = constant.MAX_L_VARIATION_PERCENT * 0.1
+    l_high = constant.MAX_L_VARIATION_PERCENT * constant.MAX_VAR_PERCENT
     l_low = -l_high
-    m_high = constant.MAX_M_VARIATION_PERCENT * 0.1
+    m_high = constant.MAX_M_VARIATION_PERCENT * constant.MAX_VAR_PERCENT
     m_low = -m_high
-    s_high = constant.MAX_S_VARIATION_PERCENT * 0.1
+    s_high = constant.MAX_S_VARIATION_PERCENT * constant.MAX_VAR_PERCENT
     s_low = -s_high
-    self.water_vap_var = self.water_vap_var + np.random.uniform(l_low, l_high)
-    self.temperature_var = self.temperature_var + np.random.uniform(m_low, m_high)
-    self.atmos_press_var = self.atmos_press_var + np.random.uniform(s_low, s_high)
+    self.water_vap_density = (self.water_vap_density +
+                              constant.GROUND_WATER_VAP_DENSITY * np.random.uniform(l_low, l_high))
+    self.temperature = (self.temperature + constant.GROUND_TEMPERATURE * np.random.uniform(m_low, m_high))
+    self.atmos_pressure = (self.atmos_pressure + constant.GROUND_ATMOS_PRESSURE * np.random.uniform(s_low, s_high))
 
   def servable_clear(self) -> None:
     """Clear the servable dict."""

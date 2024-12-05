@@ -116,6 +116,15 @@ def truncate(x: float, precision: int = 3) -> float:
   return float(math.floor(x * mult)) / mult
 
 
+def random_sign():
+  """Uniformly generate {-1, 1} 
+
+  Returns:
+      int: sign
+  """
+  return np.random.choice([-1, 1])
+
+
 def calc_sat_angular_speed(radius: float) -> float:
   """Calculate the angular speed of the satellite
 

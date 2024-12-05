@@ -16,6 +16,7 @@ from gym_env.leosat.leosat_env import LEOSatEnv
 from gym_env.digitalworld.digitalworld_env import DigitalWorldEnv
 from gym_env.realworld.realworld_env import RealWorldEnv
 from ..agent import Agent
+from low_earth_orbit.util import util
 from ..misc import misc
 
 
@@ -128,6 +129,32 @@ class OffPolicyTrainer(object):
         raise ValueError(f'No such {self.env.unwrapped.name} trainer and env.')
 
       return np.concatenate((real_state, digital_state))
+
+  def receive_sensing_env_param(self):
+    """Set the parameters of the virtual environment"""
+    if self.env.unwrapped.name == 'Real World':
+      raise ValueError('Cannot change the real world environment parameters by copying DT\'s value')
+
+    real_agents = self.twin_trainer.leo_agent_dict
+    error = self.args.dt_param_error
+
+    # Sharing LEO params
+    for sat_name in self.leo_agent_dict:
+      self.leo_agent_dict[sat_name].sat.nakagami_m = (
+        (1 + error * util.random_sign()) * real_agents[sat_name].sat.nakagami_m)
+      self.leo_agent_dict[sat_name].sat.los_power_ratio = (
+        (1 + error * util.random_sign()) * real_agents[sat_name].sat.los_power_ratio)
+      self.leo_agent_dict[sat_name].sat.rx_power_ratio = (
+        (1 + error * util.random_sign()) * real_agents[sat_name].sat.rx_power_ratio)
+
+    # Sharing ground params
+    real_ue_dict = self.twin_trainer.env.unwrapped.ue_dict
+    digital_dict = self.env.unwrapped.ue_dict
+    assert real_ue_dict is not digital_dict
+    for ue_name in real_ue_dict:
+      digital_dict[ue_name].water_vap_density = real_ue_dict[ue_name].water_vap_density
+      digital_dict[ue_name].temperature = real_ue_dict[ue_name].temperature
+      digital_dict[ue_name].atmos_pressure = real_ue_dict[ue_name].atmos_pressure
 
   def twin_parameter_query(self):
     if not self.online or not self.twin_trainer.online:

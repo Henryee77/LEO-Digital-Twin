@@ -113,7 +113,12 @@ def test_export_power_dict(constell: Constellation, sat_name_list):
     constell.all_sat[sat_name].import_power_dict(temp_power_dict[sat_name])
 
 
+def test_func():
+  a = util.random_sign()
+
+
 if __name__ == '__main__':
   constell = init_constel()
   sat_name_list = ['3_0_24', '2_0_1', '1_0_9']
-  print(timeit.timeit(functools.partial(test_export_power_dict, constell, sat_name_list), number=round(1e2)))
+  # print(timeit.timeit(functools.partial(test_export_power_dict, constell, sat_name_list), number=round(1e2)))
+  print(timeit.timeit(test_func, number=round(1e5)))

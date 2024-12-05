@@ -85,8 +85,10 @@ def main(args):
                               real_agents=realworld_agent_dict,
                               digital_agents=digitalworld_agent_dict,
                               agent_names=sat_name_list)
-  print(f'real env name: {real_env.unwrapped.name}')
-  print(f'digital env name: {digital_env.unwrapped.name}')
+  print(f'real env name: {real_env.unwrapped.name},'
+        f'{real_env.unwrapped.leo_agents is real_env.unwrapped.real_agents}')
+  print(f'digital env name: {digital_env.unwrapped.name},'
+        f'{digital_env.unwrapped.leo_agents is digital_env.unwrapped.digital_agents}')
 
   # Start training
   trainer_dict = {'TD3': 'Off-Policy',
@@ -197,6 +199,7 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
        r_info) = realworld_trainer.take_action(real_actions)
 
       if time_count % args.twin_sharing_period == 0:
+        digitalworld_trainer.receive_sensing_env_param()
         digitalworld_trainer.twin_parameter_query()
         realworld_trainer.twin_parameter_query()
         digitalworld_trainer.twin_parameter_update()
@@ -369,13 +372,13 @@ if __name__ == '__main__':
       '--eval-period', default=10, type=int,
       help='The evaluation frequency')
   parser.add_argument(
-      '--dt_online_ep', type=int,
+      '--dt_online_ep', default=0, type=int,
       help='The episode to turn on digital twins')
   parser.add_argument(
-      '--realLEO_online_ep', type=int,
+      '--realLEO_online_ep', default=0, type=int,
       help='The episode to turn on real LEOs')
   parser.add_argument(
-      '--ue-num', type=int,
+      '--ue-num', default=3, type=int,
       help='The number of ues')
   parser
 

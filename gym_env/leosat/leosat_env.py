@@ -134,10 +134,12 @@ class LEOSatEnv(gym.Env):
     reward = self._cal_reward(ue_throughput=ue_throughput)
     # print(self.ee[self.step_num], self.data_rate[self.step_num], self.overhead[self.step_num])
     self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
+    # print(f'{self.name}, step:{self.step_num}, {self.ues[0].temperature}')
 
     self.step_num += 1
     self.total_step_num += 1
     self.constel.update_sat_position()
+    self.dynamic_channel_update()
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
     has_action = (self.step_num % self.action_period == 0)
@@ -147,6 +149,9 @@ class LEOSatEnv(gym.Env):
     obs = self.get_state_info(has_action)
 
     return (obs, reward, done, truncated, {'has_action': has_action})
+
+  def dynamic_channel_update(self):
+    pass
 
   def record_sinr_thpt(self, ue_sinr, ue_throughput):
     if self.last_episode:
