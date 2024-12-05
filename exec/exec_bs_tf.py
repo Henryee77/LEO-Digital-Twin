@@ -33,7 +33,7 @@ if __name__ == '__main__':
   tf_list = [1, 2, 3, 4, 5]
   step_num = 100
 
-  dir_name = f'3 - Beam sweeping-T_f {max_ep} eps'
+  dir_name = f'Beam sweeping-T_f {max_ep} eps - 4'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:
@@ -50,7 +50,7 @@ if __name__ == '__main__':
           f'--dt-computaion-speed {f_comp} '
           f'--dt_online_ep {d_start_ep} --realLEO_online_ep {r_start_ep} '
           f'--federated-upload-period {ps_period} --federated-download-period {ps_period} '
-          f'--twin-sharing-period {twin_sharing_period} '
+          f'--model-sharing-period {twin_sharing_period} '
           f'--ue-num {ue_num} --prefix "{prefix}" --dir-name "{dir_name}"'
         )
         if error_code > 0:

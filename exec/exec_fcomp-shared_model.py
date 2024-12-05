@@ -1,4 +1,5 @@
-import os
+import sys
+import subprocess
 from low_earth_orbit.util import constant
 
 
@@ -29,7 +30,7 @@ if __name__ == '__main__':
   mode = 'DT + TS'
   tf = constant.DEFAULT_ACTION_TIMESLOT
   bs_mode = 'ABS'
-
+  d_start_ep, r_start_ep, ps_period, twin_sharing_period = mode_2_start_ep(mode)
   fcomp_list = [0.75e9 + 1e9 * i for i in range(0, 6)]
   model_sharing_period_list = [5 + 15 * i for i in range(1, 6)]
   step_num = 100
@@ -41,18 +42,17 @@ if __name__ == '__main__':
     for ms_period in model_sharing_period_list:
       for f_comp in fcomp_list:
         prefix = f'ms_period-{ms_period} f_comp-{f_comp / 1e9:.2f} ue{ue_num}'
-        d_start_ep, r_start_ep, ps_period, twin_sharing_period = mode_2_start_ep(mode)
 
-        error_code = os.system(
-          f'python main.py --model "TD3" --max-ep-num {max_ep} --max-time-per-ep {step_num} '
+        cmd = (
+          f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
+          f'--model-sharing-period {ms_period} '
           f'--action-timeslot {tf} '
           f'--beam-sweeping-mode {bs_mode} '
-          f'--model-sharing-period {ms_period} '
           f'--dt-computaion-speed {f_comp} '
           f'--dt_online_ep {d_start_ep} --realLEO_online_ep {r_start_ep} '
           f'--federated-upload-period {ps_period} --federated-download-period {ps_period} '
-          f'--ue-num {ue_num} --prefix "{prefix}" --dir-name "{dir_name}"'
+          f'--ue-num {ue_num}'
         )
-        if error_code > 0:
-          print('--------------------------------------------------------------------------------------------------')
-          raise ValueError('Runtime error.')
+        path_cmd = ['--prefix', prefix, '--dir-name', dir_name]
+        call_cmd = cmd.split(' ')
+        proc = subprocess.call([sys.executable] + call_cmd + path_cmd)

@@ -340,8 +340,8 @@ class Agent(object):
     self.memory.add((obs, new_obs, action, reward, done))
 
   def update_share_weight(self, r: float, total_train_iter: int):
-    if self.hist_reward_q.qsize() <= self.args.historical_reward_window:
-      self.hist_total_reward -= self.hist_reward_q.get()
+    if self.hist_reward_q.qsize() >= self.args.historical_reward_window:
+      self.hist_total_reward -= self.hist_reward_q.get(block=False)
     self.hist_total_reward += r
     self.hist_reward_q.put(r)
 
