@@ -310,7 +310,7 @@ if __name__ == '__main__':
       '--twin-sharing-update-rate', default=1e-1, type=float,
       help='Network update rate of twin sharing')
   parser.add_argument(
-      '--twin-sharing-period', default=5, type=int,
+      '--twin-sharing-period', default=10, type=int,
       help='Period of twin sharing uploading')
   parser.add_argument(
       '--twin-sharing-layer-num-per-turn', default=1, type=int,

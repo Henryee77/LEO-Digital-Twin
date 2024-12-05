@@ -1,4 +1,5 @@
-import os
+import sys
+import subprocess
 from low_earth_orbit.util import constant
 
 
@@ -38,15 +39,14 @@ if __name__ == '__main__':
 
   dir_name = f'statetype_param_sharing_period {max_ep} eps'
   # dir_name = 'debug'
-  bugged_folders = []
 
   for ue_num in ue_num_list:
     for shared_state_type in provide_type:
       for ts_period in twin_sharing_period_list:
         prefix = f'shared_type-{shared_state_type} param_sharing_period-{ts_period} ue{ue_num}'
 
-        error_code = os.system(
-          f'python main.py --model "TD3" --max-ep-num {max_ep} --max-time-per-ep {step_num} '
+        cmd = (
+          f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
           f'--shared-state-type {shared_state_type} '
           f'--twin-sharing-period {ts_period} '
           f'--action-timeslot {tf} '
@@ -55,12 +55,8 @@ if __name__ == '__main__':
           f'--dt-computaion-speed {f_comp} '
           f'--dt_online_ep {d_start_ep} --realLEO_online_ep {r_start_ep} '
           f'--federated-upload-period {ps_period} --federated-download-period {ps_period} '
-          f'--twin-sharing-period {twin_sharing_period} '
-          f'--ue-num {ue_num} --prefix "{prefix}" --dir-name "{dir_name}"'
+          f'--ue-num {ue_num}'
         )
-        if error_code > 0:
-          print('--------------------------------------------------------------------------------------------------')
-          # raise ValueError('Runtime error.')
-          bugged_folders.append(prefix)
-
-  print(bugged_folders)
+        path_cmd = ['--prefix', prefix, '--dir-name', dir_name]
+        call_cmd = cmd.split(' ')
+        proc = subprocess.call([sys.executable] + call_cmd + path_cmd)

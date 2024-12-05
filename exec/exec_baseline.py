@@ -1,4 +1,3 @@
-import os
 import sys
 import subprocess
 from low_earth_orbit.util import constant
