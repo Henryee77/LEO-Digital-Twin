@@ -25,7 +25,7 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [3]
+  ue_num_list = [6]
   max_ep = 500
   step_num = 100
   mode = 'DT + TS'
@@ -48,7 +48,8 @@ if __name__ == '__main__':
         cmd = (
           f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
           f'--shared-state-type {shared_state_type} '
-          f'--twin-sharing-period {ts_period} '
+          f'--model-sharing-period {ts_period} '
+          f'--env-param-sharing-period {ts_period} '
           f'--action-timeslot {tf} '
           f'--beam-sweeping-mode {bs_mode} '
           f'--cell-layer-num {cell_layer} '
