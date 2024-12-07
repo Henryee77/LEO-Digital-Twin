@@ -34,9 +34,9 @@ if __name__ == '__main__':
   bs_mode = 'ABS'
   f_comp = 4e9
   provide_type = [0, 1, 2]
-  param_error_list = [0.1 * i for i in range(0, 6)]
+  param_error_list = [0.05 * i for i in range(0, 6)]
 
-  dir_name = f'statetype-param_error {max_ep} eps'
+  dir_name = f'statetype-param_error {max_ep} eps - 2'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:
