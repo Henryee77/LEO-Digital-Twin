@@ -152,9 +152,12 @@ class OffPolicyTrainer(object):
     digital_dict = self.env.unwrapped.ue_dict
     assert real_ue_dict is not digital_dict
     for ue_name in real_ue_dict:
-      digital_dict[ue_name].water_vap_density = real_ue_dict[ue_name].water_vap_density
-      digital_dict[ue_name].temperature = real_ue_dict[ue_name].temperature
-      digital_dict[ue_name].atmos_pressure = real_ue_dict[ue_name].atmos_pressure
+      digital_dict[ue_name].water_vap_density = (
+        (1 + error * util.random_sign()) * real_ue_dict[ue_name].water_vap_density)
+      digital_dict[ue_name].temperature = (
+        (1 + error * util.random_sign()) * real_ue_dict[ue_name].temperature)
+      digital_dict[ue_name].atmos_pressure = (
+        (1 + error * util.random_sign()) * real_ue_dict[ue_name].atmos_pressure)
 
   def twin_parameter_query(self):
     if not self.online or not self.twin_trainer.online:

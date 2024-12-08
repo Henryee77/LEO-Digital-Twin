@@ -314,7 +314,7 @@ if __name__ == '__main__':
 
   # ------------Twin Sharing ---------------
   parser.add_argument(
-      '--twin-sharing-update-rate', default=1e-1, type=float,
+      '--twin-sharing-update-rate', default=0.5, type=float,
       help='Network update rate of twin sharing')
   parser.add_argument(
       '--model-sharing-period', default=5, type=int,
