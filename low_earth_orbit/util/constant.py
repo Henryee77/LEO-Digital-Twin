@@ -121,6 +121,6 @@ CELL_ALPHA = 0.5
 # Latency
 DEFAULT_DT_CPU_CYCLE = 2.5e9
 DEFAULT_LEO_CPU_CYCLE = 2.5e9
-F_0 = 10
-RT_COMP_SIZE = 4e7   # CPU cycle needed for a single tx-rx pair
+F_0 = 10   # CPU cycle needed for a data in RA
+RT_COMP_SIZE = 1e7   # CPU cycle needed for a single tx-rx pair
 DEFAULT_GATEWAY_THROUGHPUT = 100e6  # bytes/s

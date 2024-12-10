@@ -300,13 +300,14 @@ class LEOSatEnv(gym.Env):
           self.data_rate[self.step_num][sat_name] += sat_tran_ratio[sat_name] * throughput
           self.throughput[self.step_num][sat_name] += throughput
 
-          power_muW = (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6
+          power_muW = (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) * 1e6
           ee = (sat_tran_ratio[sat_name] * throughput / power_muW)
           self.ee[self.step_num][sat_name] += ee
 
-          self.penalty[self.step_num][ue_name] = (np.max(self.ue_dict[ue_name].required_datarate - throughput, 0)
-                                                  / power_muW)
-          reward[sat_name] += np.max(ee - self.penalty[self.step_num][ue_name], 0)
+          self.penalty[self.step_num][ue_name] = max((self.ue_dict[ue_name].required_datarate - throughput) / power_muW,
+                                                     0)
+
+          reward[sat_name] += max(ee - self.penalty[self.step_num][ue_name], 0)
 
     return reward
 
