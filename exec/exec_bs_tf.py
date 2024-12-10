@@ -25,21 +25,21 @@ def mode_2_start_ep(mode):
 
 if __name__ == '__main__':
   ue_num_list = [3, 6]
-  max_ep = 750
-  mode = 'DT'
+  max_ep = 500
+  mode = 'No DT'
   cell_layer = 3
   f_comp = constant.DEFAULT_DT_CPU_CYCLE
   bs_list = ['ABS', 'SCBS', 'SSBS']
   tf_list = [1, 2, 3, 4, 5]
   step_num = 100
 
-  dir_name = f'Beam sweeping-T_f {max_ep} eps - 4'
+  dir_name = f'3 - Beam sweeping-T_f {max_ep} eps'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:
     for bs_mode in bs_list:
       for tf in tf_list:
-        prefix = f'{bs_mode} tf-{tf}s ue{ue_num}'
+        prefix = f'{mode} {bs_mode} tf-{tf}s ue{ue_num}'
         d_start_ep, r_start_ep, ps_period, twin_sharing_period = mode_2_start_ep(mode)
 
         error_code = os.system(

@@ -274,7 +274,7 @@ if __name__ == '__main__':
       '--policy-freq', default=2, type=int,
       help='Frequency of delayed policy updates')
   parser.add_argument(
-      '--min-epsilon', default=0.25, type=float,
+      '--min-epsilon', default=0, type=float,
       help='The minimum of epsilon')
   parser.add_argument(
       '--expl-noise', default=0.2, type=float,
@@ -292,7 +292,7 @@ if __name__ == '__main__':
       '--discount', default=1e-2, type=float,
       help='Discount factor')
   parser.add_argument(
-      '--full-explore-steps', default=1e4, type=int,
+      '--full-explore-steps', default=1e3, type=int,
       help='Number of steps to do exploration')
 
   # -----------Federated Sharing ---------------
@@ -314,7 +314,7 @@ if __name__ == '__main__':
 
   # ------------Twin Sharing ---------------
   parser.add_argument(
-      '--twin-sharing-update-rate', default=1e-1, type=float,
+      '--twin-sharing-update-rate', default=0.5, type=float,
       help='Network update rate of twin sharing')
   parser.add_argument(
       '--model-sharing-period', default=5, type=int,
