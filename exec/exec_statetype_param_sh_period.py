@@ -25,7 +25,7 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [6]
+  ue_num_list = [3]
   max_ep = 500
   step_num = 100
   mode = 'DT + TS'
@@ -34,10 +34,10 @@ if __name__ == '__main__':
   cell_layer = 3
   f_comp = 5e9
   provide_type = [0, 1, 2]
-  twin_sharing_period_list = [20 * i + 10 for i in range(0, 5)]
+  twin_sharing_period_list = [10 * i + 10 for i in range(0, 9)]
   d_start_ep, r_start_ep, ps_period, twin_sharing_period = mode_2_start_ep(mode)
 
-  dir_name = f'statetype_param_sharing_period {max_ep} eps'
+  dir_name = f'2 - statetype_param_sharing_period {max_ep} eps'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:
