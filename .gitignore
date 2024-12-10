@@ -105,7 +105,7 @@ venv.bak/
 .mypy_cache/
 
 # Folder
-.history
+.history/
 log/
 pytorch_models/
 figs/

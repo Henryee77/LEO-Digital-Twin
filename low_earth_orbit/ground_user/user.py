@@ -31,15 +31,18 @@ class User(object):
       self,
       name: str,
       position: Position,
+      required_datarate: float,
       rx_gain: float = constant.DEFAULT_RX_GAIN,
-      training_window_size: int = constant.DEFAULT_TRAINING_WINDOW_SIZE
+      training_window_size: int = constant.DEFAULT_TRAINING_WINDOW_SIZE,
   ):
     """The __init__ funciton for user.
 
     Args:
       name (str): The name of the object.
       position (position): The position of the object.
-      rx_gain (float): The recieving antenna gain of the object
+      required_datarate (float): The QoS requirement for the user.
+      rx_gain (float): The recieving antenna gain of the object.
+      training_window_size (int): Window size of storing historical data used in beam training.
 
     Raise:
       ValueError: The user must initialize the position
@@ -47,6 +50,7 @@ class User(object):
     self.name = name
     self.position = position
     self.rx_gain = rx_gain
+    self.__required_datarate = required_datarate
     self.__training_window_size = training_window_size
 
     self.servable = {}
@@ -54,6 +58,10 @@ class User(object):
     self.a3_table = {}
 
     self.reset_channel_params()
+
+  @property
+  def required_datarate(self):
+    return self.__required_datarate
 
   @property
   def water_vap_density(self):

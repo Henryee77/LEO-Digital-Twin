@@ -300,13 +300,13 @@ if __name__ == '__main__':
       '--federated-update-rate', default=1e-1, type=float,
       help='Network exchanging rate of federated agents')
   parser.add_argument(
-      '--federated-upload-period', default=80, type=int,
+      '--federated-upload-period', default=50, type=int,
       help='Period of federated uploading')
   parser.add_argument(
-      '--federated-download-period', default=80, type=int,
+      '--federated-download-period', default=50, type=int,
       help='Period of federated downloading')
   parser.add_argument(
-      '--federated-layer-num-per-turn', default=2, type=int,
+      '--federated-layer-num-per-turn', default=4, type=int,
       help='number of layers per federated uploading')
   parser.add_argument(
       '--partial-upload-type', default='by-turns', type=str,
@@ -362,6 +362,16 @@ if __name__ == '__main__':
       '--dt-param-error', type=float, default=0,
       help='The error of the environment parameters sending from the real LEO')
 
+  # --------------------- UE ------------------------
+  parser.add_argument(
+      '--ue-num', default=3, type=int,
+      help='The number of ues')
+  parser
+  parser.add_argument(
+      '--R-min', default=1e8, type=float,
+      help='QoS constraint')
+  parser
+
   # ------------------- Env -------------------------
   parser.add_argument(
       '--real-env-name', type=str, default='RealWorld-v0',
@@ -387,10 +397,6 @@ if __name__ == '__main__':
   parser.add_argument(
       '--realLEO_online_ep', default=0, type=int,
       help='The episode to turn on real LEOs')
-  parser.add_argument(
-      '--ue-num', default=3, type=int,
-      help='The number of ues')
-  parser
 
   # ------------------ Misc -------------------------
   parser.add_argument(
@@ -403,7 +409,7 @@ if __name__ == '__main__':
       '--dir-name', default='', type=str,
       help='Name of the tb directory')
   parser.add_argument(
-      '--seed', default=456789, type=int,
+      '--seed', default=1012131415, type=int,
       help='Sets Gym, PyTorch and Numpy seeds')
   parser.add_argument(
       '--running-mode', default='training', type=str,
