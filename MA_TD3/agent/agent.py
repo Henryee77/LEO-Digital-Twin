@@ -17,6 +17,7 @@ from low_earth_orbit.util.position import Position, Geodetic
 from low_earth_orbit.util import constant
 from low_earth_orbit.satellite.satellite import Satellite
 from low_earth_orbit.cell.cell_topology import CellTopology
+from low_earth_orbit.channel import Channel
 from low_earth_orbit.util import util
 
 
@@ -44,7 +45,8 @@ class Agent(object):
                          angle_speed=0,
                          position=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
                          cell_topo=CellTopology(center_point=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
-                                                cell_layer=args.cell_layer_num)
+                                                cell_layer=args.cell_layer_num),
+                         channel=Channel()
                          )
 
     self._init_dim()

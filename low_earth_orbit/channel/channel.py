@@ -4,14 +4,15 @@ from typing import Tuple, List
 import csv
 import functools
 import math
+import random
 import numpy as np
 import numpy.typing as npt
-from scipy.stats import uniform, norm
+from scipy.stats import norm, nakagami
 from scipy.interpolate import RegularGridInterpolator
 from itur.models import itu676
 
 from ..util import constant
-from ..util.distribution import Rayleigh, Nakagami, Rainfall_rv
+from ..util.distribution import Rainfall_rv
 from .. import util
 
 
@@ -19,11 +20,8 @@ class Channel():
   """The class of wireless channel"""
 
   def __init__(self, month: int = 1):
-    self.rayleigh = Rayleigh()
-    self.nakagami = Nakagami()
-
     self.month = month
-    self.weather_map = []
+    self.weather_map = np.zeros((6, 6))
     # self.load_rainfall_data()
 
   def free_space(self, distance: float, freq: float) -> float:
@@ -39,24 +37,6 @@ class Channel():
     pl = 2 * util.todb(distance) + 2 * util.todb(freq) + constant.FREE_SPACE_LOSS
     pl = float(pl)
     return pl
-
-  def shadowed_rician_fading(self, b: float, m: float, Omega: float) -> float:
-    """The shadowed rician fading model.
-       Reference: A new simple model for land mobile satellite channels first- and second-order statistics
-
-    Args:
-      b (float): half power of multipath component
-      m (float): Nakagami parameter
-      Omega (float): Average power of LOS component
-
-    Returns:
-      (float): The shadow fading in dB
-    """
-    A = self.rayleigh.rvs(scale=math.sqrt(b))
-    Z = self.nakagami.rvs(nu=m, scale=math.sqrt(Omega))
-    alpha = uniform.rvs() * 2 * constant.PI
-    R = A * np.exp(1j * alpha) + Z
-    return abs(R)
 
   def scintillation_loss(self, elevation_angle):
     """The scintillation loss model.
@@ -142,8 +122,9 @@ class Channel():
     scpl = self.scintillation_loss(elevation_angle)
     gpl = self.gas_attenuation(freq, elevation_angle,
                                water_vapor_density, temperature, atmos_pressure)
+
     '''rl = self.itu_rain_attenuation(rain_rate=rain_rate,
-                                   L_s=distance / constant.KM,
+                                   L_s=self.rain_height_grid(()),
                                    freq=freq,
                                    elevation_angle=elevation_angle)'''
 
@@ -164,6 +145,24 @@ class Channel():
                                           m=nakagami_m,
                                           Omega=los_power_ratio)
     return sr_loss
+
+  def shadowed_rician_fading(self, b: float, m: float, Omega: float) -> float:
+    """The shadowed rician fading model.
+       Reference: A new simple model for land mobile satellite channels first- and second-order statistics
+
+    Args:
+      b (float): half power of multipath component
+      m (float): Nakagami parameter
+      Omega (float): Average power of LOS component
+
+    Returns:
+      (float): The shadow fading in dB
+    """
+    A = np.random.rayleigh(scale=math.sqrt(b))
+    Z = nakagami.rvs(nu=m, scale=math.sqrt(Omega))
+    alpha = random.random() * 2 * constant.PI
+    R = A * np.exp(1j * alpha) + Z
+    return abs(R)
 
   def cal_total_loss(self,
                      distance: float,
@@ -241,8 +240,8 @@ class Channel():
     return r, p_0
 
   def generate_rainfall(self, lon: float, lat: float) -> List[float]:
-    """WARNING: This method is just a rough estimation using data from ITU.\n
-    Generate the rainfall of the given area.
+    """Generate the rainfall of the given area.
+    WARNING: This method is just a rough estimation using data from ITU.
 
     Args:
         lon (float): longitude
@@ -251,15 +250,37 @@ class Channel():
     Returns:
         List[float]: rainfall (mm/hr)
     """
-
     r, p_0 = self._rain_fall_prob_param(lon=lon, lat=lat)
     rainfall_rv = Rainfall_rv(r=r, p_0=p_0)
     rainfall = rainfall_rv.rvs(size=1)
 
     return [data if data > 1 else 0 for data in rainfall]
 
+  def rainrate_of_rain_prob(self, rain_prob: float):
+    if rain_prob < 0 or rain_prob > 1:
+      raise ValueError('Rainfall probability need to be between [0, 1].')
+
+    rand = random.random()
+    if rain_prob >= rand:
+      return self.generate_rainfall()
+    else:
+      return 0
+
   def modified_rain_attenuation(self, rain_rate: float, L_s: float, height_diff: float, freq: float, elevation_angle: float, polarization_angle: float = 0) -> float:
-    # reference paper: Rain Attenuation Prediction Model for Satellite Communications in Tropical Regions
+    """Calculate the rain attenuation.
+    Reference paper: Rain Attenuation Prediction Model for Satellite Communications in Tropical Regions.
+
+    Args:
+        rain_rate (float): rain rate (mm/h)
+        L_s (float): slant path distance (m)
+        height_diff: height from the rain top to the ground user.
+        freq (float): central frequency
+        elevation_angle (float): elevation angle
+        polarization_angle (float, optional): polarization angle. Defaults to 0.
+
+    Returns:
+        float: rain attenuation (dB)
+    """
     k_h, alpha_h, k_v, alpha_v = constant.COEFFICIENT_TABLE_FOR_RAIN_ATTENUATION[round(freq / 1e9)]
     k = (k_h + k_v + (k_h - k_v) * (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / 2
     alpha = (k_h * alpha_h + k_v * alpha_v + (k_h * alpha_h - k_v * alpha_v) *
@@ -275,7 +296,7 @@ class Channel():
 
     Args:
         rain_rate (float): rain rate (mm/h)
-        L_s (float): slant path distance (km)
+        L_s (float): slant path distance (m)
         freq (float): central frequency
         elevation_angle (float): elevation angle
         polarization_angle (float, optional): polarization angle. Defaults to 0.
@@ -289,12 +310,13 @@ class Channel():
     k = (k_h + k_v + (k_h - k_v) * (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / 2
     alpha = (k_h * alpha_h + k_v * alpha_v + (k_h * alpha_h - k_v * alpha_v) *
              (math.cos(elevation_angle) ** 2) * math.cos(2 * polarization_angle)) / (2 * k)
-    return k * (rain_rate ** alpha) * L_s
+    return k * (rain_rate ** alpha) * L_s / constant.KM
 
   def load_rainfall_data(self):
     mean_surface_temp = []
     mean_total_rainfall = []
     rain_rate_exceed_001 = []
+    rain_height = []
 
     with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/LAT_T_LIST.TXT', mode='r', newline='') as f:
       T_lat_list = [float(data) for data in f.read().split(' ')]
@@ -323,6 +345,17 @@ class Channel():
         rain_rate_exceed_001.append([float(data) for data in line.split(' ')])
     rain_rate_exceed_001 = list(map(list, zip(*rain_rate_exceed_001)))
 
+    with open(f'low_earth_orbit/util/rainfall_data/rain height/LAT_h0_LIST.TXT', mode='r', newline='') as f:
+      rain_height_lat_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/rain height/LON_h0_LIST.TXT', mode='r', newline='') as f:
+      rain_height_lon_list = [float(data) for data in f.read().split(' ')]
+    with open(f'low_earth_orbit/util/rainfall_data/rain height/h0.TXT', mode='r', newline='') as f:
+      for line in f.read().splitlines():
+        rain_height.append([float(data * constant.KM + constant.ZERO_DEGREE_ISOTHERM_HEIGHT)
+                           for data in line.split(' ')])
+    rain_height = list(map(list, zip(*rain_rate_exceed_001)))
+
     self.mean_temp_grid = RegularGridInterpolator((T_lon_list, T_lat_list), mean_surface_temp)
     self.mean_rainfall_grid = RegularGridInterpolator((MT_lon_list, MT_lat_list), mean_total_rainfall)
     self.rain_rate_001_grid = RegularGridInterpolator((R001_lon_list, R001_lat_list), rain_rate_exceed_001)
+    self.rain_height_grid = RegularGridInterpolator((rain_height_lon_list, rain_height_lat_list), rain_height)

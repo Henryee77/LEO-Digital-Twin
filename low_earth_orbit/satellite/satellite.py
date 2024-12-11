@@ -26,7 +26,7 @@ class Satellite(object):
                position: Position,
                angle_speed: float,
                cell_topo: CellTopology,
-               channel: Channel = None,
+               channel: Channel,
                max_power: float = constant.MAX_POWER,
                min_power: float = constant.MIN_POWER,
                total_bandwidth=constant.DEFAULT_BANDWIDTH,
@@ -39,10 +39,7 @@ class Satellite(object):
     self.angle_speed = angle_speed
     self.cell_topo = cell_topo
     self.antenna_list = [Antenna() for _ in range(self.cell_topo.cell_number)]
-    if channel:
-      self.wireless_channel = channel
-    else:
-      self.wireless_channel = Channel()
+    self.wireless_channel = channel
 
     self.__max_power = max_power
     self.__min_power = min_power

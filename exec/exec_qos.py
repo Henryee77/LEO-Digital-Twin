@@ -36,7 +36,7 @@ if __name__ == '__main__':
   qos_list = [i * 5e7 for i in range(6)]
   step_num = 100
 
-  dir_name = f'QoS Comparison {max_ep} eps'
+  dir_name = f'2 - QoS Comparison {max_ep} eps'
   # dir_name = 'debug'
 
   for ue_num in ue_num_list:

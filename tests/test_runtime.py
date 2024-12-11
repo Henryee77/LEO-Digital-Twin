@@ -19,7 +19,9 @@ import time
 import timeit
 import copy
 import numpy as np
+import random
 from random import sample
+from scipy.stats import uniform
 
 
 def init_constel():
@@ -114,13 +116,42 @@ def test_export_power_dict(constell: Constellation, sat_name_list):
     constell.all_sat[sat_name].import_power_dict(temp_power_dict[sat_name])
 
 
-def test_func():
-  pass
+def test_func(ch: Channel):
+  # a = random.random()
+  a = ch.cal_total_loss(distance=1e6 * random.random(),
+                        freq=2e10,
+                        elevation_angle=constant.PI / 4 * random.random(),
+                        nakagami_m=constant.NAKAGAMI_PARAMETER * random.random(),
+                        rx_power_ratio=constant.TOTAL_POWER_RECEIVED_RATIO,
+                        los_power_ratio=constant.LOS_COMPONENT_POWER,
+                        water_vapor_density=constant.GROUND_WATER_VAP_DENSITY * random.random(),
+                        temperature=constant.GROUND_TEMPERATURE * random.random(),
+                        atmos_pressure=constant.GROUND_ATMOS_PRESSURE)
+
+
+def test_func1(ch: Channel):
+  fspl = ch.free_space(distance=1e6 * random.random(),
+                       freq=2e10)
+
+
+def test_func2(ch: Channel):
+  scpl = ch.scintillation_loss(constant.PI / 4 * random.random())
+
+
+def test_func3(ch: Channel):
+  gpl = ch.gas_attenuation(fc=2e10, elevation_angle=constant.PI / 4 * random.random(),
+                           water_vapor_density=constant.GROUND_WATER_VAP_DENSITY * random.random(),
+                           temperature=constant.GROUND_TEMPERATURE * random.random(),
+                           atmos_pressure=constant.GROUND_ATMOS_PRESSURE)
 
 
 if __name__ == '__main__':
   constell = init_constel()
   sat_name_list = ['3_0_24', '2_0_1', '1_0_9']
+  ch = Channel()
 
   # print(timeit.timeit(functools.partial(test_export_power_dict, constell, sat_name_list), number=round(1e2)))
-  print(timeit.timeit(functools.partial(test_func), number=round(1e1)))
+  print(timeit.timeit(functools.partial(test_func, ch), number=round(1e2 * 2 * 3 * 6)))
+  print(timeit.timeit(functools.partial(test_func1, ch), number=round(1e2 * 2 * 3 * 6)))
+  print(timeit.timeit(functools.partial(test_func2, ch), number=round(1e2 * 2 * 3 * 6)))
+  print(timeit.timeit(functools.partial(test_func3, ch), number=round(1e2 * 2 * 3 * 6)))
