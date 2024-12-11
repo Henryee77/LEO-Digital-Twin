@@ -106,13 +106,15 @@ class Constellation(object):
     projection_point = satellite_pos.to_geodetic()
     projection_point.height = constant.R_EARTH
 
+    wireless_channel = Channel()
     sat_obj = Satellite(shell_index=shell_index,
                         plane_index=plane_index,
                         sat_index=sat_index,
                         angle_speed=self.angular_speed_orbital[shell_index],
                         position=Position(orbital=satellite_pos),
                         cell_topo=CellTopology(center_point=Position(geodetic=projection_point),
-                                               cell_layer=self.args.cell_layer_num)
+                                               cell_layer=self.args.cell_layer_num),
+                        channel=wireless_channel
                         )
 
     self.all_sat[sat_obj.name] = sat_obj

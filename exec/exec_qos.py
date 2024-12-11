@@ -32,8 +32,8 @@ def mode_2_start_ep(mode):
 if __name__ == '__main__':
   ue_num_list = [6]
   max_ep = 500
-  mode_list = ['DT + TS + FS', 'DT + TS', 'DT', 'No DT']
-  qos_list = [i * 2e8 for i in range(6)]
+  mode_list = ['DT + TS + FS', 'DT + TS', 'DT', 'No DT']  #
+  qos_list = [i * 5e7 for i in range(6)]
   step_num = 100
 
   dir_name = f'QoS Comparison {max_ep} eps'

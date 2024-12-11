@@ -45,6 +45,7 @@ class LEOSatEnv(gym.Env):
     self.ee = {}
     self.data_rate = {}  # Consider overhead
     self.throughput = {}  # No overhead
+    self.ue_throughput = {}
     self.penalty = {}
     self.overhead = {}
     self.ue_pos_data = {}
@@ -133,9 +134,11 @@ class LEOSatEnv(gym.Env):
     ue_throughput = self.constel.cal_throughput(ues=self.ues,
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
+    for ue_name, thput in ue_throughput.items():
+      self.ue_throughput[self.step_num][ue_name] = thput
 
     reward = self._cal_reward(ue_throughput=ue_throughput)
-    self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
+    self.record_steps_of_last_ep(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     self.step_num += 1
     self.total_step_num += 1
@@ -154,7 +157,7 @@ class LEOSatEnv(gym.Env):
   def dynamic_channel_update(self):
     pass
 
-  def record_sinr_thpt(self, ue_sinr, ue_throughput):
+  def record_steps_of_last_ep(self, ue_sinr, ue_throughput):
     if self.last_episode:
       for ue_name, sinr in ue_sinr.items():
         self.tb_writer.add_scalars(f'{self.name} Env Param/ue sinr',
@@ -182,12 +185,18 @@ class LEOSatEnv(gym.Env):
                                {f'{self.args.prefix} {self.name}': sum(self.overflowed_overhead.values()) /
                                 len(self.overflowed_overhead)},
                                self.reset_count)
-    saved_dict = {}
+    pen_saved_dict = {}
+    ue_thput_saved_dict = {}
     for ue_name in self.ue_dict:
-      saved_dict[f'{self.args.prefix} {self.name} ue{ue_name}'] = sum(
+      pen_saved_dict[f'{self.args.prefix} {self.name} {ue_name}'] = sum(
         self.penalty[t][ue_name] for t in range(self.step_num)) / self.step_num
+      ue_thput_saved_dict[f'{self.args.prefix} {self.name} {ue_name}'] = sum(
+        self.ue_throughput[t][ue_name] for t in range(self.step_num)) / self.step_num
     self.tb_writer.add_scalars(f'{self.name} Env Param/penalty term',
-                               saved_dict,
+                               pen_saved_dict,
+                               self.reset_count)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/UE average throughput',
+                               ue_thput_saved_dict,
                                self.reset_count)
 
   def _take_action(self, action_n: Dict[str, List[float]]):
@@ -367,6 +376,7 @@ class LEOSatEnv(gym.Env):
       self.data_rate[t] = {}
       self.overhead[t] = {}
       self.throughput[t] = {}
+      self.ue_throughput[t] = {}
       self.penalty[t] = {}
       for sat_name in self.agent_names:
         self.ee[t][sat_name] = 0
@@ -375,6 +385,7 @@ class LEOSatEnv(gym.Env):
         self.throughput[t][sat_name] = 0
       for ue in self.ues:
         self.penalty[t][ue.name] = 0
+        self.ue_throughput[t][ue.name] = 0
 
     for sat_name in self.agent_names:
       self.leo_agents[sat_name].sat = self.constel.all_sat[sat_name]

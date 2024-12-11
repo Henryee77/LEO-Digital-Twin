@@ -23,6 +23,7 @@ class Channel():
     self.nakagami = Nakagami()
 
     self.month = month
+    self.weather_map = []
     # self.load_rainfall_data()
 
   def free_space(self, distance: float, freq: float) -> float:
