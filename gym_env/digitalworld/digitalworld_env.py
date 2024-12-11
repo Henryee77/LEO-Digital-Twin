@@ -94,7 +94,7 @@ class DigitalWorldEnv(LEOSatEnv):
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
     reward = self._cal_reward(ue_throughput=ue_throughput, no_action=True)
-    self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
+    self.record_steps_of_last_ep(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     self.step_num += 1
     self.total_step_num += 1
