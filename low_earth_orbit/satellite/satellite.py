@@ -47,7 +47,7 @@ class Satellite(object):
     self.beam_alg = beam_alg
     self.__bs_latency = 0
 
-    self.reset_channel_params()
+    self.reset_fading_params()
 
   @property
   def shell_index(self):
@@ -203,7 +203,7 @@ class Satellite(object):
     for i in range(self.cell_topo.cell_number):
       self.cell_topo.set_beamwidth(i, constant.DEFAULT_BEAMWIDTH_3DB)
 
-  def reset_channel_params(self):
+  def reset_fading_params(self):
     self.nakagami_m = constant.NAKAGAMI_PARAMETER
     self.los_power_ratio = constant.LOS_COMPONENT_POWER
     self.rx_power_ratio = constant.TOTAL_POWER_RECEIVED_RATIO
@@ -296,7 +296,8 @@ class Satellite(object):
     theta = self.position.angle_between_targets(beam_pos, ue.position)
 
     tx_gain = float(self.antenna_list[beam_index].calc_antenna_gain(theta))
-    path_loss = self.wireless_channel.cal_total_loss(distance=dis_sat_ue,
+    path_loss = self.wireless_channel.cal_total_loss(ue_pos=ue.position,
+                                                     distance=dis_sat_ue,
                                                      freq=self.antenna_list[beam_index].central_frequency,
                                                      elevation_angle=epsilon,
                                                      nakagami_m=self.nakagami_m,

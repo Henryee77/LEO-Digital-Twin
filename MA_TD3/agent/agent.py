@@ -46,7 +46,8 @@ class Agent(object):
                          position=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
                          cell_topo=CellTopology(center_point=Position(geodetic=Geodetic(0, 0, constant.R_EARTH)),
                                                 cell_layer=args.cell_layer_num),
-                         channel=Channel()
+                         channel=Channel(rain_prob=self.args.rainfall_prob,
+                                         has_weather=self.args.has_weather_module)
                          )
 
     self._init_dim()

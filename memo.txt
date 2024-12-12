@@ -1,6 +1,6 @@
 
 ##Training commands:
-python main.py --model "TD3" --max-ep-num 10 --dir-name "debug" --prefix "parameter debug"
+python main.py --model "TD3" --max-ep-num 10 --dir-name "debug" --prefix "debug" --has-weather-module 1
 
 ##Testing commands:
 python main.py --env-name "LEOSat-v0" --model "TD3" --max-ep-num 20000 --prefix "test new state def (sinr_diff-power_diff)"

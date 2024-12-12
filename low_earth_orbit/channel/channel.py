@@ -1,7 +1,6 @@
 """The channel model."""
 
 from typing import Tuple, List
-import csv
 import functools
 import math
 import random
@@ -10,7 +9,7 @@ import numpy.typing as npt
 from scipy.stats import norm, nakagami
 from scipy.interpolate import RegularGridInterpolator
 from itur.models import itu676
-
+from low_earth_orbit.util.position import Position
 from ..util import constant
 from ..util.distribution import Rainfall_rv
 from .. import util
@@ -19,10 +18,22 @@ from .. import util
 class Channel():
   """The class of wireless channel"""
 
-  def __init__(self, month: int = 1):
+  def __init__(self,
+               rain_prob: float,
+               has_weather: int,
+               month: int = 1):
+    self.rain_prob = rain_prob
     self.month = month
-    self.weather_map = np.zeros((6, 6))
-    # self.load_rainfall_data()
+    self.has_weather = (has_weather == 1)
+    if self.has_weather:
+      self.map_lon_list = np.linspace(constant.ORIGIN_LONG - constant.MAP_HALF_WIDTH,
+                                      constant.ORIGIN_LONG + constant.MAP_HALF_WIDTH,
+                                      num=round(2 * constant.MAP_HALF_WIDTH))
+      self.map_lat_list = np.linspace(constant.ORIGIN_LATI - constant.MAP_HALF_WIDTH,
+                                      constant.ORIGIN_LATI + constant.MAP_HALF_WIDTH,
+                                      num=round(2 * constant.MAP_HALF_WIDTH))
+      self.load_rainfall_data()
+      self.update_weather()
 
   def free_space(self, distance: float, freq: float) -> float:
     """The free space path loss model.
@@ -102,12 +113,15 @@ class Channel():
 
     return float(zenith_att.value)
 
-  def cal_deterministic_loss(self, distance: float,
+  def cal_deterministic_loss(self,
+                             ue_pos: Position,
+                             distance: float,
                              freq: float,
                              elevation_angle: float,
                              water_vapor_density: float,
                              temperature: float,
-                             atmos_pressure: float) -> float:
+                             atmos_pressure: float,
+                             ) -> float:
     """Calculate the deterministic part of the loss.
 
     Args:
@@ -123,12 +137,17 @@ class Channel():
     gpl = self.gas_attenuation(freq, elevation_angle,
                                water_vapor_density, temperature, atmos_pressure)
 
-    '''rl = self.itu_rain_attenuation(rain_rate=rain_rate,
-                                   L_s=self.rain_height_grid(()),
-                                   freq=freq,
-                                   elevation_angle=elevation_angle)'''
+    ue_lon = ue_pos.geodetic.longitude
+    ue_lat = ue_pos.geodetic.latitude
+    if self.has_weather:
+      rl = self.itu_rain_attenuation(rain_rate=self.rain_rate_grid((ue_lon, ue_lat)),
+                                     L_s=self.rain_height_grid((ue_lon, ue_lat)) / math.sin(elevation_angle),
+                                     freq=freq,
+                                     elevation_angle=elevation_angle)
+    else:
+      rl = 0
 
-    return fspl + scpl + gpl  # + rl
+    return fspl + scpl + gpl + rl
 
   def cal_stochastic_loss(self,
                           nakagami_m: float,
@@ -165,6 +184,7 @@ class Channel():
     return abs(R)
 
   def cal_total_loss(self,
+                     ue_pos: Position,
                      distance: float,
                      freq: float,
                      elevation_angle: float,
@@ -184,7 +204,8 @@ class Channel():
     Returns:
       (float): The total loss (dB)
     """
-    det_loss = self.cal_deterministic_loss(distance=round(distance,
+    det_loss = self.cal_deterministic_loss(ue_pos=ue_pos,
+                                           distance=round(distance,
                                                           constant.CACHED_PRECISION),
                                            freq=round(freq,
                                                       constant.CACHED_PRECISION),
@@ -195,7 +216,9 @@ class Channel():
                                            temperature=round(temperature,
                                                              constant.CACHED_PRECISION),
                                            atmos_pressure=round(atmos_pressure,
-                                                                constant.CACHED_PRECISION))
+                                                                constant.CACHED_PRECISION)
+                                           )
+
     stoch_loss = self.cal_stochastic_loss(nakagami_m, rx_power_ratio, los_power_ratio)
 
     return det_loss + stoch_loss
@@ -252,19 +275,34 @@ class Channel():
     """
     r, p_0 = self._rain_fall_prob_param(lon=lon, lat=lat)
     rainfall_rv = Rainfall_rv(r=r, p_0=p_0)
-    rainfall = rainfall_rv.rvs(size=1)
+    sample = 20
+    skew = max(round(random.random() * sample), 1)
+    return np.mean(np.partition(rainfall_rv.rvs(size=sample), -skew)[-skew:])
 
-    return [data if data > 1 else 0 for data in rainfall]
-
-  def rainrate_of_rain_prob(self, rain_prob: float):
+  def rainrate_of_rain_prob(self, lon: float, lat: float, rain_prob: float):
     if rain_prob < 0 or rain_prob > 1:
       raise ValueError('Rainfall probability need to be between [0, 1].')
 
     rand = random.random()
     if rain_prob >= rand:
-      return self.generate_rainfall()
+      rainrate = 0
+      while rainrate == 0:
+        rainrate = self.generate_rainfall(lon=lon, lat=lat)
+      return rainrate
     else:
       return 0
+
+  def update_weather(self):
+    """Update the rain rate map.
+    Assume the rainfall probabilty is identical in everywhere.
+    """
+    if not self.has_weather:
+      return
+    rain_rate_map = [[self.rainrate_of_rain_prob(lon=lon,
+                                                 lat=lat,
+                                                 rain_prob=self.rain_prob) for lat in self.map_lat_list]
+                     for lon in self.map_lon_list]
+    self.rain_rate_grid = RegularGridInterpolator((self.map_lon_list, self.map_lat_list), rain_rate_map)
 
   def modified_rain_attenuation(self, rain_rate: float, L_s: float, height_diff: float, freq: float, elevation_angle: float, polarization_angle: float = 0) -> float:
     """Calculate the rain attenuation.
@@ -325,7 +363,7 @@ class Channel():
     with open(f'low_earth_orbit/util/rainfall_data/mean surface temperature/T_Month{self.month:0>2}.TXT', mode='r', newline='') as f:
       for line in f.read().splitlines():
         mean_surface_temp.append([float(data) + constant.KELVIN_TO_CELCIUS for data in line.split(' ')])
-    mean_surface_temp = list(map(list, zip(*mean_surface_temp)))
+    mean_surface_temp = list(map(list, zip(*mean_surface_temp)))  # transpose 2d list
 
     with open(f'low_earth_orbit/util/rainfall_data/mean total rainfall/LAT_MT_LIST.TXT', mode='r', newline='') as f:
       MT_lat_list = [float(data) for data in f.read().split(' ')]
@@ -348,12 +386,13 @@ class Channel():
     with open(f'low_earth_orbit/util/rainfall_data/rain height/LAT_h0_LIST.TXT', mode='r', newline='') as f:
       rain_height_lat_list = [float(data) for data in f.read().split(' ')]
     with open(f'low_earth_orbit/util/rainfall_data/rain height/LON_h0_LIST.TXT', mode='r', newline='') as f:
+      # print(f.read().split(' '))
       rain_height_lon_list = [float(data) for data in f.read().split(' ')]
     with open(f'low_earth_orbit/util/rainfall_data/rain height/h0.TXT', mode='r', newline='') as f:
       for line in f.read().splitlines():
-        rain_height.append([float(data * constant.KM + constant.ZERO_DEGREE_ISOTHERM_HEIGHT)
+        rain_height.append([float(data) * constant.KM + constant.ZERO_DEGREE_ISOTHERM_HEIGHT
                            for data in line.split(' ')])
-    rain_height = list(map(list, zip(*rain_rate_exceed_001)))
+    rain_height = list(map(list, zip(*rain_height)))
 
     self.mean_temp_grid = RegularGridInterpolator((T_lon_list, T_lat_list), mean_surface_temp)
     self.mean_rainfall_grid = RegularGridInterpolator((MT_lon_list, MT_lat_list), mean_total_rainfall)

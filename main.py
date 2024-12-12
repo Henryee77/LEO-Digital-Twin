@@ -392,11 +392,17 @@ if __name__ == '__main__':
       '--eval-period', default=10, type=int,
       help='The evaluation frequency')
   parser.add_argument(
-      '--dt_online_ep', default=0, type=int,
+      '--dt-online-ep', default=0, type=int,
       help='The episode to turn on digital twins')
   parser.add_argument(
-      '--realLEO_online_ep', default=0, type=int,
+      '--realLEO-online-ep', default=0, type=int,
       help='The episode to turn on real LEOs')
+  parser.add_argument(
+      '--has-weather-module', default=1, type=int,
+      help='Has weather simulation module or not. (0=False, 1=True)')
+  parser.add_argument(
+      '--rainfall-prob', default=0.05, type=float,
+      help='The rainfall propability of the region')
 
   # ------------------ Misc -------------------------
   parser.add_argument(

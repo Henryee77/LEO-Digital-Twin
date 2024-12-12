@@ -13,6 +13,7 @@ from low_earth_orbit.ground_user import User
 from low_earth_orbit.constellation import Constellation
 from low_earth_orbit.constellation import ConstellationData
 from low_earth_orbit.nmc import NMC
+from low_earth_orbit.channel import Channel
 from low_earth_orbit.util import util
 from low_earth_orbit.util import Position
 from low_earth_orbit.util import Geodetic
@@ -39,6 +40,8 @@ class LEOSatEnv(gym.Env):
     self.args = args
     self.tb_writer = tb_writer
     self.constel = self.ues = self.nmc = None
+    self.wireless_channel = Channel(rain_prob=self.args.rainfall_prob,
+                                    has_weather=self.args.has_weather_module)
     self.ue_dict = {}
     self.prev_cell_sinr = {}
     self.prev_beam_power = {}
@@ -362,6 +365,7 @@ class LEOSatEnv(gym.Env):
 
   def _init_env(self):
     self.step_num = 0
+    self.wireless_channel.update_weather()
     self.constel = self.make_constellation()
     self.ues = self.make_ues()
     self.dt_server = User('DT server', position=Position(geodetic=Geodetic(longitude=constant.ORIGIN_LONG,
@@ -452,6 +456,7 @@ class LEOSatEnv(gym.Env):
                           sat_height=sat_height[i],
                           inclination_angle=inclination[i])
         for i in range(shell_num)],
+        channel=self.wireless_channel,
         args=self.args)
 
     # move the constellation to the desired simulated scenario
