@@ -306,7 +306,7 @@ if __name__ == '__main__':
       '--federated-download-period', default=50, type=int,
       help='Period of federated downloading')
   parser.add_argument(
-      '--federated-layer-num-per-turn', default=4, type=int,
+      '--federated-layer-num-per-turn', default=3, type=int,
       help='number of layers per federated uploading')
   parser.add_argument(
       '--partial-upload-type', default='by-turns', type=str,

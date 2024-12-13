@@ -49,7 +49,7 @@ if __name__ == '__main__':
           f'--action-timeslot {tf} '
           f'--beam-sweeping-mode {bs_mode} '
           f'--dt-computaion-speed {f_comp} '
-          f'--dt_online_ep {d_start_ep} --realLEO_online_ep {r_start_ep} '
+          f'--dt-online-ep {d_start_ep} --realLEO-online-ep {r_start_ep} '
           f'--federated-upload-period {ps_period} --federated-download-period {ps_period} '
           f'--ue-num {ue_num}'
         )

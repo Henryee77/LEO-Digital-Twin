@@ -51,7 +51,7 @@ if __name__ == '__main__':
           f'--env-param-sharing-period {env_ps_period} '
           f'--beam-sweeping-mode {bs_mode} '
           f'--dt-computaion-speed {f_comp} '
-          f'--dt_online_ep {d_start_ep} --realLEO_online_ep {r_start_ep} '
+          f'--dt-online-ep {d_start_ep} --realLEO-online-ep {r_start_ep} '
           f'--federated-upload-period {fs_period} --federated-download-period {fs_period} '
           f'--ue-num {ue_num}'
         )
