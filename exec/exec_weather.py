@@ -1,4 +1,5 @@
 import sys
+import os
 import subprocess
 from low_earth_orbit.util import constant
 
@@ -39,8 +40,12 @@ if __name__ == '__main__':
 
   d_start_ep, r_start_ep, fs_period, twin_sharing_period = mode_2_start_ep(mode)
 
-  dir_name = f'Weather Comparison {max_ep} eps'
-  # dir_name = 'debug'
+  dir_name = f'1 - Weather Comparison {max_ep} eps'
+  while os.path.exists(f'./tb_result/{dir_name}'):
+    print('Warning: Directory exists')
+    # raise ValueError('Directory exists')
+    split_str = dir_name.split('-')
+    dir_name = f'{int(split_str[0]) + 1} -' + split_str[-1]
 
   for ue_num in ue_num_list:
     for rain_prob in rain_prob_list:
@@ -57,8 +62,6 @@ if __name__ == '__main__':
           f'--env-param-sharing-period {twin_sharing_period} '
           f'--ue-num {ue_num}'
         )
-        print(cmd)
         path_cmd = ['--prefix', prefix, '--dir-name', dir_name]
         call_cmd = cmd.split(' ')
-        print(call_cmd)
         proc = subprocess.call([sys.executable] + call_cmd + path_cmd)
