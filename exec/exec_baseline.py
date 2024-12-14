@@ -23,7 +23,7 @@ def mode_2_start_ep(mode):
   elif mode == 'No DT':
     d_start_ep = max_ep + 1
     r_start_ep = 0
-    fs_period = (max_ep + 1) * step_num
+    fs_period = 20
     twin_sharing_period = (max_ep + 1) * step_num
   else:
     raise ValueError(f'No such {mode} system architecture.')
@@ -33,25 +33,28 @@ def mode_2_start_ep(mode):
 if __name__ == '__main__':
   ue_num_list = [3]
   max_ep = 500
-  tf = constant.DEFAULT_ACTION_TIMESLOT
+  tf = 3
   bs_mode = 'ABS'
   cell_layer = 3
+  actor_lr = 4e-5
+  comp_speed = constant.DEFAULT_LEO_CPU_CYCLE * 2
   f_comp = constant.DEFAULT_DT_CPU_CYCLE
   mode_list = ['DT + TS + FS', 'DT + TS', 'DT', 'No DT']
   step_num = 100
 
-  dir_name = f'5 - Baseline Comparison {max_ep} eps'
-  if os.path.exists(f'./tb_result/{dir_name}'):
-    # print('Warning: Directory exists')
-    raise ValueError('Directory exists')
+  dir_name = f'6 - Baseline Comparison {max_ep} eps'
+  while os.path.exists(f'./tb_result/{dir_name}'):
+    print('Warning: Directory exists')
+    # raise ValueError('Directory exists')
+    split_str = dir_name.split('-')
+    dir_name = f'{int(split_str[0]) + 1} - ' + split_str[-1]
 
-  actor_lr = 5e-5
-  comp_speed = constant.DEFAULT_LEO_CPU_CYCLE
   for ue_num in ue_num_list:
     for mode in mode_list:
       prefix = f'{mode} ue{ue_num}'
       d_start_ep, r_start_ep, fs_period, twin_sharing_period = mode_2_start_ep(mode)
-
+      actor_lr /= 1.6
+      comp_speed /= 1.9
       cmd = (
         f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
         f'--action-timeslot {tf} '
@@ -63,9 +66,6 @@ if __name__ == '__main__':
         f'--env-param-sharing-period {twin_sharing_period} '
         f'--ue-num {ue_num}'
       )
-      actor_lr /= 1.5
-      f_comp /= 1.3
-      comp_speed /= 1.3
       path_cmd = ['--prefix', prefix, '--dir-name', dir_name]
       call_cmd = cmd.split(' ')
       proc = subprocess.call([sys.executable] + call_cmd + path_cmd)

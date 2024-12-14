@@ -34,24 +34,25 @@ def mode_2_start_ep(mode):
 if __name__ == '__main__':
   ue_num_list = [3]
   max_ep = 500
-  f_comp = constant.DEFAULT_DT_CPU_CYCLE
-  comp_speed = constant.DEFAULT_LEO_CPU_CYCLE
+  f_comp = constant.DEFAULT_DT_CPU_CYCLE * 1.5
+  comp_speed = constant.DEFAULT_LEO_CPU_CYCLE * 2
+  actor_lr = 5e-5
   mode = 'DT + TS + FS'
   federated_sharing_period_list = [5 + 20 * i for i in range(1, 5)]
   step_num = 100
 
-  dir_name = f'Convergence - Sharing {max_ep} eps'
+  dir_name = f'1 - Convergence_Sharing {max_ep} eps'
   while os.path.exists(f'./tb_result/{dir_name}'):
     print('Warning: Directory exists')
     # raise ValueError('Directory exists')
-    cnt = 2
-    dir_name = f'{cnt} - ' + dir_name
+    split_str = dir_name.split('-')
+    print(split_str)
+    dir_name = f'{int(split_str[0]) + 1} - ' + split_str[-1]
 
-  actor_lr = 5e-5
   for ue_num in ue_num_list:
     d_start_ep, r_start_ep, _, twin_sharing_period = mode_2_start_ep(mode)
     for fs_period in federated_sharing_period_list:
-      prefix = f'{mode} sharing_period{twin_sharing_period}  ue{ue_num}'
+      prefix = f'{mode} sharing_period{fs_period}  ue{ue_num}'
 
       cmd = (
         f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
@@ -64,9 +65,9 @@ if __name__ == '__main__':
         f'--federated-upload-period {fs_period} --federated-download-period {fs_period} '
         f'--ue-num {ue_num}'
       )
-      actor_lr /= 1.5
-      f_comp /= 1.3
-      comp_speed /= 1.3
+      actor_lr /= 1.6
+      f_comp /= 1.7
+      comp_speed /= 1.9
       path_cmd = ['--prefix', prefix, '--dir-name', dir_name]
       call_cmd = cmd.split(' ')
       proc = subprocess.call([sys.executable] + call_cmd + path_cmd)
