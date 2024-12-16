@@ -1,4 +1,5 @@
 import sys
+import os
 import subprocess
 from low_earth_orbit.util import constant
 
@@ -31,13 +32,16 @@ def mode_2_start_ep(mode):
 
 if __name__ == '__main__':
   ue_num_list = [6]
-  max_ep = 500
-  mode_list = ['DT + TS + FS', 'DT + TS', 'DT', 'No DT']  #
+  max_ep = 400
+  mode_list = ['DT + TS + FS', 'DT + TS', 'DT', 'No DT']
   qos_list = [i * 5e7 for i in range(6)]
   step_num = 100
 
-  dir_name = f'2 - QoS Comparison {max_ep} eps'
-  # dir_name = 'debug'
+  dir_name = f'1 - QoS Comparison {max_ep} eps'
+  while os.path.exists(f'./tb_result/{dir_name}'):
+    print('Warning: Directory exists')
+    split_str = dir_name.split('-')
+    dir_name = f'{int(split_str[0]) + 1} -' + split_str[-1]
 
   for ue_num in ue_num_list:
     for mode in mode_list:
@@ -48,7 +52,7 @@ if __name__ == '__main__':
         cmd = (
           f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
           f'--R-min {qos} '
-          f'--dt_online_ep {d_start_ep} --realLEO_online_ep {r_start_ep} '
+          f'--dt-online-ep {d_start_ep} --realLEO-online-ep {r_start_ep} '
           f'--federated-upload-period {fs_period} --federated-download-period {fs_period} '
           f'--model-sharing-period {twin_sharing_period} '
           f'--env-param-sharing-period {twin_sharing_period} '
