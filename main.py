@@ -254,17 +254,17 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--actor-n-hidden', default=3000, type=int,
+      '--actor-n-hidden', default=2500, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--critic-n-hidden', default=6000, type=int,
+      '--critic-n-hidden', default=5000, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--training-period', default=40, type=int,
+      '--training-period', default=50, type=int,
       help='Peiord (number of radio frame) of NN training.')
   parser.add_argument(
       '--replay-buffer-size', default=2000, type=int,
-      help='The printing number of the network weight (for debug)')
+      help='The size of replay buffer')
 
   # --------------- TD3 -----------------------
   parser.add_argument(
@@ -300,13 +300,13 @@ if __name__ == '__main__':
       '--federated-update-rate', default=1e-1, type=float,
       help='Network exchanging rate of federated agents')
   parser.add_argument(
-      '--federated-upload-period', default=50, type=int,
+      '--federated-upload-period', default=20, type=int,
       help='Period of federated uploading')
   parser.add_argument(
-      '--federated-download-period', default=50, type=int,
+      '--federated-download-period', default=20, type=int,
       help='Period of federated downloading')
   parser.add_argument(
-      '--federated-layer-num-per-turn', default=4, type=int,
+      '--federated-layer-num-per-turn', default=1, type=int,
       help='number of layers per federated uploading')
   parser.add_argument(
       '--partial-upload-type', default='by-turns', type=str,
@@ -418,7 +418,7 @@ if __name__ == '__main__':
       '--dir-name', default='', type=str,
       help='Name of the tb directory')
   parser.add_argument(
-      '--seed', default=1012131415, type=int,
+      '--seed', default=778899, type=int,
       help='Sets Gym, PyTorch and Numpy seeds')
   parser.add_argument(
       '--running-mode', default='training', type=str,
