@@ -42,10 +42,8 @@ if __name__ == '__main__':
   mode_list = ['DT + TS + FS', 'DT + TS', 'DT', 'No DT']
   step_num = 100
 
-  dir_name = f'6 - Baseline Comparison {max_ep} eps'
+  dir_name = f'1 - Baseline Comparison {max_ep} eps'
   while os.path.exists(f'./tb_result/{dir_name}'):
-    print('Warning: Directory exists')
-    # raise ValueError('Directory exists')
     split_str = dir_name.split('-')
     dir_name = f'{int(split_str[0]) + 1} - ' + split_str[-1]
 

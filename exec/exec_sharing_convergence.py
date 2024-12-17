@@ -45,10 +45,7 @@ if __name__ == '__main__':
 
   dir_name = f'1 - Convergence_Sharing {max_ep} eps'
   while os.path.exists(f'./tb_result/{dir_name}'):
-    print('Warning: Directory exists')
-    # raise ValueError('Directory exists')
     split_str = dir_name.split('-')
-    print(split_str)
     dir_name = f'{int(split_str[0]) + 1} -' + split_str[-1]
 
   for ue_num in ue_num_list:
