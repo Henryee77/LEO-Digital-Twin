@@ -204,6 +204,17 @@ class LEOSatEnv(gym.Env):
                                ue_thput_saved_dict,
                                self.reset_count)
 
+    stdv_thput_dict = {f'{self.args.prefix} {self.name}':
+                       np.std(np.fromiter(ue_thput_saved_dict.values(), dtype=float))}
+    self.tb_writer.add_scalars(f'{self.name} Env Param/stdv of UE average throughput',
+                               stdv_thput_dict,
+                               self.reset_count)
+    stdv_thput_dict = {f'{self.args.prefix} {self.name}':
+                       np.mean(np.fromiter(ue_thput_saved_dict.values(), dtype=float))}
+    self.tb_writer.add_scalars(f'{self.name} Env Param/mean of UE average throughput',
+                               stdv_thput_dict,
+                               self.reset_count)
+
   def _take_action(self, action_n: Dict[str, List[float]]):
     satbeam_list = []
     for sat_name, action in action_n.items():

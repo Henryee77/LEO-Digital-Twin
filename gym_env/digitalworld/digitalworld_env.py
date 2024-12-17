@@ -30,7 +30,7 @@ class DigitalWorldEnv(LEOSatEnv):
                      digital_agents=digital_agents,
                      agent_names=agent_names)
     self.name = 'Digital World'
-    self.rt_data = misc.load_rt_file(f'ue{len(self.ues)}_rt_result')
+    self.rt_data = misc.load_rt_file(f'ue{len(self.ues)} spacing_{self.args.rt_ray_spacing} rt_result')
 
     def mean_stdv_of_db(rt_data, key):
       data_array = np.asarray([data[key]

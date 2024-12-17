@@ -20,6 +20,7 @@ import timeit
 import copy
 import numpy as np
 import random
+from typing import Dict
 from random import sample
 from scipy.stats import uniform
 
@@ -129,21 +130,19 @@ def test_cal_losss(ch: Channel):
                         atmos_pressure=constant.GROUND_ATMOS_PRESSURE)
 
 
-def test_func(ch: Channel):
-  ch.update_weather()
-  '''elev = constant.PI / 6
-  ue_lon = 122
-  ue_lat = 24
-  rain_rate = ch.rain_rate_grid((ue_lon, ue_lat))
-  a = ch.itu_rain_attenuation(rain_rate=rain_rate,
-                              L_s=ch.rain_height_grid((ue_lon, ue_lat)) / np.sin(elev),
-                              freq=2e10,
-                              elevation_angle=elev)
-  print(a, rain_rate)'''
+def test_func1(a: Dict[int, int]):
+  np.std(np.fromiter(a.values(), dtype=float))
+
+
+def test_func2(a: Dict[int, int]):
+  np.std(list(a.values()))
 
 
 if __name__ == '__main__':
-  ch = Channel(rain_prob=0.5, month=6)
+  a = {}
+  for i in range(10):
+    a[i] = i
 
   # print(timeit.timeit(functools.partial(test_export_power_dict, constell, sat_name_list), number=round(1e2)))
-  print(timeit.timeit(functools.partial(test_func, ch), number=round(10)))
+  print(timeit.timeit(functools.partial(test_func2, a), number=round(1e5)))
+  print(timeit.timeit(functools.partial(test_func1, a), number=round(1e5)))

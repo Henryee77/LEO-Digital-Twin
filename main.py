@@ -361,6 +361,9 @@ if __name__ == '__main__':
   parser.add_argument(
       '--dt-param-error', type=float, default=0,
       help='The error of the environment parameters sending from the real LEO')
+  parser.add_argument(
+      '--rt-ray-spacing', type=str, default='0.25',
+      help='The spacing degree of each ray in ray tracing')
 
   # --------------------- UE ------------------------
   parser.add_argument(
