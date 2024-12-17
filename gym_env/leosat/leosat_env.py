@@ -45,16 +45,17 @@ class LEOSatEnv(gym.Env):
     self.ue_dict = {}
     self.prev_cell_sinr = {}
     self.prev_beam_power = {}
+
     self.ee = {}
     self.data_rate = {}  # Consider overhead
-    self.throughput = {}  # No overhead
+    self.sat_throughput = {}  # No overhead
     self.ue_throughput = {}
     self.penalty = {}
     self.overhead = {}
-    self.ue_pos_data = {}
     self.qos_percent = {}
-    self.load_ues_data()
 
+    self.ue_pos_data = {}
+    self.load_ues_data()
     self.online = False
     self.twin_online = False
     self.leo_agents = agent_dict
@@ -138,9 +139,6 @@ class LEOSatEnv(gym.Env):
     ue_throughput = self.constel.cal_throughput(ues=self.ues,
                                                 sinr=ue_sinr,
                                                 interference_beams=self.additional_beam_set)
-    for ue_name, thput in ue_throughput.items():
-      self.ue_throughput[self.step_num][ue_name] = thput
-      self.qos_percent[self.step_num][ue_name] = thput >= self.ue_dict[ue_name].required_datarate
 
     reward = self._cal_reward(ue_throughput=ue_throughput)
     self.record_steps_of_last_ep(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
@@ -182,7 +180,7 @@ class LEOSatEnv(gym.Env):
                                {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(self.data_rate)},
                                self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average system throughput',
-                               {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(self.throughput)},
+                               {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(self.sat_throughput)},
                                self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average EE',
                                {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(
@@ -228,9 +226,7 @@ class LEOSatEnv(gym.Env):
       turned_on_beams = self.action_to_beam_list(action=action[agent.beam_slice])
       satbeam_list = satbeam_list + [(sat_name, beam_idx) for beam_idx in turned_on_beams]
     for ue in self.ues:
-      # print(ue.servable, satbeam_list)
       ue.filter_servable(satbeam_list)
-      # print(self.name, self.step_num, ue.servable)
 
     # beam decision and handover
     self.nmc.a3_event_check()
@@ -317,7 +313,6 @@ class LEOSatEnv(gym.Env):
 
     for ue_name, throughput in ue_throughput.items():
       last_satbeam = self.ue_dict[ue_name].last_serving
-      # print(self.ue_dict[ue_name].servable)
       if last_satbeam is not None:
         sat_name, _ = last_satbeam
         agent = self.leo_agents[sat_name]
@@ -328,17 +323,21 @@ class LEOSatEnv(gym.Env):
             self.overflowed_overhead[sat_name] = max(0, overhead - constant.MOVING_TIMESLOT)
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
 
-          self.data_rate[self.step_num][sat_name] += sat_tran_ratio[sat_name] * throughput
-          self.throughput[self.step_num][sat_name] += throughput
+          # record result
+          self.ue_throughput[self.step_num][ue_name] = throughput
+          ue_data_rate = sat_tran_ratio[sat_name] * throughput
+          self.data_rate[self.step_num][sat_name] += ue_data_rate
+          self.qos_percent[self.step_num][ue_name] = int(ue_data_rate >= self.ue_dict[ue_name].required_datarate)
+          self.sat_throughput[self.step_num][sat_name] += throughput
 
           power_muW = (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) * 1e6
           ee = (sat_tran_ratio[sat_name] * throughput / power_muW)
           self.ee[self.step_num][sat_name] += ee
 
-          self.penalty[self.step_num][ue_name] = max((self.ue_dict[ue_name].required_datarate - throughput) / power_muW,
+          self.penalty[self.step_num][ue_name] = max((self.ue_dict[ue_name].required_datarate - ue_data_rate) / power_muW,
                                                      0)
 
-          reward[sat_name] += max(ee - self.penalty[self.step_num][ue_name], 0)
+          reward[sat_name] += (ee - self.penalty[self.step_num][ue_name])
 
     return reward
 
@@ -398,7 +397,7 @@ class LEOSatEnv(gym.Env):
       self.ee[t] = {}
       self.data_rate[t] = {}
       self.overhead[t] = {}
-      self.throughput[t] = {}
+      self.sat_throughput[t] = {}
       self.ue_throughput[t] = {}
       self.penalty[t] = {}
       self.qos_percent[t] = {}
@@ -406,7 +405,7 @@ class LEOSatEnv(gym.Env):
         self.ee[t][sat_name] = 0
         self.data_rate[t][sat_name] = 0
         self.overhead[t][sat_name] = 0
-        self.throughput[t][sat_name] = 0
+        self.sat_throughput[t][sat_name] = 0
       for ue in self.ues:
         self.penalty[t][ue.name] = 0
         self.ue_throughput[t][ue.name] = 0
