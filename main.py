@@ -254,17 +254,17 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--actor-n-hidden', default=2500, type=int,
+      '--actor-n-hidden', default=3000, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--critic-n-hidden', default=5000, type=int,
+      '--critic-n-hidden', default=6000, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
       '--training-period', default=40, type=int,
       help='Peiord (number of radio frame) of NN training.')
   parser.add_argument(
-      '--replay-buffer-size', default=3000, type=int,
-      help='The size of replay buffer')
+      '--replay-buffer-size', default=2000, type=int,
+      help='The printing number of the network weight (for debug)')
 
   # --------------- TD3 -----------------------
   parser.add_argument(
@@ -306,7 +306,7 @@ if __name__ == '__main__':
       '--federated-download-period', default=50, type=int,
       help='Period of federated downloading')
   parser.add_argument(
-      '--federated-layer-num-per-turn', default=3, type=int,
+      '--federated-layer-num-per-turn', default=4, type=int,
       help='number of layers per federated uploading')
   parser.add_argument(
       '--partial-upload-type', default='by-turns', type=str,

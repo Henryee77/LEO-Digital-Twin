@@ -24,8 +24,8 @@ def mode_2_start_ep(mode):
 
 
 if __name__ == '__main__':
-  ue_num_list = [3, 6]
-  max_ep = 500
+  ue_num_list = [6]
+  max_ep = 300
   mode = 'No DT'
   cell_layer = 3
   f_comp = constant.DEFAULT_DT_CPU_CYCLE

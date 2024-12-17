@@ -37,9 +37,10 @@ if __name__ == '__main__':
   f_comp = constant.DEFAULT_DT_CPU_CYCLE * 1.5
   comp_speed = constant.DEFAULT_LEO_CPU_CYCLE * 2
   actor_lr = 5e-5
+  explore_step = 1e3
   training_period = 30
   mode = 'DT + TS + FS'
-  federated_sharing_period_list = [5 + 20 * i for i in range(1, 5)]
+  federated_sharing_period_list = [5 + 25 * i for i in range(1, 5)]
   step_num = 100
 
   dir_name = f'1 - Convergence_Sharing {max_ep} eps'
@@ -58,6 +59,7 @@ if __name__ == '__main__':
       cmd = (
         f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
         f'--actor-lr {actor_lr} '
+        f'--full-explore-steps {explore_step} '
         f'--training-period {training_period} '
         f'--dt-computaion-speed {f_comp} '
         f'--leo-computaion-speed {comp_speed} '
@@ -67,9 +69,10 @@ if __name__ == '__main__':
         f'--federated-upload-period {fs_period} --federated-download-period {fs_period} '
         f'--ue-num {ue_num}'
       )
-      actor_lr /= 1.3
+      actor_lr /= 1.5
       f_comp /= 1.7
       comp_speed /= 1.9
+      explore_step = round(explore_step * 1.3)
       training_period += 10
       path_cmd = ['--prefix', prefix, '--dir-name', dir_name]
       call_cmd = cmd.split(' ')
