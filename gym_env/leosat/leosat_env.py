@@ -52,6 +52,7 @@ class LEOSatEnv(gym.Env):
     self.penalty = {}
     self.overhead = {}
     self.ue_pos_data = {}
+    self.qos_percent = {}
     self.load_ues_data()
 
     self.online = False
@@ -139,6 +140,7 @@ class LEOSatEnv(gym.Env):
                                                 interference_beams=self.additional_beam_set)
     for ue_name, thput in ue_throughput.items():
       self.ue_throughput[self.step_num][ue_name] = thput
+      self.qos_percent[self.step_num][ue_name] = thput >= self.ue_dict[ue_name].required_datarate
 
     reward = self._cal_reward(ue_throughput=ue_throughput)
     self.record_steps_of_last_ep(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
@@ -185,6 +187,10 @@ class LEOSatEnv(gym.Env):
     self.tb_writer.add_scalars(f'{self.name} Env Param/average EE',
                                {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(
                                  self.ee) / len(self.agent_names)},
+                               self.reset_count)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average QoS percent',
+                               {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(
+                                 self.qos_percent) / len(self.ues)},
                                self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average overflowed overhead',
                                {f'{self.args.prefix} {self.name}': sum(self.overflowed_overhead.values()) /
@@ -395,6 +401,7 @@ class LEOSatEnv(gym.Env):
       self.throughput[t] = {}
       self.ue_throughput[t] = {}
       self.penalty[t] = {}
+      self.qos_percent[t] = {}
       for sat_name in self.agent_names:
         self.ee[t][sat_name] = 0
         self.data_rate[t][sat_name] = 0
@@ -403,6 +410,7 @@ class LEOSatEnv(gym.Env):
       for ue in self.ues:
         self.penalty[t][ue.name] = 0
         self.ue_throughput[t][ue.name] = 0
+        self.qos_percent[t][ue.name] = 0
 
     for sat_name in self.agent_names:
       self.leo_agents[sat_name].sat = self.constel.all_sat[sat_name]

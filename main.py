@@ -120,7 +120,7 @@ def main(args):
         training_process(args, realworld_trainer, digitalworld_trainer)
 
         # evaluate performance every certain steps
-        if ep_cnt % args.eval_period == 0:
+        if ep_cnt % args.eval_period == 0 or ep_cnt == 1:
           eval_process(args, realworld_trainer, digitalworld_trainer)
           tb_writer.flush()
 
