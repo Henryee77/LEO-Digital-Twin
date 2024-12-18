@@ -37,10 +37,11 @@ if __name__ == '__main__':
   f_comp = constant.DEFAULT_DT_CPU_CYCLE * 1.5
   comp_speed = constant.DEFAULT_LEO_CPU_CYCLE * 2
   actor_lr = 5e-5
-  explore_step = 1e3
+  explore_step = 100
   training_period = 30
   mode = 'DT + TS + FS'
-  federated_sharing_period_list = [5 + 25 * i for i in range(1, 5)]
+  ts_percent = [0.1 * i for i in range(1, 6)]
+  twin_sharing_period_list = [round(1 / percent) for percent in ts_percent]
   step_num = 100
 
   dir_name = f'1 - Convergence_Sharing {max_ep} eps'
@@ -49,8 +50,8 @@ if __name__ == '__main__':
     dir_name = f'{int(split_str[0]) + 1} -' + split_str[-1]
 
   for ue_num in ue_num_list:
-    d_start_ep, r_start_ep, _, twin_sharing_period = mode_2_start_ep(mode)
-    for fs_period in federated_sharing_period_list:
+    d_start_ep, r_start_ep, fs_period, _ = mode_2_start_ep(mode)
+    for twin_sharing_period in twin_sharing_period_list:
       prefix = f'{mode} sharing_period{fs_period}  ue{ue_num}'
 
       cmd = (
@@ -68,8 +69,8 @@ if __name__ == '__main__':
       )
       actor_lr /= 1.5
       f_comp /= 1.7
-      comp_speed /= 1.9
-      explore_step = round(explore_step * 1.3)
+      comp_speed /= 1.7
+      explore_step = round(explore_step * 1.75)
       training_period += 10
       path_cmd = ['--prefix', prefix, '--dir-name', dir_name]
       call_cmd = cmd.split(' ')
