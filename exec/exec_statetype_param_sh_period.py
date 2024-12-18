@@ -38,8 +38,11 @@ if __name__ == '__main__':
   twin_sharing_period_list = [round(1 / percent) for percent in ts_percent]
   d_start_ep, r_start_ep, ps_period, _ = mode_2_start_ep(mode)
 
-  dir_name = f'2 - statetype_param_sharing_period {max_ep} eps'
-  # dir_name = 'debug'
+  dir_name = f'1 - statetype_param_sharing_period {max_ep} eps'
+  while os.path.exists(f'./tb_result/{dir_name}'):
+    print('Warning: Directory exists')
+    split_str = dir_name.split('-')
+    dir_name = f'{int(split_str[0]) + 1} -' + split_str[-1]
 
   for ue_num in ue_num_list:
     for shared_state_type in provide_type:
