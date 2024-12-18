@@ -35,7 +35,7 @@ if __name__ == '__main__':
   f_comp = 5e9
   provide_type = [0, 1, 2]
   ts_percent = [0.1 * i for i in range(1, 6)]
-  twin_sharing_period_list = [1 / percent for percent in ts_percent]
+  twin_sharing_period_list = [round(1 / percent) for percent in ts_percent]
   d_start_ep, r_start_ep, ps_period, _ = mode_2_start_ep(mode)
 
   dir_name = f'2 - statetype_param_sharing_period {max_ep} eps'
