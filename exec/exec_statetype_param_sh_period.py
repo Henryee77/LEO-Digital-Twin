@@ -29,13 +29,14 @@ if __name__ == '__main__':
   max_ep = 500
   step_num = 100
   mode = 'DT + TS'
-  tf = constant.DEFAULT_ACTION_TIMESLOT
+  tf = 3
   bs_mode = 'ABS'
   cell_layer = 3
   f_comp = 5e9
   provide_type = [0, 1, 2]
-  twin_sharing_period_list = [10 * i + 10 for i in range(0, 9)]
-  d_start_ep, r_start_ep, ps_period, twin_sharing_period = mode_2_start_ep(mode)
+  ts_percent = [0.1 * i for i in range(1, 6)]
+  twin_sharing_period_list = [1 / percent for percent in ts_percent]
+  d_start_ep, r_start_ep, ps_period, _ = mode_2_start_ep(mode)
 
   dir_name = f'2 - statetype_param_sharing_period {max_ep} eps'
   # dir_name = 'debug'
