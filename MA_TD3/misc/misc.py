@@ -285,7 +285,7 @@ def generate_action_space(cell_num: int):
   return action_space, beam_slice, power_slice, beamwidth_slice
 
 
-def generate_state_space(agent_type: str, cell_num: int, shared_type, pos_dim: int = 2):
+def generate_state_space(agent_type: str, cell_num: int, shared_type, received_agent_num: int = 1, pos_dim: int = 2):
   pos_low = np.array([-1] * pos_dim)
   pos_high = np.array([1] * pos_dim)
   pos_slice = slice(0, pos_dim)
@@ -320,8 +320,8 @@ def generate_state_space(agent_type: str, cell_num: int, shared_type, pos_dim: i
   else:
     raise ValueError('No such agent type')
 
-  observation_space = spaces.Box(low=np.float32(obs_low),
-                                 high=np.float32(obs_high),
+  observation_space = spaces.Box(low=np.float32(np.tile(obs_low, received_agent_num)),
+                                 high=np.float32(np.tile(obs_high, received_agent_num)),
                                  dtype=np.float32)
 
   return observation_space, pos_slice, beam_info_slice, shared_slice

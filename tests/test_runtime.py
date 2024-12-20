@@ -130,19 +130,15 @@ def test_cal_losss(ch: Channel):
                         atmos_pressure=constant.GROUND_ATMOS_PRESSURE)
 
 
-def test_func1(a: Dict[int, int]):
-  np.std(np.fromiter(a.values(), dtype=float))
-
-
-def test_func2(a: Dict[int, int]):
-  np.std(list(a.values()))
+def test_func():
+  all_states = [[i, i + 1, i + 2] for i in range(3)]
+  a = np.hstack(all_states)
+  print(all_states)
+  print(a)
+  print(a.squeeze())
 
 
 if __name__ == '__main__':
-  a = {}
-  for i in range(10):
-    a[i] = i
 
   # print(timeit.timeit(functools.partial(test_export_power_dict, constell, sat_name_list), number=round(1e2)))
-  print(timeit.timeit(functools.partial(test_func2, a), number=round(1e5)))
-  print(timeit.timeit(functools.partial(test_func1, a), number=round(1e5)))
+  print(timeit.timeit(functools.partial(test_func), number=round(1e0)))

@@ -36,6 +36,7 @@ class OffPolicyTrainer(object):
     self.total_train_iter = 0  # steps of training iteration
     self.total_eps = 0  # steps of episodes
     self.leo_agent_dict = leo_agent_dict
+    self.agent_name_list = list(leo_agent_dict.keys())
     self.agent_num = len(self.leo_agent_dict)
 
     self.__cur_states = {}
@@ -102,16 +103,23 @@ class OffPolicyTrainer(object):
       self.total_eps = self.twin_trainer.total_eps
     self.__online = online
 
-  def combined_state(self, sat_name) -> npt.NDArray[np.float32]:
+  def aggregated_state_dict(self) -> Dict[str, npt.NDArray[np.float32]]:
+    if self.args.scope_of_states == 'local':
+      return {agent_name: self.dt_combined_state(agent_name) for agent_name in self.agent_name_list}
+    elif self.args.scope_of_states == 'global':
+      all_states = [self.dt_combined_state(agent_name) for agent_name in self.agent_name_list]
+      return {agent_name: np.hstack(all_states) for agent_name in self.agent_name_list}
+
+  def dt_combined_state(self, sat_name) -> npt.NDArray[np.float32]:
     if not self.online:
       raise ValueError(f'{self.env.unwrapped.name} is offline.')
     if not self.twin_trainer.online:
       # TODO This section has the risk of causing bug, be careful!
       twin_state_len = self.twin_trainer.leo_agent_dict[sat_name].self_state_dim
       state_len = self.leo_agent_dict[sat_name].self_state_dim
-      if twin_state_len > state_len:  # I'm real and the twin is digital
+      if twin_state_len > state_len:  # I'm real and the DTs are offline.
         return np.concatenate((self.cur_states[sat_name], self.cur_states[sat_name], np.zeros((twin_state_len - state_len,))))
-      else:  # I'm digital and the twin is real
+      else:  # I'm DT and the real LEOs are offline.
         return np.concatenate((self.cur_states[sat_name], self.cur_states[sat_name][:twin_state_len]))
     else:
       # TODO Using the name attribute to identify the trainer may cause some bugs, be careful!
@@ -363,8 +371,9 @@ class OffPolicyTrainer(object):
 
     # For next timesteps
     prev_state_dict = {}
+    aggr_state_dict = self.aggregated_state_dict()
     for agent_name in self.leo_agent_dict:
-      prev_state_dict[agent_name] = self.combined_state(agent_name)
+      prev_state_dict[agent_name] = aggr_state_dict[agent_name]
     self.cur_states = new_env_observation
     self.total_timesteps += 1
     for agent_name in env_reward:
@@ -398,10 +407,11 @@ class OffPolicyTrainer(object):
   def save_to_replaybuffer(self, prev_state_dict, action_dict, total_reward, done):
     if prev_state_dict is None or action_dict is None:
       return
+    aggr_state_dict = self.aggregated_state_dict()
     for agent_name, leo_agent in self.leo_agent_dict.items():
       leo_agent.add_memory(
           obs=prev_state_dict[agent_name],
-          new_obs=self.combined_state(agent_name),
+          new_obs=aggr_state_dict[agent_name],
           action=action_dict[agent_name],
           reward=total_reward,
           done=done)
@@ -411,9 +421,10 @@ class OffPolicyTrainer(object):
     if not self.online:
       return None
     action_dict = {}
+    aggr_state_dict = self.aggregated_state_dict()
     for agent_name, leo_agent in self.leo_agent_dict.items():
       agent_action = leo_agent.select_stochastic_action(
-        np.asarray(self.combined_state(agent_name)), self.total_timesteps)
+        np.asarray(aggr_state_dict[agent_name]), self.total_timesteps)
       action_dict[agent_name] = agent_action
 
     self.nn_action_time += time.time() - start_time
@@ -425,9 +436,10 @@ class OffPolicyTrainer(object):
       return None
 
     action_dict = {}
+    aggr_state_dict = self.aggregated_state_dict()
     for agent_name, leo_agent in self.leo_agent_dict.items():
       agent_action = leo_agent.select_deterministic_action(
-        np.asarray(self.combined_state(agent_name)))
+        np.asarray(aggr_state_dict[agent_name]))
       action_dict[agent_name] = agent_action
 
     self.nn_action_time += time.time() - start_time

@@ -58,7 +58,8 @@ def main(args):
                                            agent_type='real_LEO',
                                            args=args,
                                            device=device,
-                                           comp_freq=constant.DEFAULT_LEO_CPU_CYCLE)
+                                           comp_freq=args.leo_computaion_speed,
+                                           total_agent_num=len(sat_name_list))
     digitalworld_agent_dict[sat_name] = Agent(policy_name=args.model,
                                               tb_writer=tb_writer,
                                               log=log,
@@ -66,7 +67,8 @@ def main(args):
                                               agent_type='digital_LEO',
                                               args=args,
                                               device=device,
-                                              comp_freq=args.dt_computaion_speed)
+                                              comp_freq=args.dt_computaion_speed,
+                                              total_agent_num=len(sat_name_list))
 
   # Create env
   real_env = misc.make_env(args.real_env_name,
@@ -400,6 +402,9 @@ if __name__ == '__main__':
   parser.add_argument(
       '--realLEO-online-ep', default=0, type=int,
       help='The episode to turn on real LEOs')
+  parser.add_argument(
+      '--scope-of-states', default='local', type=str,
+      help='Using local observed states, or aggregate the states to global state. (input: local or global)')
   parser.add_argument(
       '--has-weather-module', default=1, type=int,
       help='Has weather simulation module or not. (0=False, 1=True)')

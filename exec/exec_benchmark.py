@@ -14,7 +14,12 @@ def mode_2_start_ep(mode):
     d_start_ep = 0
     r_start_ep = round(max_ep / 2)
     fs_period = (max_ep + 1) * step_num
-    twin_sharing_period = 20
+    twin_sharing_period = (max_ep + 1) * step_num
+  elif mode == 'DT no NN':
+    d_start_ep = 0
+    r_start_ep = 0
+    fs_period = (max_ep + 1) * step_num
+    twin_sharing_period = (max_ep + 1) * step_num
   else:
     raise ValueError(f'No such {mode} system architecture.')
   return d_start_ep, r_start_ep, fs_period, twin_sharing_period
@@ -29,8 +34,9 @@ if __name__ == '__main__':
   actor_lr = 4e-5
   comp_speed = constant.DEFAULT_LEO_CPU_CYCLE * 2
   f_comp = constant.DEFAULT_DT_CPU_CYCLE
-  mode_list = ['DT offline']
+  mode_list = ['DT no NN']
   step_num = 100
+  env_sharing_period = 5
 
   dir_name = f'Benchmark {max_ep} eps'
 
@@ -46,7 +52,7 @@ if __name__ == '__main__':
         f'--dt-online-ep {d_start_ep} --realLEO-online-ep {r_start_ep} '
         f'--federated-upload-period {fs_period} --federated-download-period {fs_period} '
         f'--model-sharing-period {twin_sharing_period} '
-        f'--env-param-sharing-period {twin_sharing_period} '
+        f'--env-param-sharing-period {env_sharing_period} '
         f'--ue-num {ue_num}'
       )
       path_cmd = ['--prefix', prefix, '--dir-name', dir_name]

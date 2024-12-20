@@ -30,7 +30,8 @@ class Agent(object):
                sat_name: str,
                agent_type: str,
                device: device,
-               comp_freq: float):
+               comp_freq: float,
+               total_agent_num: int):
 
     self.log = log
     self.tb_writer = tb_writer
@@ -38,6 +39,7 @@ class Agent(object):
     self.agent_type = agent_type
     self.device = device
     self.comp_freq = comp_freq
+    self.total_agent_num = total_agent_num
     sat_indices = sat_name.split('_')
     self.sat = Satellite(shell_index=sat_indices[0],
                          plane_index=sat_indices[1],
@@ -66,6 +68,12 @@ class Agent(object):
     self.twin_sharing_param_num = 0
 
   def _init_dim(self):
+    if self.args.scope_of_states == 'local':
+      received_agent_num = 1
+    elif self.args.scope_of_states == 'global':
+      received_agent_num = self.total_agent_num
+    else:
+      raise ValueError(f'No {self.args.scope_of_states} type of --scope-of-states')
 
     (self.action_space,
      self.beam_slice,
@@ -77,7 +85,8 @@ class Agent(object):
      self.beam_info_slice,
      self.shared_slice) = misc.generate_state_space(agent_type=self.agent_type,
                                                     cell_num=self.sat.cell_topo.cell_number,
-                                                    shared_type=self.args.shared_state_type)
+                                                    shared_type=self.args.shared_state_type,
+                                                    received_agent_num=received_agent_num)
 
     self.min_actions = self.action_space.low
     self.max_actions = self.action_space.high
