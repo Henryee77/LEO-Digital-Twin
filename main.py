@@ -58,7 +58,8 @@ def main(args):
                                            agent_type='real_LEO',
                                            args=args,
                                            device=device,
-                                           comp_freq=constant.DEFAULT_LEO_CPU_CYCLE)
+                                           comp_freq=constant.DEFAULT_LEO_CPU_CYCLE,
+                                           total_agent_num=len(sat_name_list))
     digitalworld_agent_dict[sat_name] = Agent(policy_name=args.model,
                                               tb_writer=tb_writer,
                                               log=log,
@@ -66,7 +67,8 @@ def main(args):
                                               agent_type='digital_LEO',
                                               args=args,
                                               device=device,
-                                              comp_freq=args.dt_computaion_speed)
+                                              comp_freq=args.dt_computaion_speed,
+                                              total_agent_num=len(sat_name_list))
 
   # Create env
   real_env = misc.make_env(args.real_env_name,
@@ -384,7 +386,7 @@ if __name__ == '__main__':
       '--scope-of-states', default='local', type=str,
       help='(Only for benchmark!) Using local observed states, or aggregate the states to global state. (input: local or global)')
   parser.add_argument(
-      '--scope-of-actions', default='centralized', type=str,
+      '--scope-of-actions', default='distributed', type=str,
       help='(Only for benchmark!) Single centralized agent, or distributed agents. (input: centralized or distributed)')
 
   # ------------------- Env -------------------------

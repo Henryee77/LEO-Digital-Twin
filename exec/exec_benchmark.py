@@ -34,20 +34,22 @@ if __name__ == '__main__':
   actor_lr = 4e-5
   comp_speed = constant.DEFAULT_LEO_CPU_CYCLE * 2
   f_comp = constant.DEFAULT_DT_CPU_CYCLE
-  mode_list = ['DT no NN']
+  mode_list = ['DT + TS + FS']
   step_num = 100
   env_sharing_period = 5
+  state_type = 'global'
 
   dir_name = f'Benchmark {max_ep} eps'
 
   for ue_num in ue_num_list:
     for mode in mode_list:
-      prefix = f'{mode} ue{ue_num}'
+      prefix = f'{state_type} state ue{ue_num}'
       d_start_ep, r_start_ep, fs_period, twin_sharing_period = mode_2_start_ep(mode)
       cmd = (
         f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
         f'--action-timeslot {tf} '
         f'--actor-lr {actor_lr} '
+        f'--scope-of-states {state_type} '
         f'--leo-computaion-speed {comp_speed} '
         f'--dt-online-ep {d_start_ep} --realLEO-online-ep {r_start_ep} '
         f'--federated-upload-period {fs_period} --federated-download-period {fs_period} '
