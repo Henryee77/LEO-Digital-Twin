@@ -58,8 +58,7 @@ def main(args):
                                            agent_type='real_LEO',
                                            args=args,
                                            device=device,
-                                           comp_freq=args.leo_computaion_speed,
-                                           total_agent_num=len(sat_name_list))
+                                           comp_freq=constant.DEFAULT_LEO_CPU_CYCLE)
     digitalworld_agent_dict[sat_name] = Agent(policy_name=args.model,
                                               tb_writer=tb_writer,
                                               log=log,
@@ -67,8 +66,7 @@ def main(args):
                                               agent_type='digital_LEO',
                                               args=args,
                                               device=device,
-                                              comp_freq=args.dt_computaion_speed,
-                                              total_agent_num=len(sat_name_list))
+                                              comp_freq=args.dt_computaion_speed)
 
   # Create env
   real_env = misc.make_env(args.real_env_name,
@@ -163,7 +161,7 @@ def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer
   r_info = realworld_trainer.reset_env(eval=True)
 
   while time_count < args.max_time_per_ep and not (digital_done or real_done):
-    if r_info['has_action']:
+    if (realworld_trainer.online and r_info['has_action']) or (digitalworld_trainer.online and d_info['has_action']):
       digital_actions = digitalworld_trainer.deterministic_actions()
       real_actions = realworld_trainer.deterministic_actions()
 
@@ -187,7 +185,7 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
   r_info = realworld_trainer.reset_env()
 
   while time_count < args.max_time_per_ep and not (digital_done or real_done):
-    if r_info['has_action']:
+    if (realworld_trainer.online and r_info['has_action']) or (digitalworld_trainer.online and d_info['has_action']):
       digital_actions = digitalworld_trainer.stochastic_actions()
       real_actions = realworld_trainer.stochastic_actions()
 
@@ -230,7 +228,7 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='')
 
-  # NN Training
+  # ----------------- NN --------------------
   parser.add_argument(
     '--model', default='TD3', type=str,
     help='Learnig model')
@@ -371,11 +369,23 @@ if __name__ == '__main__':
   parser.add_argument(
       '--ue-num', default=3, type=int,
       help='The number of ues')
-  parser
   parser.add_argument(
       '--R-min', default=1e8, type=float,
       help='QoS constraint')
-  parser
+
+  # --------------------- Agent ------------------------
+  parser.add_argument(
+      '--dt-online-ep', default=0, type=int,
+      help='The episode to turn on digital twins')
+  parser.add_argument(
+      '--realLEO-online-ep', default=0, type=int,
+      help='The episode to turn on real LEOs')
+  parser.add_argument(
+      '--scope-of-states', default='local', type=str,
+      help='(Only for benchmark!) Using local observed states, or aggregate the states to global state. (input: local or global)')
+  parser.add_argument(
+      '--scope-of-actions', default='centralized', type=str,
+      help='(Only for benchmark!) Single centralized agent, or distributed agents. (input: centralized or distributed)')
 
   # ------------------- Env -------------------------
   parser.add_argument(
@@ -396,15 +406,6 @@ if __name__ == '__main__':
   parser.add_argument(
       '--eval-period', default=10, type=int,
       help='The evaluation frequency')
-  parser.add_argument(
-      '--dt-online-ep', default=0, type=int,
-      help='The episode to turn on digital twins')
-  parser.add_argument(
-      '--realLEO-online-ep', default=0, type=int,
-      help='The episode to turn on real LEOs')
-  parser.add_argument(
-      '--scope-of-states', default='local', type=str,
-      help='Using local observed states, or aggregate the states to global state. (input: local or global)')
   parser.add_argument(
       '--has-weather-module', default=1, type=int,
       help='Has weather simulation module or not. (0=False, 1=True)')

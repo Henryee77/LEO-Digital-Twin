@@ -259,7 +259,7 @@ def construct_dnn_dict(input_dim: int, output_dim: int, hidden_nodes: List[int],
   return OrderedDict(layer_list)
 
 
-def generate_action_space(cell_num: int):
+def generate_action_space(cell_num: int, decided_agent_num: int = 1):
   beam_action_low = np.array([-1] * cell_num)
   beam_action_high = np.array([1] * cell_num)
   beam_slice = slice(0, cell_num)
@@ -278,8 +278,8 @@ def generate_action_space(cell_num: int):
   action_high = np.concatenate(
       (beam_action_high, total_power_high, beamwidth_action_high))
 
-  action_space = spaces.Box(low=np.float32(action_low),
-                            high=np.float32(action_high),
+  action_space = spaces.Box(low=np.float32(np.tile(action_low, decided_agent_num)),
+                            high=np.float32(np.tile(action_high, decided_agent_num)),
                             dtype=np.float32)
 
   return action_space, beam_slice, power_slice, beamwidth_slice

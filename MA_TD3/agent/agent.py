@@ -74,11 +74,18 @@ class Agent(object):
       received_agent_num = self.total_agent_num
     else:
       raise ValueError(f'No {self.args.scope_of_states} type of --scope-of-states')
+    if self.args.scope_of_actions == 'distributed':
+      decided_agent_num = 1
+    elif self.args.scope_of_actions == 'centralized':
+      decided_agent_num = self.total_agent_num
+    else:
+      raise ValueError(f'No {self.args.scope_of_states} type of --scope-of-states')
 
     (self.action_space,
      self.beam_slice,
      self.power_slice,
-     self.beamwidth_slice) = misc.generate_action_space(self.sat.cell_topo.cell_number)
+     self.beamwidth_slice) = misc.generate_action_space(self.sat.cell_topo.cell_number,
+                                                        decided_agent_num=decided_agent_num)
 
     (self.observation_space,
      self.pos_slice,

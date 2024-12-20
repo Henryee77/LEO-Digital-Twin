@@ -67,11 +67,6 @@ if __name__ == '__main__':
         f'--federated-upload-period {fs_period} --federated-download-period {fs_period} '
         f'--ue-num {ue_num}'
       )
-      actor_lr /= 1.5
-      f_comp /= 1.7
-      comp_speed /= 1.7
-      explore_step = round(explore_step * 1.75)
-      training_period += 10
       path_cmd = ['--prefix', prefix, '--dir-name', dir_name]
       call_cmd = cmd.split(' ')
       proc = subprocess.call([sys.executable] + call_cmd + path_cmd)

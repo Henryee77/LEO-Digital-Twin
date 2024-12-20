@@ -51,8 +51,6 @@ if __name__ == '__main__':
     for mode in mode_list:
       prefix = f'{mode} ue{ue_num}'
       d_start_ep, r_start_ep, fs_period, twin_sharing_period = mode_2_start_ep(mode)
-      actor_lr /= 1.6
-      comp_speed /= 1.9
       cmd = (
         f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
         f'--action-timeslot {tf} '
