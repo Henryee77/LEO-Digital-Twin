@@ -149,6 +149,9 @@ class RealWorldEnv(LEOSatEnv):
                 + agent.computation_latency
                 + feedback_overhead)
 
+    if self.args.scope_of_actions == 'centralized':
+      overhead += state_exchange_overhead * len(self.agent_names)
+
     self.tb_writer.add_scalars(f'{self.name} Overhead/overhead',
                                {agent.name: overhead},
                                self.total_step_num)

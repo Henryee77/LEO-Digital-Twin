@@ -77,7 +77,7 @@ class Agent(object):
     if self.args.scope_of_actions == 'distributed':
       decided_agent_num = 1
     elif self.args.scope_of_actions == 'centralized':
-      decided_agent_num = self.total_agent_num
+      decided_agent_num = 1
     else:
       raise ValueError(f'No {self.args.scope_of_states} type of --scope-of-states')
 
