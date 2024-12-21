@@ -34,17 +34,17 @@ if __name__ == '__main__':
   actor_lr = 4e-5
   comp_speed = constant.DEFAULT_LEO_CPU_CYCLE * 2
   f_comp = constant.DEFAULT_DT_CPU_CYCLE
-  mode_list = ['DT + TS + FS']
+  mode_list = ['DT no NN']
   step_num = 100
   env_sharing_period = 5
-  state_type = 'global'
-  action_type = 'centralized'
+  state_type = 'local'
+  action_type = 'distributed'
 
   dir_name = f'Benchmark {max_ep} eps'
 
   for ue_num in ue_num_list:
     for mode in mode_list:
-      prefix = f'{action_type} agent ue{ue_num}'
+      prefix = f'{mode} ue{ue_num}'
       d_start_ep, r_start_ep, fs_period, twin_sharing_period = mode_2_start_ep(mode)
       cmd = (
         f'main.py --model TD3 --max-ep-num {max_ep} --max-time-per-ep {step_num} '
