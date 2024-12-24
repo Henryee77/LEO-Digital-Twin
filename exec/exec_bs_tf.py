@@ -33,8 +33,10 @@ if __name__ == '__main__':
   tf_list = [1, 2, 3, 4, 5]
   step_num = 100
 
-  dir_name = f'3 - Beam sweeping-T_f {max_ep} eps'
-  # dir_name = 'debug'
+  dir_name = f'1 - Beam sweeping-T_f {max_ep} eps'
+  while os.path.exists(f'./tb_result/{dir_name}'):
+    split_str = dir_name.split('-')
+    dir_name = f'{int(split_str[0]) + 1} - ' + split_str[-1]
 
   for ue_num in ue_num_list:
     for bs_mode in bs_list:
