@@ -354,7 +354,7 @@ class OffPolicyTrainer(object):
         f'{agent.name}/training_reward', {'training_reward': self.ep_reward[agent_name]}, self.total_eps)
     self.tb_time += time.time() - start_time
 
-  def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], float, bool, Dict[Any, Any]]:
+  def take_action(self, action_dict, running_mode='training') -> Tuple[Dict[str, npt.NDArray[np.float32]], Dict[str, float], bool, Dict[Any, Any]]:
     if not self.online:
       return None, None, False, None
     # Take action in env
@@ -379,7 +379,7 @@ class OffPolicyTrainer(object):
     for agent_name in env_reward:
       self.ep_reward[agent_name] += env_reward[agent_name]
 
-    return prev_state_dict, sum(env_reward.values()), done, info
+    return prev_state_dict, env_reward, done, info
 
   def no_action_step(self, running_mode='training'):
     if not self.online:
@@ -404,10 +404,23 @@ class OffPolicyTrainer(object):
 
     return sum(env_reward.values()), done, info
 
-  def save_to_replaybuffer(self, prev_state_dict, action_dict, total_reward, done):
+  def save_to_replaybuffer(self,
+                           agent_type: str,
+                           prev_state_dict: Dict[str, npt.NDArray[np.float32]],
+                           action_dict: Dict[str, npt.NDArray[np.float32]],
+                           reward_dict: Dict[str, float],
+                           done: bool):
     if prev_state_dict is None or action_dict is None:
       return
     aggr_state_dict = self.aggregated_state_dict()
+    if agent_type == 'DT':
+      total_reward = sum(reward_dict.values())
+      for agent_name in reward_dict:
+        reward_dict[agent_name] = total_reward
+    elif agent_type == 'LEO':
+      pass
+    else:
+      raise ValueError(f'No such {agent_type} type of agents.')
     for agent_name, leo_agent in self.leo_agent_dict.items():
       leo_agent.add_memory(
           obs=prev_state_dict[agent_name],

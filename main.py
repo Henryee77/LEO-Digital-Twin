@@ -192,11 +192,11 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
       real_actions = realworld_trainer.stochastic_actions()
 
       (digital_prev_state_dict,
-       digital_step_total_reward,
+       digital_step_reward_dict,
        digital_done,
        d_info) = digitalworld_trainer.take_action(digital_actions)
       (real_prev_state_dict,
-       real_step_total_reward,
+       real_step_reward_dict,
        real_done,
        r_info) = realworld_trainer.take_action(real_actions)
 
@@ -211,11 +211,11 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
 
       digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
                                                 action_dict=digital_actions,
-                                                total_reward=digital_step_total_reward,
+                                                reward_dict=digital_step_reward_dict,
                                                 done=digital_done)
       realworld_trainer.save_to_replaybuffer(prev_state_dict=real_prev_state_dict,
                                              action_dict=real_actions,
-                                             total_reward=real_step_total_reward,
+                                             reward_dict=real_step_reward_dict,
                                              done=real_done)
     else:
       _, digital_done, d_info = digitalworld_trainer.no_action_step()
