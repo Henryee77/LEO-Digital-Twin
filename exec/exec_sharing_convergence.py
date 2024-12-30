@@ -40,7 +40,7 @@ if __name__ == '__main__':
   explore_step = 100
   training_period = 30
   mode = 'DT + TS + FS'
-  ts_percent = [0.1 * i for i in range(1, 6)]
+  ts_percent = [0.05, 0.1, 0.25, 0.5]
   twin_sharing_period_list = [round(1 / percent) for percent in ts_percent]
   step_num = 100
 

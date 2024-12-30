@@ -111,7 +111,8 @@ class DigitalWorldEnv(LEOSatEnv):
 
     realworld_header = self.real_agents[agent.sat_name].sat.beam_training_latency
 
-    digitalworld_header = util.rt_delay(len(self.digital_agents) * len(self.ues),
+    digitalworld_header = util.rt_delay(float(self.args.rt_ray_spacing),
+                                        len(self.digital_agents) * len(self.ues),
                                         self.digital_agents[agent.sat_name].comp_freq)
 
     state_exchange_overhead = (agent.sat.trans_latency(agent.state_dim * constant.FLOAT_SIZE, self.dt_server)

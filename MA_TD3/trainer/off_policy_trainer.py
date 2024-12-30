@@ -426,7 +426,7 @@ class OffPolicyTrainer(object):
           obs=prev_state_dict[agent_name],
           new_obs=aggr_state_dict[agent_name],
           action=action_dict[agent_name],
-          reward=total_reward,
+          reward=reward_dict[agent_name],
           done=done)
 
   def stochastic_actions(self) -> Dict[str, npt.NDArray[np.float32]]:

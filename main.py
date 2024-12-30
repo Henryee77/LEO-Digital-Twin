@@ -209,11 +209,13 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
         digitalworld_trainer.twin_parameter_update()
         realworld_trainer.twin_parameter_update()
 
-      digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
+      digitalworld_trainer.save_to_replaybuffer(agent_type='DT',
+                                                prev_state_dict=digital_prev_state_dict,
                                                 action_dict=digital_actions,
                                                 reward_dict=digital_step_reward_dict,
                                                 done=digital_done)
-      realworld_trainer.save_to_replaybuffer(prev_state_dict=real_prev_state_dict,
+      realworld_trainer.save_to_replaybuffer(agent_type='LEO',
+                                             prev_state_dict=real_prev_state_dict,
                                              action_dict=real_actions,
                                              reward_dict=real_step_reward_dict,
                                              done=real_done)
