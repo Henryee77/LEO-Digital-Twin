@@ -20,7 +20,6 @@ from torch.utils.tensorboard import SummaryWriter
 import gymnasium as gym
 from gymnasium import spaces
 import yaml
-import git
 import numpy as np
 import matplotlib.pyplot as plt
 import gym_env  # this line is neccessary, don't delete it.
@@ -98,10 +97,6 @@ def set_log(args, log_path, repo_path=".") -> Dict[str, Logger]:
 
   for arg, value in sorted(vars(args).items()):
     log[args.log_name].info("%s: %r", arg, value)
-
-  repo = git.Repo(repo_path)
-  log[args.log_name].info('Branch: {}'.format(repo.active_branch))
-  log[args.log_name].info('Commit: {}'.format(repo.head.commit))
 
   return log
 
