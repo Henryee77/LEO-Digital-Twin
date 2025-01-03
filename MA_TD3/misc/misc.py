@@ -10,14 +10,16 @@ from logging import Logger
 from datetime import datetime
 from collections import OrderedDict
 from typing import List, Tuple, Dict, OrderedDict
+import numpy.typing as npt
 
 import torch
 from torch import nn
-from tensorboardX import SummaryWriter
+import torch.nn.functional as F
+from torch.autograd import Variable
+from torch.utils.tensorboard import SummaryWriter
 import gymnasium as gym
 from gymnasium import spaces
 import yaml
-import git
 import numpy as np
 import matplotlib.pyplot as plt
 import gym_env  # this line is neccessary, don't delete it.
@@ -96,10 +98,6 @@ def set_log(args, log_path, repo_path=".") -> Dict[str, Logger]:
   for arg, value in sorted(vars(args).items()):
     log[args.log_name].info("%s: %r", arg, value)
 
-  repo = git.Repo(repo_path)
-  log[args.log_name].info('Branch: {}'.format(repo.active_branch))
-  log[args.log_name].info('Commit: {}'.format(repo.head.commit))
-
   return log
 
 
@@ -133,6 +131,63 @@ def circ_range(start: int, num: int, modulo: int) -> Tuple[List[int], int]:
     result.append(index)
     index = int((index + 1) % modulo)
   return result, index
+
+
+def onehot_from_logits(logits: npt.NDArray[np.float32] | torch.Tensor):
+  """Given batch of logits, return one-hot sample
+  Ref: https://github.com/shariqiqbal2810/maddpg-pytorch/blob/master/utils/misc.py
+  """
+  if isinstance(logits, np.ndarray):
+    logits = torch.from_numpy(logits)
+    if len(logits.shape) == 1:
+      logits = logits.unsqueeze(0)  # Add a dimension
+
+  argmax_acs = (logits == logits.max(1, keepdim=True)[0]).float()
+  return argmax_acs
+
+
+def sample_gumbel(shape, eps=1e-20, tens_type=torch.FloatTensor):
+  """Sample from Gumbel(0, 1)
+  Ref: https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
+  Ref: https://github.com/shariqiqbal2810/maddpg-pytorch/blob/master/utils/misc.py
+  """
+  U = Variable(tens_type(*shape).uniform_(), requires_grad=False)
+  return -torch.log(-torch.log(U + eps) + eps)
+
+
+def gumbel_softmax_sample(logits, temperature):
+  """ Draw a sample from the Gumbel-Softmax distribution
+  Ref: https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
+  Ref: https://github.com/shariqiqbal2810/maddpg-pytorch/blob/master/utils/misc.py
+  """
+  if device == torch.device("cuda"):
+    tens_type = torch.cuda.FloatTensor
+  elif device == torch.device("cpu"):
+    tens_type = torch.FloatTensor
+  else:
+    raise ValueError("Invalid dtype")
+
+  y = logits + sample_gumbel(logits.shape, tens_type=tens_type)
+  return F.softmax(y / temperature, dim=1)
+
+
+def gumbel_softmax(logits, temperature=1.0, hard=False):
+  """Sample from the Gumbel-Softmax distribution and optionally discretize.
+  Ref: https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
+  Ref: https://github.com/shariqiqbal2810/maddpg-pytorch/blob/master/utils/misc.py
+  """
+  if isinstance(logits, np.ndarray):
+    logits = torch.from_numpy(logits)
+    if len(logits.shape) == 1:
+      logits = logits.unsqueeze(0)  # Add a dimension
+  assert len(logits.shape) == 2, "Shape should be: (# of batch, # of action)"
+
+  y = gumbel_softmax_sample(logits, temperature)
+  if hard:
+    y_hard = onehot_from_logits(y)
+    y = (y_hard - y).detach() + y
+
+  return y
 
 
 def load_rt_file(filename: str) -> Dict[str, Dict[int, Dict[str, float]]]:
@@ -199,7 +254,7 @@ def construct_dnn_dict(input_dim: int, output_dim: int, hidden_nodes: List[int],
   return OrderedDict(layer_list)
 
 
-def generate_action_space(cell_num: int):
+def generate_action_space(cell_num: int, decided_agent_num: int = 1):
   beam_action_low = np.array([-1] * cell_num)
   beam_action_high = np.array([1] * cell_num)
   beam_slice = slice(0, cell_num)
@@ -218,14 +273,14 @@ def generate_action_space(cell_num: int):
   action_high = np.concatenate(
       (beam_action_high, total_power_high, beamwidth_action_high))
 
-  action_space = spaces.Box(low=np.float32(action_low),
-                            high=np.float32(action_high),
+  action_space = spaces.Box(low=np.float32(np.tile(action_low, decided_agent_num)),
+                            high=np.float32(np.tile(action_high, decided_agent_num)),
                             dtype=np.float32)
 
   return action_space, beam_slice, power_slice, beamwidth_slice
 
 
-def generate_state_space(agent_type: str, cell_num: int, shared_type, pos_dim: int = 2):
+def generate_state_space(agent_type: str, cell_num: int, shared_type, received_agent_num: int = 1, pos_dim: int = 2):
   pos_low = np.array([-1] * pos_dim)
   pos_high = np.array([1] * pos_dim)
   pos_slice = slice(0, pos_dim)
@@ -260,8 +315,8 @@ def generate_state_space(agent_type: str, cell_num: int, shared_type, pos_dim: i
   else:
     raise ValueError('No such agent type')
 
-  observation_space = spaces.Box(low=np.float32(obs_low),
-                                 high=np.float32(obs_high),
+  observation_space = spaces.Box(low=np.float32(np.tile(obs_low, received_agent_num)),
+                                 high=np.float32(np.tile(obs_high, received_agent_num)),
                                  dtype=np.float32)
 
   return observation_space, pos_slice, beam_info_slice, shared_slice

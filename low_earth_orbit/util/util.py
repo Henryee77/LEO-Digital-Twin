@@ -116,6 +116,15 @@ def truncate(x: float, precision: int = 3) -> float:
   return float(math.floor(x * mult)) / mult
 
 
+def random_sign():
+  """Uniformly generate {-1, 1} 
+
+  Returns:
+      int: sign
+  """
+  return np.random.choice([-1, 1])
+
+
 def calc_sat_angular_speed(radius: float) -> float:
   """Calculate the angular speed of the satellite
 
@@ -150,8 +159,8 @@ def propagation_delay(distance) -> float:
   return distance / constant.LIGHT_SPEED
 
 
-def rt_delay(unit_num, comp_speed) -> float:
-  return unit_num * constant.RT_COMP_SIZE / comp_speed
+def rt_delay(ray_spacing: float, unit_num, comp_speed) -> float:
+  return unit_num * constant.RT_COMP_SIZE * (180 / ray_spacing) / comp_speed
 
 
 def d_longitude(origin_latitude: float, distance: float) -> float:
@@ -162,10 +171,8 @@ def d_latitude(distance: float) -> float:
   return (distance / constant.R_EARTH) / constant.PI_IN_RAD
 
 
-def avg_nested_2d_dict(dict_2d: Dict[Any, Dict[Any, int | float]]) -> float:
-  cnt = 0
+def avg_time_sat_dict(dict_2d: Dict[Any, Dict[Any, int | float]]) -> float:
   total_value = 0
   for dict in dict_2d.values():
-    cnt += len(dict)
     total_value += sum(dict.values())
-  return total_value / cnt
+  return total_value / len(dict_2d.keys())

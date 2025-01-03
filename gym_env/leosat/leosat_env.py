@@ -24,6 +24,8 @@ from MA_TD3.agent.agent import Agent
 class LEOSatEnv(gym.Env):
   """The LEO Env class."""
 
+  ue_dict: Dict[str, User]
+
   def __init__(self,
                ax: plt.Axes,
                args,
@@ -38,16 +40,22 @@ class LEOSatEnv(gym.Env):
     self.args = args
     self.tb_writer = tb_writer
     self.constel = self.ues = self.nmc = None
+    self.wireless_channel = Channel(rain_prob=self.args.rainfall_prob,
+                                    has_weather=self.args.has_weather_module)
     self.ue_dict = {}
     self.prev_cell_sinr = {}
     self.prev_beam_power = {}
+
     self.ee = {}
-    self.data_rate = {}
-    self.throughput = {}
+    self.data_rate = {}  # Consider overhead
+    self.sat_throughput = {}  # No overhead
+    self.ue_throughput = {}
+    self.penalty = {}
     self.overhead = {}
+    self.qos_percent = {}
+
     self.ue_pos_data = {}
     self.load_ues_data()
-
     self.online = False
     self.twin_online = False
     self.leo_agents = agent_dict
@@ -56,9 +64,9 @@ class LEOSatEnv(gym.Env):
     self.agent_num = len(agent_names)
     self.agent_names = agent_names
     self.cell_num = 0
-    self.wireless_channel = Channel()
 
     self.step_num = 0
+    self.total_step_num = 0
     self.action_period = args.action_timeslot / constant.MOVING_TIMESLOT
     self.reset_count = 0
     self.max_step = args.max_time_per_ep
@@ -133,45 +141,82 @@ class LEOSatEnv(gym.Env):
                                                 interference_beams=self.additional_beam_set)
 
     reward = self._cal_reward(ue_throughput=ue_throughput)
-    # print(self.ee[self.step_num], self.data_rate[self.step_num], self.overhead[self.step_num])
-    self.record_sinr_thpt(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
+    self.record_steps_of_last_ep(ue_sinr=ue_sinr, ue_throughput=ue_throughput)
 
     self.step_num += 1
+    self.total_step_num += 1
     self.constel.update_sat_position()
+    self.dynamic_channel_update()
     done = (self.step_num >= self.max_step)
     truncated = (self.step_num >= self.max_step)
     has_action = (self.step_num % self.action_period == 0)
+    if has_action:
+      for sat_name in self.agent_names:
+        self.overflowed_overhead[sat_name] = 0
     obs = self.get_state_info(has_action)
 
     return (obs, reward, done, truncated, {'has_action': has_action})
 
-  def record_sinr_thpt(self, ue_sinr, ue_throughput):
+  def dynamic_channel_update(self):
+    pass
+
+  def record_steps_of_last_ep(self, ue_sinr, ue_throughput):
     if self.last_episode:
       for ue_name, sinr in ue_sinr.items():
         self.tb_writer.add_scalars(f'{self.name} Env Param/ue sinr',
                                    {ue_name: sinr},
-                                   self.step_num + (self.reset_count - 1) * self.max_step)
+                                   self.total_step_num)
       for ue_name, throughput in ue_throughput.items():
         self.tb_writer.add_scalars(f'{self.name} Env Param/ue throughput',
                                    {ue_name: throughput},
-                                   self.step_num + (self.reset_count - 1) * self.max_step)
+                                   self.total_step_num)
 
   def save_episode_result(self):
     self.tb_writer.add_scalars(f'{self.name} Env Param/average overhead',
-                               {self.args.prefix: util.avg_nested_2d_dict(self.overhead)},
+                               {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(
+                                 self.overhead) / len(self.agent_names)},
                                self.reset_count)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/average data rate',
-                               {self.args.prefix: util.avg_nested_2d_dict(self.data_rate)},
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average system data rate',
+                               {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(self.data_rate)},
                                self.reset_count)
-    self.tb_writer.add_scalars(f'{self.name} Env Param/average throughput',
-                               {self.args.prefix: util.avg_nested_2d_dict(self.throughput)},
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average system throughput',
+                               {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(self.sat_throughput)},
                                self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average EE',
-                               {self.args.prefix: util.avg_nested_2d_dict(self.ee)},
+                               {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(
+                                 self.ee) / len(self.agent_names)},
+                               self.reset_count)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/average QoS percent',
+                               {f'{self.args.prefix} {self.name}': util.avg_time_sat_dict(
+                                 self.qos_percent) / len(self.ues)},
                                self.reset_count)
     self.tb_writer.add_scalars(f'{self.name} Env Param/average overflowed overhead',
-                               {self.args.prefix: sum(self.overflowed_overhead.values()) /
+                               {f'{self.args.prefix} {self.name}': sum(self.overflowed_overhead.values()) /
                                 len(self.overflowed_overhead)},
+                               self.reset_count)
+    pen_saved_dict = {}
+    ue_thput_saved_dict = {}
+    for ue_name in self.ue_dict:
+      pen_saved_dict[f'{self.args.prefix} {self.name} {ue_name}'] = sum(
+        self.penalty[t][ue_name] for t in range(self.step_num)) / self.step_num
+      ue_thput_saved_dict[f'{self.args.prefix} {self.name} {ue_name}'] = sum(
+        self.ue_throughput[t][ue_name] for t in range(self.step_num)) / self.step_num
+    self.tb_writer.add_scalars(f'{self.name} Env Param/penalty term',
+                               pen_saved_dict,
+                               self.reset_count)
+    self.tb_writer.add_scalars(f'{self.name} Env Param/UE average throughput',
+                               ue_thput_saved_dict,
+                               self.reset_count)
+
+    stdv_thput_dict = {f'{self.args.prefix} {self.name}':
+                       np.std(np.fromiter(ue_thput_saved_dict.values(), dtype=float))}
+    self.tb_writer.add_scalars(f'{self.name} Env Param/stdv of UE average throughput',
+                               stdv_thput_dict,
+                               self.reset_count)
+    stdv_thput_dict = {f'{self.args.prefix} {self.name}':
+                       np.mean(np.fromiter(ue_thput_saved_dict.values(), dtype=float))}
+    self.tb_writer.add_scalars(f'{self.name} Env Param/mean of UE average throughput',
+                               stdv_thput_dict,
                                self.reset_count)
 
   def _take_action(self, action_n: Dict[str, List[float]]):
@@ -181,9 +226,7 @@ class LEOSatEnv(gym.Env):
       turned_on_beams = self.action_to_beam_list(action=action[agent.beam_slice])
       satbeam_list = satbeam_list + [(sat_name, beam_idx) for beam_idx in turned_on_beams]
     for ue in self.ues:
-      # print(ue.servable, satbeam_list)
       ue.filter_servable(satbeam_list)
-      # print(self.name, self.step_num, ue.servable)
 
     # beam decision and handover
     self.nmc.a3_event_check()
@@ -258,6 +301,10 @@ class LEOSatEnv(gym.Env):
 
   def _cal_reward(self, ue_throughput: Dict[str, float], no_action=False) -> Dict[str, float]:
     sat_tran_ratio = {}
+    reward = {}
+    for sat_name in self.agent_names:
+      reward[sat_name] = 0
+
     if no_action:
       for sat_name in self.leo_agents:
         overhead = self.overflowed_overhead[sat_name]
@@ -266,7 +313,6 @@ class LEOSatEnv(gym.Env):
 
     for ue_name, throughput in ue_throughput.items():
       last_satbeam = self.ue_dict[ue_name].last_serving
-      # print(self.ue_dict[ue_name].servable)
       if last_satbeam is not None:
         sat_name, _ = last_satbeam
         agent = self.leo_agents[sat_name]
@@ -274,16 +320,26 @@ class LEOSatEnv(gym.Env):
           if sat_name not in sat_tran_ratio:
             self.overhead[self.step_num][sat_name] = self._cal_overhead(agent)
             overhead = self.overhead[self.step_num][sat_name] + self.overflowed_overhead[sat_name]
-            self.overflowed_overhead[sat_name] = max(
-              0, self.overflowed_overhead[sat_name] + (overhead - constant.MOVING_TIMESLOT))
+            self.overflowed_overhead[sat_name] = max(0, overhead - constant.MOVING_TIMESLOT)
             sat_tran_ratio[sat_name] = max(0, 1 - overhead / constant.MOVING_TIMESLOT)
 
-          self.data_rate[self.step_num][sat_name] += sat_tran_ratio[sat_name] * throughput
-          self.throughput[self.step_num][sat_name] += throughput
-          self.ee[self.step_num][sat_name] += (sat_tran_ratio[sat_name] * throughput /
-                                               (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) / 1e6)
+          # record result
+          self.ue_throughput[self.step_num][ue_name] = throughput
+          ue_data_rate = sat_tran_ratio[sat_name] * throughput
+          self.data_rate[self.step_num][sat_name] += ue_data_rate
+          self.qos_percent[self.step_num][ue_name] = int(ue_data_rate >= self.ue_dict[ue_name].required_datarate)
+          self.sat_throughput[self.step_num][sat_name] += throughput
 
-    return self.ee[self.step_num]
+          power_muW = (util.tolinear(agent.sat.all_power) / constant.MILLIWATT) * 1e6
+          ee = (sat_tran_ratio[sat_name] * throughput / power_muW)
+          self.ee[self.step_num][sat_name] += ee
+
+          self.penalty[self.step_num][ue_name] = max((self.ue_dict[ue_name].required_datarate - ue_data_rate) / power_muW,
+                                                     0)
+
+          reward[sat_name] += (ee - self.penalty[self.step_num][ue_name])
+
+    return reward
 
   def _cal_overhead(self, agent: Agent) -> float:
     pass
@@ -327,11 +383,12 @@ class LEOSatEnv(gym.Env):
 
   def _init_env(self):
     self.step_num = 0
-    self.constel = self.make_constellation(channel=self.wireless_channel)
+    self.wireless_channel.update_weather()
+    self.constel = self.make_constellation()
     self.ues = self.make_ues()
     self.dt_server = User('DT server', position=Position(geodetic=Geodetic(longitude=constant.ORIGIN_LONG,
                                                                            latitude=constant.ORIGIN_LATI,
-                                                                           height=constant.R_EARTH)))
+                                                                           height=constant.R_EARTH)), required_datarate=0)
     for ue in self.ues:
       self.ue_dict[ue.name] = ue
     self.nmc = self.make_nmc(constel=self.constel, ues=self.ues)
@@ -340,12 +397,19 @@ class LEOSatEnv(gym.Env):
       self.ee[t] = {}
       self.data_rate[t] = {}
       self.overhead[t] = {}
-      self.throughput[t] = {}
+      self.sat_throughput[t] = {}
+      self.ue_throughput[t] = {}
+      self.penalty[t] = {}
+      self.qos_percent[t] = {}
       for sat_name in self.agent_names:
         self.ee[t][sat_name] = 0
         self.data_rate[t][sat_name] = 0
         self.overhead[t][sat_name] = 0
-        self.throughput[t][sat_name] = 0
+        self.sat_throughput[t][sat_name] = 0
+      for ue in self.ues:
+        self.penalty[t][ue.name] = 0
+        self.ue_throughput[t][ue.name] = 0
+        self.qos_percent[t][ue.name] = 0
 
     for sat_name in self.agent_names:
       self.leo_agents[sat_name].sat = self.constel.all_sat[sat_name]
@@ -398,7 +462,7 @@ class LEOSatEnv(gym.Env):
     diff_lo = abs(sat.position.geodetic.longitude - constant.ORIGIN_LONG)
     return diff_la < r and diff_lo < r
 
-  def make_constellation(self, channel: Channel) -> Constellation:
+  def make_constellation(self) -> Constellation:
     """Make a constellation"""
     shell_num = 4
     plane_num = [1, 1, 1, 1, 1]
@@ -412,7 +476,7 @@ class LEOSatEnv(gym.Env):
                           sat_height=sat_height[i],
                           inclination_angle=inclination[i])
         for i in range(shell_num)],
-        channel=channel,
+        channel=self.wireless_channel,
         args=self.args)
 
     # move the constellation to the desired simulated scenario
@@ -437,7 +501,9 @@ class LEOSatEnv(gym.Env):
       ues[ue_idx] = User(name=f'ue{ue_idx}',
                          position=Position(geodetic=Geodetic(longitude=float(self.ue_pos_data[ue_idx]['longitude']),
                                                              latitude=float(self.ue_pos_data[ue_idx]['latitude']),
-                                                             height=float(self.ue_pos_data[ue_idx]['height']))))
+                                                             height=float(self.ue_pos_data[ue_idx]['height']))),
+                         required_datarate=self.args.R_min
+                         )
 
     return ues
 

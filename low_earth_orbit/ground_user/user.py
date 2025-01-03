@@ -2,6 +2,7 @@
 
 from typing import Dict, Tuple, List
 import collections
+import numpy as np
 
 from ..util import Position
 from ..util import constant
@@ -30,15 +31,18 @@ class User(object):
       self,
       name: str,
       position: Position,
+      required_datarate: float,
       rx_gain: float = constant.DEFAULT_RX_GAIN,
-      training_window_size: int = constant.DEFAULT_TRAINING_WINDOW_SIZE
+      training_window_size: int = constant.DEFAULT_TRAINING_WINDOW_SIZE,
   ):
     """The __init__ funciton for user.
 
     Args:
       name (str): The name of the object.
       position (position): The position of the object.
-      rx_gain (float): The recieving antenna gain of the object
+      required_datarate (float): The QoS requirement for the user.
+      rx_gain (float): The recieving antenna gain of the object.
+      training_window_size (int): Window size of storing historical data used in beam training.
 
     Raise:
       ValueError: The user must initialize the position
@@ -46,11 +50,48 @@ class User(object):
     self.name = name
     self.position = position
     self.rx_gain = rx_gain
+    self.__required_datarate = required_datarate
     self.__training_window_size = training_window_size
 
     self.servable = {}
     self.serving_history = collections.deque(maxlen=training_window_size)
     self.a3_table = {}
+
+    self.reset_channel_params()
+
+  @property
+  def required_datarate(self):
+    return self.__required_datarate
+
+  @property
+  def water_vap_density(self):
+    return self.__water_vap_density
+
+  @water_vap_density.setter
+  def water_vap_density(self, value):
+    self.__water_vap_density = np.clip(value,
+                                       (1 - constant.MAX_L_VARIATION_PERCENT) * constant.GROUND_WATER_VAP_DENSITY,
+                                       (1 + constant.MAX_L_VARIATION_PERCENT) * constant.GROUND_WATER_VAP_DENSITY)
+
+  @property
+  def temperature(self):
+    return self.__temperature
+
+  @temperature.setter
+  def temperature(self, value):
+    self.__temperature = np.clip(value,
+                                 (1 - constant.MAX_M_VARIATION_PERCENT) * constant.GROUND_TEMPERATURE,
+                                 (1 + constant.MAX_M_VARIATION_PERCENT) * constant.GROUND_TEMPERATURE)
+
+  @property
+  def atmos_pressure(self):
+    return self.__atmos_pressure
+
+  @atmos_pressure.setter
+  def atmos_pressure(self, value):
+    self.__atmos_pressure = np.clip(value,
+                                    (1 - constant.MAX_S_VARIATION_PERCENT) * constant.GROUND_ATMOS_PRESSURE,
+                                    (1 + constant.MAX_S_VARIATION_PERCENT) * constant.GROUND_ATMOS_PRESSURE)
 
   @property
   def training_window_size(self):
@@ -105,6 +146,23 @@ class User(object):
         float: latency
     """
     return data_size / self.data_rate
+
+  def reset_channel_params(self):
+    self.water_vap_density = constant.GROUND_WATER_VAP_DENSITY
+    self.temperature = constant.GROUND_TEMPERATURE
+    self.atmos_pressure = constant.GROUND_ATMOS_PRESSURE
+
+  def update_channel_params(self):
+    l_high = constant.MAX_L_VARIATION_PERCENT * constant.MAX_VAR_PERCENT
+    l_low = -l_high
+    m_high = constant.MAX_M_VARIATION_PERCENT * constant.MAX_VAR_PERCENT
+    m_low = -m_high
+    s_high = constant.MAX_S_VARIATION_PERCENT * constant.MAX_VAR_PERCENT
+    s_low = -s_high
+    self.water_vap_density = (self.water_vap_density +
+                              constant.GROUND_WATER_VAP_DENSITY * np.random.uniform(l_low, l_high))
+    self.temperature = (self.temperature + constant.GROUND_TEMPERATURE * np.random.uniform(m_low, m_high))
+    self.atmos_pressure = (self.atmos_pressure + constant.GROUND_ATMOS_PRESSURE * np.random.uniform(s_low, s_high))
 
   def servable_clear(self) -> None:
     """Clear the servable dict."""

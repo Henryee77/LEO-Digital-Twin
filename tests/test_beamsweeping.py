@@ -11,11 +11,22 @@ from low_earth_orbit.util import Geodetic
 from low_earth_orbit.ground_user import User
 from low_earth_orbit.channel.channel import Channel
 from low_earth_orbit import util
-
+import argparse
 from low_earth_orbit.nmc import NMC
 
 
 def main_sim(scan_mode):
+  parser = argparse.ArgumentParser(description='')
+  parser.add_argument(
+      '--beam-sweeping-mode', type=str, default='ABS',
+      help='Beam-sweeping mode')
+  parser.add_argument(
+      '--cell-layer-num', type=int, default=constant.DEFAULT_CELL_LAYER,
+      help='Number of cell layer (related to cell number)')
+  parser.add_argument(
+      '--leo-computaion-speed', type=float, default=constant.DEFAULT_LEO_CPU_CYCLE,
+      help='LEO computation speed')
+  args = parser.parse_args()
 
   shell_num = 4
   plane_num = [1, 1, 1, 1, 1]
@@ -34,7 +45,7 @@ def main_sim(scan_mode):
           )
           for i in range(shell_num)
       ],
-      channel=Channel()
+      args=args
   )
 
   simulation_time = 50
@@ -78,7 +89,7 @@ def main_sim(scan_mode):
   for t in range(simulation_time + 1):
     # _time = time.time()
 
-    '''ax.clear()
+    ax.clear()
     util.plot_taiwan_shape(ax)
     for ue in user_list:
       ax.scatter(
@@ -109,7 +120,7 @@ def main_sim(scan_mode):
     plt.xlim((long - r, long + r))
     plt.ylim((lati - r, lati + r))
     plt.show()
-    plt.pause(0.5)'''
+    plt.pause(0.5)
 
     LEO_constellation.scan_ues(user_list, sat_name_list=sat_name_list, scan_mode=scan_mode)
 

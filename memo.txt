@@ -1,19 +1,17 @@
 
-env diff
-  1. training latency
-  2. cal_thhrouput return sinr
-  3. print user handover
+##Training commands:
+python main.py --model "TD3" --max-ep-num 10 --dir-name "debug" --prefix "debug" --has-weather-module 1
 
-python main.py --model "TD3" --ep-max-timesteps 20 --prefix "debug"
-python main.py --model "TD3" --ep-max-timesteps 15000 --prefix "DT_15k eps"
-python main.py --env-name "LEOSat-v0" --model "DDPG" --ep-max-timesteps 40000 --prefix "ma-ddpg" --running-mode "testing"
+##Testing commands:
+python main.py --env-name "LEOSat-v0" --model "TD3" --max-ep-num 20000 --prefix "test new state def (sinr_diff-power_diff)"
 
-python main.py --env-name "LEOSat-v0" --model "TD3" --ep-max-timesteps 20000 --prefix "test new state def (sinr_diff-power_diff)"
 
-tensorboard --logdir=""
-
+##Install all package from requirements.txt: 
 FOR /F %k in (requirements.txt) DO pip install %k
 
-TODO:
-weather
-efficiently maintain sat.servable
+
+Update all package (shell command): 
+pip freeze | %{$_.split('==')[0]} | %{pip install --upgrade $_}
+
+
+tensorboard --logdir="

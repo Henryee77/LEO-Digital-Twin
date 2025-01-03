@@ -58,7 +58,8 @@ def main(args):
                                            agent_type='real_LEO',
                                            args=args,
                                            device=device,
-                                           comp_freq=constant.DEFAULT_LEO_CPU_CYCLE)
+                                           comp_freq=constant.DEFAULT_LEO_CPU_CYCLE,
+                                           total_agent_num=len(sat_name_list))
     digitalworld_agent_dict[sat_name] = Agent(policy_name=args.model,
                                               tb_writer=tb_writer,
                                               log=log,
@@ -66,7 +67,8 @@ def main(args):
                                               agent_type='digital_LEO',
                                               args=args,
                                               device=device,
-                                              comp_freq=args.dt_computaion_speed)
+                                              comp_freq=args.dt_computaion_speed,
+                                              total_agent_num=len(sat_name_list))
 
   # Create env
   real_env = misc.make_env(args.real_env_name,
@@ -85,8 +87,10 @@ def main(args):
                               real_agents=realworld_agent_dict,
                               digital_agents=digitalworld_agent_dict,
                               agent_names=sat_name_list)
-  print(f'real env name: {real_env.unwrapped.name}')
-  print(f'digital env name: {digital_env.unwrapped.name}')
+  print(f'real env name: {real_env.unwrapped.name},'
+        f'{real_env.unwrapped.leo_agents is real_env.unwrapped.real_agents}')
+  print(f'digital env name: {digital_env.unwrapped.name},'
+        f'{digital_env.unwrapped.leo_agents is digital_env.unwrapped.digital_agents}')
 
   # Start training
   trainer_dict = {'TD3': 'Off-Policy',
@@ -118,7 +122,7 @@ def main(args):
         training_process(args, realworld_trainer, digitalworld_trainer)
 
         # evaluate performance every certain steps
-        if ep_cnt % args.eval_period == 0:
+        if ep_cnt % args.eval_period == 0 or ep_cnt == 1:
           eval_process(args, realworld_trainer, digitalworld_trainer)
           tb_writer.flush()
 
@@ -159,7 +163,7 @@ def eval_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_trainer
   r_info = realworld_trainer.reset_env(eval=True)
 
   while time_count < args.max_time_per_ep and not (digital_done or real_done):
-    if r_info['has_action']:
+    if (realworld_trainer.online and r_info['has_action']) or (digitalworld_trainer.online and d_info['has_action']):
       digital_actions = digitalworld_trainer.deterministic_actions()
       real_actions = realworld_trainer.deterministic_actions()
 
@@ -183,32 +187,37 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
   r_info = realworld_trainer.reset_env()
 
   while time_count < args.max_time_per_ep and not (digital_done or real_done):
-    if r_info['has_action']:
+    if (realworld_trainer.online and r_info['has_action']) or (digitalworld_trainer.online and d_info['has_action']):
       digital_actions = digitalworld_trainer.stochastic_actions()
       real_actions = realworld_trainer.stochastic_actions()
 
       (digital_prev_state_dict,
-       digital_step_total_reward,
+       digital_step_reward_dict,
        digital_done,
        d_info) = digitalworld_trainer.take_action(digital_actions)
       (real_prev_state_dict,
-       real_step_total_reward,
+       real_step_reward_dict,
        real_done,
        r_info) = realworld_trainer.take_action(real_actions)
 
-      if time_count % args.twin_sharing_period == 0:
+      if time_count % args.env_param_sharing_period == 0:
+        digitalworld_trainer.receive_sensing_env_param()
+
+      if time_count % args.model_sharing_period == 0:
         digitalworld_trainer.twin_parameter_query()
         realworld_trainer.twin_parameter_query()
         digitalworld_trainer.twin_parameter_update()
         realworld_trainer.twin_parameter_update()
 
-      digitalworld_trainer.save_to_replaybuffer(prev_state_dict=digital_prev_state_dict,
+      digitalworld_trainer.save_to_replaybuffer(agent_type='DT',
+                                                prev_state_dict=digital_prev_state_dict,
                                                 action_dict=digital_actions,
-                                                total_reward=digital_step_total_reward,
+                                                reward_dict=digital_step_reward_dict,
                                                 done=digital_done)
-      realworld_trainer.save_to_replaybuffer(prev_state_dict=real_prev_state_dict,
+      realworld_trainer.save_to_replaybuffer(agent_type='LEO',
+                                             prev_state_dict=real_prev_state_dict,
                                              action_dict=real_actions,
-                                             total_reward=real_step_total_reward,
+                                             reward_dict=real_step_reward_dict,
                                              done=real_done)
     else:
       _, digital_done, d_info = digitalworld_trainer.no_action_step()
@@ -223,7 +232,7 @@ def training_process(args, realworld_trainer: OffPolicyTrainer, digitalworld_tra
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='')
 
-  # NN Training
+  # ----------------- NN --------------------
   parser.add_argument(
     '--model', default='TD3', type=str,
     help='Learnig model')
@@ -249,17 +258,17 @@ if __name__ == '__main__':
       '--clipping-grad-norm', default=1, type=float,
       help='Value of clipping grad norm')
   parser.add_argument(
-      '--actor-n-hidden', default=3200, type=int,
+      '--actor-n-hidden', default=2500, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--critic-n-hidden', default=6400, type=int,
+      '--critic-n-hidden', default=5000, type=int,
       help='Number of hidden neuron')
   parser.add_argument(
-      '--training-period', default=25, type=int,
+      '--training-period', default=50, type=int,
       help='Peiord (number of radio frame) of NN training.')
   parser.add_argument(
       '--replay-buffer-size', default=2000, type=int,
-      help='The printing number of the network weight (for debug)')
+      help='The size of replay buffer')
 
   # --------------- TD3 -----------------------
   parser.add_argument(
@@ -269,7 +278,7 @@ if __name__ == '__main__':
       '--policy-freq', default=2, type=int,
       help='Frequency of delayed policy updates')
   parser.add_argument(
-      '--min-epsilon', default=0.25, type=float,
+      '--min-epsilon', default=0, type=float,
       help='The minimum of epsilon')
   parser.add_argument(
       '--expl-noise', default=0.2, type=float,
@@ -287,40 +296,48 @@ if __name__ == '__main__':
       '--discount', default=1e-2, type=float,
       help='Discount factor')
   parser.add_argument(
-      '--full-explore-steps', default=1e4, type=int,
+      '--full-explore-steps', default=1e3, type=int,
       help='Number of steps to do exploration')
 
-  # -----------Parameter Sharing ---------------
+  # -----------Federated Sharing ---------------
   parser.add_argument(
       '--federated-update-rate', default=1e-1, type=float,
       help='Network exchanging rate of federated agents')
   parser.add_argument(
-      '--federated-upload-period', default=80, type=int,
+      '--federated-upload-period', default=20, type=int,
       help='Period of federated uploading')
   parser.add_argument(
-      '--federated-download-period', default=80, type=int,
+      '--federated-download-period', default=20, type=int,
       help='Period of federated downloading')
   parser.add_argument(
-      '--federated-layer-num-per-turn', default=2, type=int,
+      '--federated-layer-num-per-turn', default=1, type=int,
       help='number of layers per federated uploading')
   parser.add_argument(
-      '--twin-sharing-update-rate', default=1e-1, type=float,
+      '--partial-upload-type', default='by-turns', type=str,
+      help='"random" or "by-turns"')
+
+  # ------------Twin Sharing ---------------
+  parser.add_argument(
+      '--twin-sharing-update-rate', default=0.5, type=float,
       help='Network update rate of twin sharing')
   parser.add_argument(
-      '--twin-sharing-period', default=5, type=int,
+      '--model-sharing-period', default=5, type=int,
+      help='Period of twin sharing uploading')
+  parser.add_argument(
+      '--env-param-sharing-period', default=5, type=int,
       help='Period of twin sharing uploading')
   parser.add_argument(
       '--twin-sharing-layer-num-per-turn', default=1, type=int,
       help='number of layers per twin sharing')
   parser.add_argument(
-      '--historical-smoothing-coef', default=0.9, type=float,
-      help='The smoothing coefficient of the historical average reward')
+      '--historical-reward-window', default=100, type=int,
+      help='Window size of calculating the historical average reward')
   parser.add_argument(
-      '--max-sharing-weight', default=2, type=float,
-      help='Maximum weight of parameter sharing for each agent')
+      '--sharing-weight-growth-rate', default=2, type=float,
+      help='The growth rate of the generalised logistic function')
   parser.add_argument(
-      '--partial-upload-type', default='by-turns', type=str,
-      help='"random" or "by-turns"')
+      '--sharing-weight-asymptote-occurrence', default=3, type=float,
+      help='The nu variable of the generalised logistic function')
 
   # ---------------- A3C baseline -------------------
   parser.add_argument(
@@ -345,6 +362,34 @@ if __name__ == '__main__':
   parser.add_argument(
       '--shared-state-type', type=int, default=2,
       help='Number of the state type shared. 0: None, 1: pathloss, 2: pathloss + CSI')
+  parser.add_argument(
+      '--dt-param-error', type=float, default=0,
+      help='The error of the environment parameters sending from the real LEO')
+  parser.add_argument(
+      '--rt-ray-spacing', type=str, default='0.25',
+      help='The spacing degree of each ray in ray tracing')
+
+  # --------------------- UE ------------------------
+  parser.add_argument(
+      '--ue-num', default=3, type=int,
+      help='The number of ues')
+  parser.add_argument(
+      '--R-min', default=1e8, type=float,
+      help='QoS constraint')
+
+  # --------------------- Agent ------------------------
+  parser.add_argument(
+      '--dt-online-ep', default=0, type=int,
+      help='The episode to turn on digital twins')
+  parser.add_argument(
+      '--realLEO-online-ep', default=0, type=int,
+      help='The episode to turn on real LEOs')
+  parser.add_argument(
+      '--scope-of-states', default='local', type=str,
+      help='(Only for benchmark!) Using local observed states, or aggregate the states to global state. (input: local or global)')
+  parser.add_argument(
+      '--scope-of-actions', default='distributed', type=str,
+      help='(Only for benchmark!) Single centralized agent, or distributed agents. (input: centralized or distributed)')
 
   # ------------------- Env -------------------------
   parser.add_argument(
@@ -366,15 +411,11 @@ if __name__ == '__main__':
       '--eval-period', default=10, type=int,
       help='The evaluation frequency')
   parser.add_argument(
-      '--dt_online_ep', type=int,
-      help='The episode to turn on digital twins')
+      '--has-weather-module', default=1, type=int,
+      help='Has weather simulation module or not. (0=False, 1=True)')
   parser.add_argument(
-      '--realLEO_online_ep', type=int,
-      help='The episode to turn on real LEOs')
-  parser.add_argument(
-      '--ue-num', type=int,
-      help='The number of ues')
-  parser
+      '--rainfall-prob', default=0.05, type=float,
+      help='The rainfall propability of the region')
 
   # ------------------ Misc -------------------------
   parser.add_argument(
@@ -387,7 +428,7 @@ if __name__ == '__main__':
       '--dir-name', default='', type=str,
       help='Name of the tb directory')
   parser.add_argument(
-      '--seed', default=456789, type=int,
+      '--seed', default=778899, type=int,
       help='Sets Gym, PyTorch and Numpy seeds')
   parser.add_argument(
       '--running-mode', default='training', type=str,
