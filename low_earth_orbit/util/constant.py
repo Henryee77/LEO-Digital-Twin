@@ -123,6 +123,6 @@ CELL_ALPHA = 0.5
 # Latency
 DEFAULT_DT_CPU_CYCLE = 2.5e9
 DEFAULT_LEO_CPU_CYCLE = 2.5e9
-F_0 = 10   # CPU cycle needed for a data in RA
+F_1 = 10   # CPU cycle needed for a data in RA
 RT_COMP_SIZE = 1e4   # CPU cycle needed for a single ray
 DEFAULT_GATEWAY_THROUGHPUT = 100e6  # bytes/s
