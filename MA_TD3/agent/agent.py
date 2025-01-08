@@ -264,7 +264,7 @@ class Agent(object):
 
   @property
   def computation_latency(self) -> float:
-    return constant.F_0 * self.nn_param_num / self.comp_freq
+    return constant.F_1 * self.nn_param_num / self.comp_freq
 
   @property
   def twin_sharing_param_num(self):
