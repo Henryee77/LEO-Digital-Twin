@@ -2,11 +2,12 @@
 The MATD3 algorithm in LEO environment
 
 ## How to run this program
-To run the code you need to execute the following command<br>
+To run the code you need to execute the following command:<br>
 ```
 python main.py --max-ep-num 1000 --prefix "my_training"
 ```
-The `ep-max-timesteps` is the variable specify the number of training episodes, and the `prefix` is the log name that you can change to whatever you want.
+The `ep-max-timesteps` is the variable specify the number of training episodes, and the `prefix` is the log name that you can change to whatever you want.<br>
+
 With different RL models
 ```
 python main.py --max-ep-num 1000 --model DDPG --prefix "my_training_DDPG"
