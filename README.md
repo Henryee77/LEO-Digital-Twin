@@ -1,5 +1,6 @@
 # Digital twin-MATD3 for low earth orbits
-The MATD3 algorithm in LEO environment
+The MATD3 algorithm in LEO environment.
+You can read this README.md on https://github.com/Henryee77/LEO-Digital-Twin for better experiences.
 
 ## How to run this program
 To run the code you need to execute the following command:<br>
