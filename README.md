@@ -18,7 +18,7 @@ python main.py --max-ep-num 1000 --actor-lr 0.001 --critic-lr 0.001 --prefix "my
 ```
 Hyperparameters can either be set in `main.py` or assigning using the command.
 
-## How to see the log file
+## How to see the simulation results
 ### Method 1
 If you're using vscode, you can just go to the `main.py` and click `Launch TensorBoard Session`<br>
 ![tensorboard_1](https://user-images.githubusercontent.com/16890671/227468519-274a6bf5-3422-45d0-a733-04bae1ed01a7.PNG)<br>
@@ -35,3 +35,10 @@ Or
 ```
 py -m tensorboard.main --logdir="YOUR_LOG_DIR"
 ```
+where YOUR_LOG_DIR is the path of the directory named ```tb_result```.
+
+## How to obtain the simulation results provided in the thesis
+Execute the script in the ```exec``` directory.
+For example:
+```py -m exec.exec_baseline```
+The simulation results will be in the ```tb_result``` folder.
