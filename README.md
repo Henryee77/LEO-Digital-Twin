@@ -1,19 +1,21 @@
-# TD3 for low earth orbits
-The TD3 algorithm in LEO environment
+# Digital twin-MATD3 for low earth orbits
+The MATD3 algorithm in LEO environment
 
 ## How to run this program
 To run the code you need to execute the following command<br>
 ```
-python main.py --env-name "LEOSat-v0" --ep-max-timesteps 12000 --prefix "my_training"
+python main.py --max-ep-num 1000 --prefix "my_training"
 ```
 The `ep-max-timesteps` is the variable specify the number of training episodes, and the `prefix` is the log name that you can change to whatever you want.
-
-To test the training result
+With different RL models
 ```
-python main.py --env-name "LEOSat-v0" --ep-max-timesteps 1 --prefix "my_testing" --running-mode "testing"
+python main.py --max-ep-num 1000 --model DDPG --prefix "my_training_DDPG"
 ```
-
-Other hyper parameters can be set in `main.py`.
+Or with different hyperparameters
+```
+python main.py --max-ep-num 1000 --actor-lr 0.001 --critic-lr 0.001 --prefix "my_training_lre-3"
+```
+Hyperparameters can either be set in `main.py` or assigning using the command.
 
 ## How to see the log file
 ### Method 1
@@ -26,9 +28,9 @@ Finally choose the one you want to see.<br><br>
 ### Method 2
 Use the following command
 ```
-tensorboard --logdir=${YOUR_LOG_DIR}
+tensorboard --logdir="YOUR_LOG_DIR"
 ```
 Or
 ```
-python3 -m tensorboard.main --logdir=${YOUR_LOG_DIR}
+py -m tensorboard.main --logdir="YOUR_LOG_DIR"
 ```
